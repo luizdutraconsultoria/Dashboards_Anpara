@@ -6,7 +6,7 @@
 <title>Dashboard Comercial</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -14,7 +14,7 @@
   --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.12);
   --text:#e2e4ec;--muted:#565d75;--muted2:#8890a8;
   --accent:#4e7fff;--accent2:#00d4a0;--warn:#f0b429;--danger:#ff5c5c;--purple:#a78bfa;
-  --font:'Syne',sans-serif;--mono:'JetBrains Mono',monospace;
+  --font:'Montserrat',sans-serif;--mono:'DM Mono',monospace;
   --r:10px;--r2:16px;
 }
 body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;}
@@ -115,7 +115,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 <div class="filters">
   <div class="fg"><label>Ano</label>
     <select id="f-ano" onchange="render()">
-      <option value="">Todos</option>
+      <option value="" selected>Todos</option>
       <option value="2025">2025</option>
       <option value="2026">2026</option>
     </select>
@@ -279,7 +279,7 @@ function render() {
 
 // ── CHARTS ──
 Chart.defaults.color = '#565d75';
-Chart.defaults.font  = {family:"'Syne',sans-serif",size:11};
+Chart.defaults.font  = {family:"'Montserrat',sans-serif",size:11};
 const GR = {
   x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#565d75'}},
   y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#565d75'}}
@@ -387,7 +387,11 @@ function fmtR(n){n=+n;if(!n)return'—';if(n>=1e6)return'R$'+(n/1e6).toFixed(1).
 function fK(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1000)return(n/1000).toFixed(0)+'k';return n;}
 function fmtM(s){const[y,m]=s.split('-');return['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][+m-1]+'/'+y.slice(2);}
 
-window.addEventListener('load', carregar);
+window.addEventListener('load', () => {
+  // Reseta filtros para evitar cache do browser
+  ['f-ano','f-vend','f-plano','f-orig'].forEach(id => document.getElementById(id).value = '');
+  carregar();
+});
 </script>
 </body>
 </html>
