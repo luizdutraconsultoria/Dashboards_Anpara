@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Comercial</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c10;--s1:#111318;--s2:#181b22;--s3:#1e2230;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.12);
+  --text:#e2e4ec;--muted:#565d75;--muted2:#8890a8;
+  --accent:#4e7fff;--accent2:#00d4a0;--warn:#f0b429;--danger:#ff5c5c;--purple:#a78bfa;
+  --font:'Syne',sans-serif;--mono:'JetBrains Mono',monospace;
+  --r:10px;--r2:16px;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh;}
+.wrap{max-width:1440px;margin:0 auto;padding:28px 24px;}
+
+/* HEADER */
+.hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;}
+.hdr h1{font-size:20px;font-weight:700;letter-spacing:-0.4px;}
+.hdr p{font-size:11px;color:var(--muted2);margin-top:3px;font-family:var(--mono);}
+.hdr-r{display:flex;gap:10px;align-items:center;}
+.pill{display:flex;align-items:center;gap:6px;background:rgba(0,212,160,0.08);border:1px solid rgba(0,212,160,0.2);color:var(--accent2);padding:5px 12px;border-radius:20px;font-size:11px;font-family:var(--mono);}
+.pill::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent2);animation:blink 2s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.btn{background:var(--s2);border:1px solid var(--border2);color:var(--text);padding:7px 16px;border-radius:var(--r);font-family:var(--font);font-size:13px;cursor:pointer;transition:all .15s;}
+.btn:hover{background:var(--s3);}
+
+/* FILTROS */
+.filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);padding:14px 16px;align-items:flex-end;}
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fg label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);}
+.fg select{background:var(--s2);border:1px solid var(--border2);color:var(--text);padding:6px 28px 6px 10px;border-radius:var(--r);font-family:var(--font);font-size:12px;cursor:pointer;outline:none;min-width:140px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23565d75'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
+.fg select:focus{border-color:var(--accent);}
+.fsep{width:1px;background:var(--border);margin:0 4px;align-self:stretch;}
+
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px;}
+.kpi{background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);padding:20px;position:relative;overflow:hidden;transition:border-color .2s;animation:fadeUp .4s ease both;}
+.kpi:hover{border-color:var(--border2);}
+.kpi::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--kc,var(--accent));}
+.kpi-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.9px;color:var(--muted2);margin-bottom:10px;}
+.kpi-val{font-size:34px;font-weight:700;letter-spacing:-1.5px;line-height:1;margin-bottom:6px;}
+.kpi-sub{font-size:11px;color:var(--muted2);font-family:var(--mono);}
+.kpi-d{font-size:11px;font-family:var(--mono);margin-top:6px;}
+.kpi-d.up{color:var(--accent2);}.kpi-d.dn{color:var(--danger);}
+
+/* CARDS */
+.row{display:grid;gap:14px;margin-bottom:14px;}
+.r2{grid-template-columns:1fr 1fr;}
+.r32{grid-template-columns:3fr 2fr;}
+.r23{grid-template-columns:2fr 3fr;}
+@media(max-width:900px){.r2,.r32,.r23{grid-template-columns:1fr}}
+.card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r2);padding:20px;animation:fadeUp .4s ease both;}
+.ct{font-size:13px;font-weight:600;margin-bottom:2px;}
+.cs{font-size:11px;color:var(--muted2);margin-bottom:16px;font-family:var(--mono);}
+
+/* FUNIL */
+.funil{display:flex;flex-direction:column;gap:8px;}
+.fr{display:flex;align-items:center;gap:10px;}
+.fl{font-size:11px;color:var(--muted2);width:130px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);}
+.ft{flex:1;height:26px;background:var(--s2);border-radius:5px;overflow:hidden;}
+.ff{height:100%;border-radius:5px;display:flex;align-items:center;padding-left:10px;font-size:11px;font-family:var(--mono);font-weight:500;color:rgba(255,255,255,.9);transition:width .8s cubic-bezier(.4,0,.2,1);}
+.fp{font-size:11px;font-family:var(--mono);color:var(--muted2);width:38px;text-align:right;}
+
+/* RANKING */
+.ranking{list-style:none;}
+.ri{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);}
+.ri:last-child{border-bottom:none;}
+.rn{font-family:var(--mono);font-size:11px;color:var(--muted);width:20px;text-align:right;}
+.rname{flex:1;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.rbar{width:70px;height:4px;background:var(--s3);border-radius:2px;overflow:hidden;}
+.rfill{height:100%;border-radius:2px;background:var(--accent);}
+.rval{font-family:var(--mono);font-size:11px;color:var(--accent);width:56px;text-align:right;}
+.rpct{font-family:var(--mono);font-size:10px;color:var(--muted2);width:36px;text-align:right;}
+
+/* MOTIVOS */
+.motivos{display:flex;flex-direction:column;gap:7px;}
+.mr{display:flex;align-items:center;gap:8px;}
+.ml{font-size:11px;color:var(--muted2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mbw{width:90px;height:5px;background:var(--s2);border-radius:3px;overflow:hidden;}
+.mb{height:100%;border-radius:3px;background:var(--danger);}
+.mn{font-family:var(--mono);font-size:11px;color:var(--danger);width:32px;text-align:right;}
+
+/* ESTADO */
+.estado{text-align:center;padding:80px 20px;}
+.estado h3{font-size:18px;font-weight:500;margin-bottom:8px;color:var(--muted2);}
+.estado p{font-size:13px;color:var(--muted);}
+.spin{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 20px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+.footer{text-align:center;padding-top:24px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hdr">
+  <div>
+    <h1>Dashboard Comercial</h1>
+    <p id="hsub">carregando...</p>
+  </div>
+  <div class="hdr-r">
+    <span class="pill" id="pill" style="display:none">ao vivo</span>
+    <button class="btn" onclick="carregar()">↻ atualizar</button>
+  </div>
+</header>
+
+<div class="filters">
+  <div class="fg"><label>Ano</label>
+    <select id="f-ano" onchange="render()">
+      <option value="">Todos</option>
+      <option value="2025">2025</option>
+      <option value="2026">2026</option>
+    </select>
+  </div>
+  <div class="fsep"></div>
+  <div class="fg"><label>Vendedor</label><select id="f-vend" onchange="render()"><option value="">Todos</option></select></div>
+  <div class="fsep"></div>
+  <div class="fg"><label>Plano</label><select id="f-plano" onchange="render()"><option value="">Todos</option></select></div>
+  <div class="fsep"></div>
+  <div class="fg"><label>Origem</label><select id="f-orig" onchange="render()"><option value="">Todos</option></select></div>
+  <div class="fsep"></div>
+  <button class="btn" onclick="reset()">limpar</button>
+</div>
+
+<div id="conteudo"><div class="estado"><div class="spin"></div><h3>Carregando dados...</h3><p>conectando ao Power CRM</p></div></div>
+<div class="footer" id="footer"></div>
+</div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbw4rX9x64xg4PWvW3Zw_g6rv3rggoqqOP9tRdmBCGW5fcorCt5A4Kkd71cypViYp3c6qw/exec';
+let D = null, CH = {};
+
+async function carregar() {
+  document.getElementById('conteudo').innerHTML = '<div class="estado"><div class="spin"></div><h3>Carregando...</h3></div>';
+  try {
+    const r = await fetch(API + '?acao=kpis');
+    const d = await r.json();
+    if (d.erro) throw new Error(d.erro);
+    D = d;
+    popularSelects();
+    render();
+    document.getElementById('pill').style.display = 'flex';
+  } catch(e) {
+    document.getElementById('conteudo').innerHTML = `<div class="estado"><h3>Erro</h3><p>${e.message}</p><p style="margin-top:8px;font-size:11px;color:var(--muted)">Verifique se o Web App está implantado corretamente no Apps Script</p></div>`;
+  }
+}
+
+function popularSelects() {
+  function pop(id, arr, key) {
+    const el = document.getElementById(id);
+    while(el.options.length > 1) el.remove(1);
+    arr.forEach(i => { if(i[key]) el.add(new Option(i[key], i[key])); });
+  }
+  pop('f-vend',  D.porVendedor, 'vendedor');
+  pop('f-plano', D.porPlano,    'plano');
+  pop('f-orig',  D.porOrigem,   'origem');
+}
+
+function getF() {
+  return {
+    ano:  document.getElementById('f-ano').value,
+    vend: document.getElementById('f-vend').value,
+    plano:document.getElementById('f-plano').value,
+    orig: document.getElementById('f-orig').value,
+  };
+}
+
+function reset() {
+  ['f-ano','f-vend','f-plano','f-orig'].forEach(id => document.getElementById(id).value = '');
+  render();
+}
+
+function filtrarMeses(meses) {
+  const f = getF();
+  return meses.filter(m => !f.ano || m.mes.startsWith(f.ano));
+}
+
+function filtrarVendedores(vs) {
+  const f = getF();
+  return vs.filter(v => !f.vend || v.vendedor === f.vend);
+}
+
+function render() {
+  if (!D) return;
+  const meses = filtrarMeses(D.porMes);
+  const vends  = filtrarVendedores(D.porVendedor);
+
+  const tL = meses.reduce((s,m)=>s+m.leads,0);
+  const tV = meses.reduce((s,m)=>s+m.vendas,0);
+  const tR = meses.reduce((s,m)=>s+m.receita,0);
+  const tP = meses.reduce((s,m)=>s+m.perdas,0);
+  const tPr= meses.reduce((s,m)=>s+m.propostas,0);
+  const conv= tL>0?((tV/tL)*100).toFixed(1):0;
+  const tk  = tV>0?(tR/tV):0;
+
+  const delta = c => {
+    if(meses.length<2) return null;
+    const u=meses[meses.length-1][c], p=meses[meses.length-2][c];
+    return p>0?((u-p)/p*100).toFixed(0):null;
+  };
+
+  document.getElementById('hsub').textContent =
+    fmt(tL)+' leads · '+fmt(tV)+' vendas · '+fmtR(tR)+' em prêmios';
+
+  document.getElementById('conteudo').innerHTML = `
+    <div class="kpi-grid">
+      ${K('Leads','#4e7fff',fmt(tL),'novas cotações',delta('leads'))}
+      ${K('Propostas','#f0b429',fmt(tPr),'em negociação',delta('propostas'))}
+      ${K('Vendas','#00d4a0',fmt(tV),'contratos fechados',delta('vendas'))}
+      ${K('Perdas','#ff5c5c',fmt(tP),'arquivados',delta('perdas'))}
+      ${K('Receita','#a78bfa',fmtR(tR),'prêmios mensais',null)}
+      ${K('Conversão','#00d4a0',conv+'%','lead → venda',null)}
+      ${K('Ticket médio','#4e7fff',fmtR(tk),'por contrato',null)}
+    </div>
+
+    <div class="row r32">
+      <div class="card" style="animation-delay:.05s">
+        <div class="ct">Evolução mensal</div><div class="cs">leads, vendas e perdas</div>
+        <canvas id="c-ev" height="220"></canvas>
+      </div>
+      <div class="card" style="animation-delay:.1s">
+        <div class="ct">Funil de conversão</div><div class="cs">etapas do pipeline</div>
+        <div class="funil" id="funil"></div>
+      </div>
+    </div>
+
+    <div class="row r2">
+      <div class="card" style="animation-delay:.15s">
+        <div class="ct">Receita mensal</div><div class="cs">total de prêmios (R$)</div>
+        <canvas id="c-rec" height="200"></canvas>
+      </div>
+      <div class="card" style="animation-delay:.2s">
+        <div class="ct">Motivos de perda</div><div class="cs">por arquivamento</div>
+        <div class="motivos" id="motivos"></div>
+      </div>
+    </div>
+
+    <div class="row r23">
+      <div class="card" style="animation-delay:.25s">
+        <div class="ct">Ranking de vendedores</div><div class="cs">vendas e conversão</div>
+        <ul class="ranking" id="ranking"></ul>
+      </div>
+      <div class="card" style="animation-delay:.3s">
+        <div class="ct">Leads × Vendas</div><div class="cs">comparativo mensal</div>
+        <canvas id="c-mix" height="200"></canvas>
+      </div>
+    </div>
+
+    <div class="row r2">
+      <div class="card" style="animation-delay:.35s">
+        <div class="ct">Por origem</div><div class="cs">fonte dos leads</div>
+        <canvas id="c-orig" height="190"></canvas>
+      </div>
+      <div class="card" style="animation-delay:.4s">
+        <div class="ct">Por plano</div><div class="cs">distribuição de contratos</div>
+        <canvas id="c-plano" height="190"></canvas>
+      </div>
+    </div>`;
+
+  rEvol(meses); rRec(meses); rMix(meses);
+  rFunil(D.porStatus, tL);
+  rMotivos(D.motivosPerda);
+  rRanking(vends);
+  rDonut('c-orig',  D.porOrigem, 'origem');
+  rDonut('c-plano', D.porPlano,  'plano');
+
+  const ult = D.totais && D.totais['ultima_atualizacao'];
+  document.getElementById('footer').textContent = ult
+    ? 'última sincronização: ' + new Date(ult).toLocaleString('pt-BR') : '';
+}
+
+// ── CHARTS ──
+Chart.defaults.color = '#565d75';
+Chart.defaults.font  = {family:"'Syne',sans-serif",size:11};
+const GR = {
+  x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#565d75'}},
+  y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#565d75'}}
+};
+function D2(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
+
+function rEvol(ms) {
+  D2('ev');
+  CH.ev = new Chart(document.getElementById('c-ev'), {
+    type:'line',
+    data:{
+      labels:ms.map(m=>fmtM(m.mes)),
+      datasets:[
+        {label:'Leads', data:ms.map(m=>m.leads),  borderColor:'#4e7fff',backgroundColor:'rgba(78,127,255,0.07)',tension:.4,fill:true,pointRadius:3},
+        {label:'Vendas',data:ms.map(m=>m.vendas), borderColor:'#00d4a0',backgroundColor:'transparent',tension:.4,pointRadius:3},
+        {label:'Perdas',data:ms.map(m=>m.perdas), borderColor:'#ff5c5c',backgroundColor:'transparent',tension:.4,pointRadius:3,borderDash:[4,3]},
+      ]
+    },
+    options:{plugins:{legend:{display:true,labels:{color:'#8890a8',boxWidth:10,font:{size:11}}}},scales:GR}
+  });
+}
+
+function rRec(ms) {
+  D2('rec');
+  CH.rec = new Chart(document.getElementById('c-rec'), {
+    type:'bar',
+    data:{
+      labels:ms.map(m=>fmtM(m.mes)),
+      datasets:[{data:ms.map(m=>m.receita),backgroundColor:ms.map((_,i)=>i===ms.length-1?'#4e7fff':'rgba(78,127,255,0.4)'),borderRadius:4}]
+    },
+    options:{plugins:{legend:{display:false}},scales:{x:GR.x,y:{...GR.y,ticks:{color:'#565d75',callback:v=>'R$'+fK(v)}}}}
+  });
+}
+
+function rMix(ms) {
+  D2('mix');
+  CH.mix = new Chart(document.getElementById('c-mix'), {
+    type:'bar',
+    data:{
+      labels:ms.map(m=>fmtM(m.mes)),
+      datasets:[
+        {label:'Leads', data:ms.map(m=>m.leads),  backgroundColor:'rgba(78,127,255,0.5)',borderRadius:3},
+        {label:'Vendas',data:ms.map(m=>m.vendas), backgroundColor:'rgba(0,212,160,0.7)', borderRadius:3},
+      ]
+    },
+    options:{plugins:{legend:{display:true,labels:{color:'#8890a8',boxWidth:10,font:{size:11}}}},scales:GR}
+  });
+}
+
+function rDonut(id, arr, key) {
+  D2(id);
+  const top=arr.slice(0,6);
+  const cores=['#4e7fff','#00d4a0','#f0b429','#ff5c5c','#a78bfa','#38bdf8'];
+  CH[id] = new Chart(document.getElementById(id), {
+    type:'doughnut',
+    data:{labels:top.map(i=>i[key]),datasets:[{data:top.map(i=>i.quantidade),backgroundColor:cores,borderWidth:0,hoverOffset:6}]},
+    options:{cutout:'62%',plugins:{legend:{position:'right',labels:{color:'#8890a8',boxWidth:10,font:{size:11},padding:10}}}}
+  });
+}
+
+function rFunil(arr, total) {
+  const w = document.getElementById('funil');
+  if(!arr||!arr.length){w.innerHTML='<p style="color:var(--muted);font-size:12px">Sem dados</p>';return;}
+  const cores=['#4e7fff','#00d4a0','#f0b429','#ff5c5c','#a78bfa'];
+  const max=Math.max(...arr.map(s=>s.quantidade),1);
+  w.innerHTML=arr.map((s,i)=>`
+    <div class="fr">
+      <div class="fl">${s.status}</div>
+      <div class="ft"><div class="ff" style="width:${(s.quantidade/max*100).toFixed(0)}%;background:${cores[i%cores.length]}">${fmt(s.quantidade)}</div></div>
+      <div class="fp">${total>0?((s.quantidade/total)*100).toFixed(1):0}%</div>
+    </div>`).join('');
+}
+
+function rMotivos(arr) {
+  const w = document.getElementById('motivos');
+  if(!arr||!arr.length){w.innerHTML='<p style="color:var(--muted);font-size:12px;padding:8px 0">Nenhum motivo registrado</p>';return;}
+  const top=arr.slice(0,9), max=Math.max(...top.map(m=>m.quantidade),1);
+  w.innerHTML=top.map(m=>`
+    <div class="mr">
+      <div class="ml">${m.motivo}</div>
+      <div class="mbw"><div class="mb" style="width:${(m.quantidade/max*100).toFixed(0)}%"></div></div>
+      <div class="mn">${fmt(m.quantidade)}</div>
+    </div>`).join('');
+}
+
+function rRanking(vs) {
+  const top=vs.slice(0,8), maxV=Math.max(...top.map(v=>v.vendas),1);
+  document.getElementById('ranking').innerHTML=top.map((v,i)=>`
+    <li class="ri">
+      <span class="rn">${i+1}</span>
+      <span class="rname">${v.vendedor}</span>
+      <div class="rbar"><div class="rfill" style="width:${(v.vendas/maxV*100).toFixed(0)}%"></div></div>
+      <span class="rval">${fmt(v.vendas)} vd</span>
+      <span class="rpct">${v.conversao}%</span>
+    </li>`).join('');
+}
+
+// ── HELPERS ──
+function K(lb,cor,val,sub,d){
+  const dh=d!=null?`<div class="kpi-d ${+d>=0?'up':'dn'}">${+d>=0?'↑':'↓'} ${Math.abs(d)}% vs mês ant.</div>`:'';
+  return`<div class="kpi" style="--kc:${cor}"><div class="kpi-lbl">${lb}</div><div class="kpi-val">${val}</div><div class="kpi-sub">${sub}</div>${dh}</div>`;
+}
+function fmt(n){n=+n;if(isNaN(n))return'—';return n>=1000?(n/1000).toFixed(1).replace('.',',')+'k':n.toLocaleString('pt-BR');}
+function fmtR(n){n=+n;if(!n)return'—';if(n>=1e6)return'R$'+(n/1e6).toFixed(1).replace('.',',')+'M';if(n>=1000)return'R$'+(n/1000).toFixed(1).replace('.',',')+'k';return'R$'+n.toLocaleString('pt-BR',{minimumFractionDigits:2});}
+function fK(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1000)return(n/1000).toFixed(0)+'k';return n;}
+function fmtM(s){const[y,m]=s.split('-');return['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][+m-1]+'/'+y.slice(2);}
+
+window.addEventListener('load', carregar);
+</script>
+</body>
+</html>
