@@ -219,6 +219,7 @@ function render() {
   }
   const conv= tL>0?((tV/tL)*100).toFixed(1):0;
   const tk  = tV>0?(tR/tV):0;
+  const tkFinal = tk;
 
   const delta = c => {
     if(meses.length<2) return null;
@@ -402,7 +403,7 @@ function K(lb,cor,val,sub,d){
   return`<div class="kpi" style="--kc:${cor}"><div class="kpi-lbl">${lb}</div><div class="kpi-val">${val}</div><div class="kpi-sub">${sub}</div>${dh}</div>`;
 }
 function fmt(n){n=+n;if(isNaN(n))return'—';return n>=1000?(n/1000).toFixed(1).replace('.',',')+'k':n.toLocaleString('pt-BR');}
-function fmtR(n){n=+n;if(!n)return'—';if(n>=1e6)return'R$'+(n/1e6).toFixed(1).replace('.',',')+'M';if(n>=1000)return'R$'+(n/1000).toFixed(1).replace('.',',')+'k';return'R$'+n.toLocaleString('pt-BR',{minimumFractionDigits:2});}
+function fmtR(n){n=+n;if(!n||isNaN(n))return'—';if(n>=1e6)return'R$ '+(n/1e6).toFixed(1).replace('.',',')+'M';if(n>=1000)return'R$ '+(n/1000).toFixed(1).replace('.',',')+'k';return'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});}
 function fK(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1000)return(n/1000).toFixed(0)+'k';return n;}
 function fmtM(s){const[y,m]=s.split('-');return['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][+m-1]+'/'+y.slice(2);}
 
