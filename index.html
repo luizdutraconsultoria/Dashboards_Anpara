@@ -413,68 +413,202 @@ function buildHTML(tR,tk,conv,ciclo,vols,tPerd,meses,vends,motivos,orig,plano){
   return kfi+funil+`
   <div class="row r2">
     <div class="card" style="animation-delay:.1s">
-      <div class="ct">Vendas por mês</div><div class="cs">contratos concretizados no período</div>
+      <div class="ct" id="ct-vendas">Vendas por mês</div><div class="cs" id="cs-vendas">contratos concretizados no período</div>
       <canvas id="c-ev" height="210"></canvas>
     </div>
-    <div class="card" style="animation-delay:.14s">
-      <div class="ct">Motivos de perda</div><div class="cs">por arquivamento</div>
-      <div class="motivos" id="motivos"></div>
+    <div class="card" style="animation-delay:.12s">
+      <div class="ct" id="ct-receita">Receita por mês</div><div class="cs" id="cs-receita">total de prêmios no período (R$)</div>
+      <canvas id="c-rec" height="210"></canvas>
     </div>
   </div>
   <div class="row r2">
-    <div class="card" style="animation-delay:.18s">
-      <div class="ct">Receita mensal</div><div class="cs">total de prêmios no período (R$)</div>
-      <canvas id="c-rec" height="200"></canvas>
+    <div class="card" style="animation-delay:.16s">
+      <div class="ct">Motivos de perda</div><div class="cs">por arquivamento</div>
+      <div class="motivos" id="motivos"></div>
     </div>
-    <div class="card" style="animation-delay:.22s">
+    <div class="card" style="animation-delay:.2s">
       <div class="ct">Por plano</div><div class="cs">distribuição conforme filtros</div>
-      <canvas id="c-plano" height="200"></canvas>
+      <canvas id="c-plano" height="210"></canvas>
     </div>
   </div>
   <div class="row r23">
-    <div class="card" style="animation-delay:.26s">
+    <div class="card" style="animation-delay:.24s">
       <div class="ct">Ranking de vendedores</div><div class="cs">vendas e conversão (funil estático)</div>
       <ul class="ranking" id="ranking"></ul>
     </div>
-    <div class="card" style="animation-delay:.3s">
+    <div class="card" style="animation-delay:.28s">
       <div class="ct">Por origem</div><div class="cs">fonte dos leads conforme filtros</div>
-      <canvas id="c-orig" height="200"></canvas>
+      <canvas id="c-orig" height="210"></canvas>
     </div>
-  </div>`;
-}
+  </div>`;}
 
 Chart.defaults.color='#55576e';
 Chart.defaults.font={family:"'Plus Jakarta Sans',sans-serif",size:11,weight:'500'};
 const GR={x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#55576e'}},y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#55576e'}}};
 function D2(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
 
+// Detecta granularidade baseado no filtro de data
+function detectarGranularidade() {
+  const f = getF();
+  if (!f.de || !f.ate) return 'mes';
+  const d1 = new Date(f.de), d2 = new Date(f.ate);
+  const dias = Math.round((d2 - d1) / (1000*60*60*24));
+  if (dias <= 7)  return 'dia';
+  if (dias <= 31) return 'semana';
+  return 'mes';
+}
+
+// Agrupa dados brutos por granularidade
+function agruparPorGranularidade(dados, gran) {
+  if (!dados || !dados.length) return { labels:[], vendas:[], receita:[] };
+  const f = getF();
+  const inP = dt => {
+    if(!dt||dt==='') return false;
+    if(f.de&&dt<f.de) return false;
+    if(f.ate&&dt>f.ate) return false;
+    return true;
+  };
+
+  const map = {};
+  dados.forEach(r => {
+    const dt = r[CI.dtVenda];
+    if (!inP(dt)) return;
+    let chave;
+    if (gran === 'dia') {
+      chave = dt.slice(0,10);
+    } else if (gran === 'semana') {
+      // Semana: segunda-feira da semana
+      const d = new Date(dt);
+      const dow = d.getDay(); // 0=dom
+      const diff = (dow === 0) ? -6 : 1 - dow;
+      d.setDate(d.getDate() + diff);
+      chave = d.toISOString().slice(0,10);
+    } else {
+      chave = dt.slice(0,7);
+    }
+    if (!map[chave]) map[chave] = {vendas:0, receita:0};
+    map[chave].vendas++;
+    map[chave].receita += parseFloat(String(r[CI.receita]||'0').replace('R$','').replace(/\./g,'').replace(',','.'))||0;
+  });
+
+  const keys = Object.keys(map).sort();
+  const labels = keys.map(k => {
+    if (gran === 'dia') {
+      const [y,m,d] = k.split('-');
+      return d+'/'+m;
+    } else if (gran === 'semana') {
+      const [y,m,d] = k.split('-');
+      return 'Sem '+d+'/'+m;
+    } else {
+      return fmtM(k);
+    }
+  });
+
+  // Atualizar títulos dos cards
+  const titulos = {dia:'Vendas por dia', semana:'Vendas por semana', mes:'Vendas por mês'};
+  const titulosR = {dia:'Receita por dia', semana:'Receita por semana', mes:'Receita por mês'};
+  const subs = {dia:'contratos por dia', semana:'contratos por semana', mes:'contratos por mês'};
+  const subsR = {dia:'prêmios por dia (R$)', semana:'prêmios por semana (R$)', mes:'prêmios por mês (R$)'};
+  const ctV = document.getElementById('ct-vendas');
+  const csV = document.getElementById('cs-vendas');
+  const ctR = document.getElementById('ct-receita');
+  const csR = document.getElementById('cs-receita');
+  if(ctV) ctV.textContent = titulos[gran];
+  if(csV) csV.textContent = subs[gran];
+  if(ctR) ctR.textContent = titulosR[gran];
+  if(csR) csR.textContent = subsR[gran];
+
+  return {
+    labels,
+    vendas: keys.map(k => map[k].vendas),
+    receita: keys.map(k => map[k].receita)
+  };
+}
+
+// Plugin de label no topo das barras
+const datalabelsPlugin = {
+  id:'topLabels',
+  afterDatasetsDraw(chart){
+    const ctx=chart.ctx;
+    chart.data.datasets.forEach((ds,di)=>{
+      const meta=chart.getDatasetMeta(di);
+      meta.data.forEach((bar,i)=>{
+        const val=ds.data[i];
+        if(!val) return;
+        const label = ds._isReceita ? 'R$'+fK(val) : String(val);
+        ctx.save();
+        ctx.fillStyle='rgba(236,237,245,0.8)';
+        ctx.font='600 10px Plus Jakarta Sans, sans-serif';
+        ctx.textAlign='center';
+        ctx.textBaseline='bottom';
+        ctx.fillText(label, bar.x, bar.y-3);
+        ctx.restore();
+      });
+    });
+  }
+};
+Chart.register(datalabelsPlugin);
+
 function renderCharts(meses,vends,orig,plano){
-  // Vendas por mês — barras
+  const gran = detectarGranularidade();
+
+  // Usa dados brutos se disponível para granularidade correta, senão usa meses agregados
+  let labels, vendasData, receitaData;
+  if (DRAW && (gran === 'dia' || gran === 'semana')) {
+    const f = getF();
+    const fil = DRAW.filter(r=>{
+      const dt=r[CI.dtLead];
+      if(f.de&&dt<f.de) return false;
+      if(f.ate&&dt>f.ate) return false;
+      if(f.vend&&norm(r[CI.vendedor],'Sem vendedor')!==f.vend)  return false;
+      if(f.plano&&norm(r[CI.plano],'Sem plano')!==f.plano)      return false;
+      if(f.orig&&norm(r[CI.origem],'Sem origem')!==f.orig)      return false;
+      if(f.unid&&norm(r[CI.unidade],'Sem unidade')!==f.unid)   return false;
+      return true;
+    });
+    const agr = agruparPorGranularidade(fil, gran);
+    labels = agr.labels; vendasData = agr.vendas; receitaData = agr.receita;
+  } else {
+    labels = meses.map(m=>fmtM(m.mes));
+    vendasData = meses.map(m=>m.vendas||0);
+    receitaData = meses.map(m=>m.receita||0);
+    // Atualizar títulos para mês
+    const ctV=document.getElementById('ct-vendas');const csV=document.getElementById('cs-vendas');
+    const ctR=document.getElementById('ct-receita');const csR=document.getElementById('cs-receita');
+    if(ctV)ctV.textContent='Vendas por mês';if(csV)csV.textContent='contratos por mês';
+    if(ctR)ctR.textContent='Receita por mês';if(csR)csR.textContent='prêmios por mês (R$)';
+  }
+
+  const ultimo = labels.length - 1;
+
+  // Vendas
   D2('ev');
   const ev=document.getElementById('c-ev');
-  if(ev&&meses&&meses.length){
-    CH.ev=new Chart(ev,{type:'bar',
-      data:{
-        labels:meses.map(m=>fmtM(m.mes)),
-        datasets:[{
-          label:'Vendas',
-          data:meses.map(m=>m.vendas||0),
-          backgroundColor:meses.map((_,i)=>i===meses.length-1?'#00c896':'rgba(0,200,150,0.4)'),
-          borderRadius:5,borderSkipped:false
-        }]
-      },
+  if(ev&&labels.length){
+    const ds = {
+      label:'Vendas', data:vendasData, _isReceita:false,
+      backgroundColor:labels.map((_,i)=>i===ultimo?'#00c896':'rgba(0,200,150,0.4)'),
+      borderRadius:5,borderSkipped:false
+    };
+    CH.ev=new Chart(ev,{type:'bar',data:{labels,datasets:[ds]},
       options:{plugins:{legend:{display:false}},scales:GR}
     });
   }
-  // Receita mensal — barras
+
+  // Receita
   D2('rec');
   const rec=document.getElementById('c-rec');
-  if(rec&&meses&&meses.length){
-    CH.rec=new Chart(rec,{type:'bar',
-      data:{labels:meses.map(m=>fmtM(m.mes)),datasets:[{data:meses.map(m=>m.receita||0),backgroundColor:meses.map((_,i)=>i===meses.length-1?'#4f7aff':'rgba(79,122,255,0.35)'),borderRadius:5,borderSkipped:false}]},
+  if(rec&&labels.length){
+    const ds = {
+      label:'Receita', data:receitaData, _isReceita:true,
+      backgroundColor:labels.map((_,i)=>i===ultimo?'#4f7aff':'rgba(79,122,255,0.35)'),
+      borderRadius:5,borderSkipped:false
+    };
+    CH.rec=new Chart(rec,{type:'bar',data:{labels,datasets:[ds]},
       options:{plugins:{legend:{display:false}},scales:{x:GR.x,y:{...GR.y,ticks:{color:'#55576e',callback:v=>'R$'+fK(v)}}}}
     });
   }
+
   // Por plano — barras horizontais
   D2('c-plano');
   const cp=document.getElementById('c-plano');
@@ -482,13 +616,11 @@ function renderCharts(meses,vends,orig,plano){
     const top=plano.slice(0,6);
     const cores=['#4f7aff','#00c896','#f5a623','#ff4f6a','#9d7dff','#22d3ee'];
     CH['c-plano']=new Chart(cp,{type:'bar',
-      data:{
-        labels:top.map(p=>p.plano),
-        datasets:[{data:top.map(p=>p.quantidade),backgroundColor:cores.slice(0,top.length),borderRadius:5,borderSkipped:false}]
-      },
+      data:{labels:top.map(p=>p.plano),datasets:[{data:top.map(p=>p.quantidade),backgroundColor:cores.slice(0,top.length),borderRadius:5,borderSkipped:false}]},
       options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{...GR.x},y:{...GR.y,ticks:{color:'#8a8da8',font:{size:11}}}}}
     });
   }
+
   // Por origem — donut
   rDonut('c-orig',orig||[],'origem');
 }
