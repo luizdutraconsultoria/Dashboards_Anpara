@@ -175,15 +175,15 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 const API='https://script.google.com/macros/s/AKfycbw4rX9x64xg4PWvW3Zw_g6rv3rggoqqOP9tRdmBCGW5fcorCt5A4Kkd71cypViYp3c6qw/exec';
 let DAGR=null,DRAW=null,CH={};
 
-// cols: ['dtLead','dtNeg','dtVistoria','dtLibera','dtVenda','dtPerda','isPerda','receita','vendedor','plano','origem','motivoPerda']
-const CI={dtLead:0,dtNeg:1,dtVistoria:2,dtLibera:3,dtVenda:4,dtPerda:5,isPerda:6,receita:7,vendedor:8,plano:9,origem:10,motivoPerda:11};
+// cols: ['dtLead','dtNeg','dtLibVist','dtVistoria','dtVenda','dtPerda','isPerda','receita','vendedor','plano','origem','motivoPerda']
+const CI={dtLead:0,dtNeg:1,dtLibVist:2,dtVistoria:3,dtVenda:4,dtPerda:5,isPerda:6,receita:7,vendedor:8,plano:9,origem:10,motivoPerda:11};
 
 // Cores e nomes das 5 etapas
 const ETAPAS=[
   {key:'dtLead',    lbl:'Cotações recebidas',     cor:'#4f7aff'},
   {key:'dtNeg',     lbl:'Em negociação',           cor:'#f5a623'},
-  {key:'dtVistoria',lbl:'Vistorias',               cor:'#9d7dff'},
-  {key:'dtLibera',  lbl:'Liberadas p/ cadastro',   cor:'#22d3ee'},
+  {key:'dtLibVist', lbl:'Liberadas p/ vistoria',  cor:'#9d7dff'},
+  {key:'dtVistoria',lbl:'Vistoria finalizada',     cor:'#22d3ee'},
   {key:'dtVenda',   lbl:'Vendas concretizadas',    cor:'#00c896'},
 ];
 
@@ -283,8 +283,8 @@ function renderRaw(){
   // Volume por etapa (funil estático — conta data de passagem no período)
   const tL    = fil.length;
   const tNeg  = fil.filter(r=>inP(r[CI.dtNeg])).length;
+  const tLibV = fil.filter(r=>inP(r[CI.dtLibVist])).length;
   const tVist = fil.filter(r=>inP(r[CI.dtVistoria])).length;
-  const tLib  = fil.filter(r=>inP(r[CI.dtLibera])).length;
   const tVend = fil.filter(r=>inP(r[CI.dtVenda])).length;
   const tPerd = fil.filter(r=>r[CI.isPerda]===1).length;
   const tR    = fil.filter(r=>inP(r[CI.dtVenda])).reduce((s,r)=>s+(+r[CI.receita]||0),0);
@@ -302,19 +302,19 @@ function renderRaw(){
 
   const conv=tL>0?((tVend/tL)*100).toFixed(1):0;
   const tk=tVend>0?(tR/tVend):0;
-  const vols=[tL,tNeg,tVist,tLib,tVend];
+  const vols=[tL,tNeg,tLibV,tVist,tVend];
 
   // Por mês
   const mMap={};
   fil.forEach(r=>{
     const dt=r[CI.dtLead];if(!dt)return;
     const m=dt.slice(0,7);
-    if(!mMap[m])mMap[m]={mes:m,leads:0,neg:0,vistoria:0,libera:0,vendas:0,receita:0,perdas:0};
+    if(!mMap[m])mMap[m]={mes:m,leads:0,neg:0,libvist:0,vistoria:0,vendas:0,receita:0,perdas:0};
     mMap[m].leads++;
-    if(inP(r[CI.dtNeg]))    mMap[m].neg++;
+    if(inP(r[CI.dtNeg]))     mMap[m].neg++;
+    if(inP(r[CI.dtLibVist])) mMap[m].libvist++;
     if(inP(r[CI.dtVistoria]))mMap[m].vistoria++;
-    if(inP(r[CI.dtLibera])) mMap[m].libera++;
-    if(inP(r[CI.dtVenda])){mMap[m].vendas++;mMap[m].receita+=+r[CI.receita]||0;}
+    if(inP(r[CI.dtVenda])){mMap[m].vendas++;mMap[m].receita+=(parseFloat(String(r[CI.receita]||'0').replace('R$','').replace(/\./g,'').replace(',','.'))||0);}
     if(r[CI.isPerda]===1)   mMap[m].perdas++;
   });
   const mArr=Object.values(mMap).sort((a,b)=>a.mes.localeCompare(b.mes));
@@ -452,8 +452,8 @@ function renderCharts(meses,vends,orig,plano){
         datasets:[
           {label:'Leads',     data:meses.map(m=>m.leads||0),   borderColor:'#4f7aff',backgroundColor:'rgba(79,122,255,0.08)',tension:.4,fill:true,pointRadius:3},
           {label:'Negociação',data:meses.map(m=>m.neg||0),     borderColor:'#f5a623',backgroundColor:'transparent',tension:.4,pointRadius:3},
-          {label:'Vistoria',  data:meses.map(m=>m.vistoria||0),borderColor:'#9d7dff',backgroundColor:'transparent',tension:.4,pointRadius:3},
-          {label:'Liberadas', data:meses.map(m=>m.libera||0),  borderColor:'#22d3ee',backgroundColor:'transparent',tension:.4,pointRadius:2},
+          {label:'Lib. vistoria',data:meses.map(m=>m.libvist||0),borderColor:'#9d7dff',backgroundColor:'transparent',tension:.4,pointRadius:2},
+          {label:'Vistoria',      data:meses.map(m=>m.vistoria||0),borderColor:'#22d3ee',backgroundColor:'transparent',tension:.4,pointRadius:3},
           {label:'Vendas',    data:meses.map(m=>m.vendas||0),  borderColor:'#00c896',backgroundColor:'transparent',tension:.4,pointRadius:3},
         ]
       },
