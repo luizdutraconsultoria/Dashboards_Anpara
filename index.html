@@ -226,10 +226,11 @@ function dis(v){
 }
 
 function popSelects(dados){
-  const vends=[...new Set(dados.map(r=>r[CI.vendedor]).filter(Boolean))].sort();
-  const planos=[...new Set(dados.map(r=>r[CI.plano]).filter(Boolean))].sort();
-  const origs=[...new Set(dados.map(r=>r[CI.origem]).filter(Boolean))].sort();
-  const unids=[...new Set(dados.map(r=>r[CI.unidade]).filter(Boolean))].sort();
+  const norm=(v,fb)=>v&&v.trim()?v.trim():fb;
+  const vends=[...new Set(dados.map(r=>norm(r[CI.vendedor],'Sem vendedor')))].sort();
+  const planos=[...new Set(dados.map(r=>norm(r[CI.plano],'Sem plano')))].sort();
+  const origs=[...new Set(dados.map(r=>norm(r[CI.origem],'Sem origem')))].sort();
+  const unids=[...new Set(dados.map(r=>norm(r[CI.unidade],'Sem unidade')))].sort();
   function pop(id,arr){const el=document.getElementById(id);while(el.options.length>1)el.remove(1);arr.forEach(v=>el.add(new Option(v,v)));}
   pop('f-vend',vends);pop('f-plano',planos);pop('f-orig',origs);pop('f-unid',unids);
 }
@@ -262,6 +263,7 @@ function renderAgr(){
   setFooter();
 }
 
+function norm(v,fb){return v&&v.trim()?v.trim():fb;}
 function renderRaw(){
   if(!DRAW){renderAgr();return;}
   const f=getF();
@@ -270,10 +272,10 @@ function renderRaw(){
     const dt=r[CI.dtLead];
     if(f.de&&dt<f.de) return false;
     if(f.ate&&dt>f.ate) return false;
-    if(f.vend&&r[CI.vendedor]!==f.vend)   return false;
-    if(f.plano&&r[CI.plano]!==f.plano)    return false;
-    if(f.orig&&r[CI.origem]!==f.orig)     return false;
-    if(f.unid&&r[CI.unidade]!==f.unid)   return false;
+    if(f.vend&&norm(r[CI.vendedor],'Sem vendedor')!==f.vend)  return false;
+    if(f.plano&&norm(r[CI.plano],'Sem plano')!==f.plano)       return false;
+    if(f.orig&&norm(r[CI.origem],'Sem origem')!==f.orig)       return false;
+    if(f.unid&&norm(r[CI.unidade],'Sem unidade')!==f.unid)    return false;
     return true;
   });
 
@@ -409,9 +411,9 @@ function buildHTML(tR,tk,conv,ciclo,vols,tPerd,meses,vends,motivos,orig,plano){
   </div>`;
 
   return kfi+funil+`
-  <div class="row r32">
+  <div class="row r2">
     <div class="card" style="animation-delay:.1s">
-      <div class="ct">Evolução mensal</div><div class="cs">passagem por etapa mês a mês</div>
+      <div class="ct">Vendas por mês</div><div class="cs">contratos concretizados no período</div>
       <canvas id="c-ev" height="210"></canvas>
     </div>
     <div class="card" style="animation-delay:.14s">
@@ -419,24 +421,24 @@ function buildHTML(tR,tk,conv,ciclo,vols,tPerd,meses,vends,motivos,orig,plano){
       <div class="motivos" id="motivos"></div>
     </div>
   </div>
-  <div class="row r23">
+  <div class="row r2">
     <div class="card" style="animation-delay:.18s">
+      <div class="ct">Receita mensal</div><div class="cs">total de prêmios no período (R$)</div>
+      <canvas id="c-rec" height="200"></canvas>
+    </div>
+    <div class="card" style="animation-delay:.22s">
+      <div class="ct">Por plano</div><div class="cs">distribuição conforme filtros</div>
+      <canvas id="c-plano" height="200"></canvas>
+    </div>
+  </div>
+  <div class="row r23">
+    <div class="card" style="animation-delay:.26s">
       <div class="ct">Ranking de vendedores</div><div class="cs">vendas e conversão (funil estático)</div>
       <ul class="ranking" id="ranking"></ul>
     </div>
-    <div class="card" style="animation-delay:.22s">
-      <div class="ct">Receita mensal</div><div class="cs">total de prêmios (R$)</div>
-      <canvas id="c-rec" height="200"></canvas>
-    </div>
-  </div>
-  <div class="row r2">
-    <div class="card" style="animation-delay:.26s">
-      <div class="ct">Por origem</div><div class="cs">fonte dos leads</div>
-      <canvas id="c-orig" height="180"></canvas>
-    </div>
     <div class="card" style="animation-delay:.3s">
-      <div class="ct">Por plano</div><div class="cs">distribuição de contratos</div>
-      <canvas id="c-plano" height="180"></canvas>
+      <div class="ct">Por origem</div><div class="cs">fonte dos leads conforme filtros</div>
+      <canvas id="c-orig" height="200"></canvas>
     </div>
   </div>`;
 }
@@ -447,23 +449,24 @@ const GR={x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#55576e'}},y:{g
 function D2(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
 
 function renderCharts(meses,vends,orig,plano){
+  // Vendas por mês — barras
   D2('ev');
   const ev=document.getElementById('c-ev');
   if(ev&&meses&&meses.length){
-    CH.ev=new Chart(ev,{type:'line',
+    CH.ev=new Chart(ev,{type:'bar',
       data:{
         labels:meses.map(m=>fmtM(m.mes)),
-        datasets:[
-          {label:'Leads',     data:meses.map(m=>m.leads||0),   borderColor:'#4f7aff',backgroundColor:'rgba(79,122,255,0.08)',tension:.4,fill:true,pointRadius:3},
-          {label:'Negociação',data:meses.map(m=>m.neg||0),     borderColor:'#f5a623',backgroundColor:'transparent',tension:.4,pointRadius:3},
-          {label:'Lib. vistoria',data:meses.map(m=>m.libvist||0),borderColor:'#9d7dff',backgroundColor:'transparent',tension:.4,pointRadius:2},
-          {label:'Vistoria',      data:meses.map(m=>m.vistoria||0),borderColor:'#22d3ee',backgroundColor:'transparent',tension:.4,pointRadius:3},
-          {label:'Vendas',    data:meses.map(m=>m.vendas||0),  borderColor:'#00c896',backgroundColor:'transparent',tension:.4,pointRadius:3},
-        ]
+        datasets:[{
+          label:'Vendas',
+          data:meses.map(m=>m.vendas||0),
+          backgroundColor:meses.map((_,i)=>i===meses.length-1?'#00c896':'rgba(0,200,150,0.4)'),
+          borderRadius:5,borderSkipped:false
+        }]
       },
-      options:{plugins:{legend:{display:true,labels:{color:'#8a8da8',boxWidth:10,usePointStyle:true,font:{size:11}}}},scales:GR}
+      options:{plugins:{legend:{display:false}},scales:GR}
     });
   }
+  // Receita mensal — barras
   D2('rec');
   const rec=document.getElementById('c-rec');
   if(rec&&meses&&meses.length){
@@ -472,8 +475,22 @@ function renderCharts(meses,vends,orig,plano){
       options:{plugins:{legend:{display:false}},scales:{x:GR.x,y:{...GR.y,ticks:{color:'#55576e',callback:v=>'R$'+fK(v)}}}}
     });
   }
+  // Por plano — barras horizontais
+  D2('c-plano');
+  const cp=document.getElementById('c-plano');
+  if(cp&&plano&&plano.length){
+    const top=plano.slice(0,6);
+    const cores=['#4f7aff','#00c896','#f5a623','#ff4f6a','#9d7dff','#22d3ee'];
+    CH['c-plano']=new Chart(cp,{type:'bar',
+      data:{
+        labels:top.map(p=>p.plano),
+        datasets:[{data:top.map(p=>p.quantidade),backgroundColor:cores.slice(0,top.length),borderRadius:5,borderSkipped:false}]
+      },
+      options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{...GR.x},y:{...GR.y,ticks:{color:'#8a8da8',font:{size:11}}}}}
+    });
+  }
+  // Por origem — donut
   rDonut('c-orig',orig||[],'origem');
-  rDonut('c-plano',plano||[],'plano');
 }
 
 function rDonut(id,arr,key){
