@@ -5,20 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard Comercial</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#09090f;--s1:#0f1019;--s2:#15161f;--s3:#1c1d2a;
   --b:rgba(255,255,255,0.07);--b2:rgba(255,255,255,0.13);
   --tx:#ecedf5;--mu:#55576e;--mu2:#8a8da8;
-  --blue:#4f7aff;--green:#00c896;--amber:#f5a623;--red:#ff4f6a;--purple:#9d7dff;
+  --blue:#4f7aff;--green:#00c896;--amber:#f5a623;--red:#ff4f6a;--purple:#9d7dff;--cyan:#22d3ee;
   --font:'Plus Jakarta Sans',sans-serif;--r:10px;--r2:16px;
 }
 body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px;min-height:100vh;}
 .wrap{max-width:1480px;margin:0 auto;padding:24px 28px;}
 
-/* HEADER */
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:18px;border-bottom:1px solid var(--b);}
 .hdr-l{display:flex;align-items:center;gap:10px;}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 12px rgba(79,122,255,.6);}
@@ -31,41 +30,32 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 .btn{background:var(--s2);border:1px solid var(--b2);color:var(--mu2);padding:6px 14px;border-radius:var(--r);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;}
 .btn:hover{background:var(--s3);color:var(--tx);}
 
-/* LOAD */
 .lbar{height:2px;background:var(--b);border-radius:1px;margin-bottom:14px;overflow:hidden;display:none;}
 .lbar.on{display:block;}
-.lfill{height:100%;background:var(--blue);border-radius:1px;animation:la 2s ease-in-out infinite;}
+.lfill{height:100%;background:var(--blue);animation:la 2s ease-in-out infinite;}
 @keyframes la{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}
 .lmsg{font-size:11px;color:var(--mu);margin-bottom:10px;font-weight:500;display:none;}
 .lmsg.on{display:block;}
 
-/* SHORTCUTS */
 .scuts{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;}
 .sc{background:var(--s1);border:1px solid var(--b);color:var(--mu2);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;}
 .sc:hover,.sc.on{background:rgba(79,122,255,.1);border-color:rgba(79,122,255,.3);color:var(--blue);}
 .sc:disabled{opacity:.35;cursor:default;}
 
-/* FILTROS */
 .fbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:12px 16px;align-items:flex-end;}
 .fg{display:flex;flex-direction:column;gap:5px;}
 .fg label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--mu);}
-.fg input[type=date],.fg select{
-  background:var(--s2);border:1px solid var(--b2);color:var(--tx);
-  padding:7px 12px;border-radius:var(--r);font-family:var(--font);
-  font-size:12px;font-weight:500;outline:none;transition:border-color .15s;color-scheme:dark;
-}
+.fg input[type=date],.fg select{background:var(--s2);border:1px solid var(--b2);color:var(--tx);padding:7px 12px;border-radius:var(--r);font-family:var(--font);font-size:12px;font-weight:500;outline:none;transition:border-color .15s;color-scheme:dark;}
 .fg input[type=date]{min-width:148px;}
-.fg select{min-width:155px;appearance:none;padding-right:28px;cursor:pointer;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2355576e'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 10px center;}
+.fg select{min-width:155px;appearance:none;padding-right:28px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2355576e'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
 .fg input:focus,.fg select:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(79,122,255,.1);}
 .fg select:disabled,.fg input:disabled{opacity:.4;cursor:default;}
 .fsep{width:1px;background:var(--b);margin:0 4px;align-self:stretch;}
 
-/* KPI FINANCEIROS */
+/* KPIs FINANCEIROS */
 .kfi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
 @media(max-width:900px){.kfi{grid-template-columns:repeat(2,1fr);}}
-.kf{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s;}
+.kf{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s;animation:fadeUp .35s ease both;}
 .kf:hover{border-color:var(--b2);}
 .kf-bar{position:absolute;top:0;left:0;right:0;height:2px;}
 .kf-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--mu2);margin-bottom:8px;}
@@ -74,35 +64,43 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 .kf-d{font-size:10px;font-weight:700;margin-top:6px;}
 .kf-d.up{color:var(--green);}.kf-d.dn{color:var(--red);}
 
-/* FUNIL ESTÁTICO */
-.funil-wrap{margin-bottom:16px;}
-.funil-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu2);margin-bottom:10px;}
-.funil-row{display:flex;align-items:stretch;gap:0;}
-.fe{flex:1;background:var(--s1);border:1px solid var(--b);padding:16px;position:relative;transition:border-color .2s;}
+/* FUNIL 5 ETAPAS */
+.funil-wrap{margin-bottom:16px;animation:fadeUp .35s ease .05s both;}
+.funil-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:10px;}
+.funil-row{display:flex;align-items:stretch;}
+
+.fe{flex:1;background:var(--s1);border:1px solid var(--b);padding:16px 14px;transition:border-color .2s;min-width:0;}
 .fe:hover{border-color:var(--b2);}
 .fe:first-child{border-radius:var(--r2) 0 0 var(--r2);}
 .fe:not(:last-child){border-right:none;}
-.fe-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--mu2);margin-bottom:6px;}
-.fe-val{font-size:26px;font-weight:800;letter-spacing:-1px;line-height:1;margin-bottom:4px;}
-.fe-pct{font-size:11px;font-weight:600;color:var(--mu2);}
-.fe-sep{display:flex;flex-direction:column;align-items:center;justify-content:center;width:40px;background:var(--s1);border-top:1px solid var(--b);border-bottom:1px solid var(--b);flex-shrink:0;gap:3px;}
-.fe-sep-pct{font-size:10px;font-weight:700;color:var(--amber);}
-.fe-sep-arr{font-size:14px;color:var(--mu);}
-.fe-perda{width:120px;background:var(--s1);border:1px solid var(--b);border-radius:0 var(--r2) var(--r2) 0;padding:16px;border-left:none;}
+.fe-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu2);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fe-val{font-size:24px;font-weight:800;letter-spacing:-1px;line-height:1;margin-bottom:4px;}
+.fe-pct-total{font-size:11px;font-weight:600;color:var(--mu2);}
+
+/* Seta entre etapas */
+.fe-arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;width:36px;flex-shrink:0;background:var(--s1);border-top:1px solid var(--b);border-bottom:1px solid var(--b);gap:2px;}
+.fe-arrow-pct{font-size:10px;font-weight:700;color:var(--amber);line-height:1;}
+.fe-arrow-icon{font-size:13px;color:var(--mu);line-height:1;}
+
+/* Etapa de perda separada */
+.fe-perda{width:110px;flex-shrink:0;background:var(--s1);border:1px solid var(--b);border-radius:0 var(--r2) var(--r2) 0;padding:16px 14px;border-left:2px solid rgba(255,79,106,.25);}
+.fe-perda .fe-lbl{color:rgba(255,79,106,.6);}
+.fe-perda .fe-val{color:var(--red);}
+
+/* Barra de progresso do funil */
+.fe-bar{height:3px;border-radius:2px;margin-top:8px;background:var(--s3);}
+.fe-bar-fill{height:100%;border-radius:2px;transition:width .8s ease;}
 
 /* CARDS */
 .row{display:grid;gap:12px;margin-bottom:12px;}
 .r2{grid-template-columns:1fr 1fr;}
 .r32{grid-template-columns:3fr 2fr;}
 .r23{grid-template-columns:2fr 3fr;}
-.r4{grid-template-columns:repeat(4,1fr);}
-@media(max-width:1100px){.r4{grid-template-columns:repeat(2,1fr);}}
-@media(max-width:900px){.r2,.r32,.r23,.r4{grid-template-columns:1fr}}
-.card{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:20px;}
+@media(max-width:900px){.r2,.r32,.r23{grid-template-columns:1fr}}
+.card{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:20px;animation:fadeUp .35s ease both;}
 .ct{font-size:13px;font-weight:700;letter-spacing:-.2px;margin-bottom:2px;}
 .cs{font-size:11px;color:var(--mu2);margin-bottom:16px;font-weight:500;}
 
-/* RANKING */
 .ranking{list-style:none;}
 .ri{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--b);}
 .ri:last-child{border-bottom:none;}
@@ -113,7 +111,6 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 .rval{font-size:11px;font-weight:700;color:var(--blue);width:50px;text-align:right;}
 .rpct{font-size:10px;font-weight:600;color:var(--mu2);width:34px;text-align:right;}
 
-/* MOTIVOS */
 .motivos{display:flex;flex-direction:column;gap:8px;padding-top:2px;}
 .mr{display:flex;align-items:center;gap:8px;}
 .ml{font-size:11px;color:var(--mu2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;}
@@ -127,7 +124,6 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 .spin{width:24px;height:24px;border:2px solid var(--b2);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px;}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.kf,.card,.funil-wrap{animation:fadeUp .35s ease both;}
 .footer{text-align:center;padding-top:20px;border-top:1px solid var(--b);font-size:11px;color:var(--mu);font-weight:500;margin-top:8px;}
 </style>
 </head>
@@ -148,14 +144,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 <div class="lbar" id="lbar"><div class="lfill"></div></div>
 <div class="lmsg" id="lmsg">carregando dados para filtros e funil estático...</div>
 
-<div class="scuts" id="scuts">
+<div class="scuts">
   <button class="sc" onclick="sPeriodo(7)"  disabled>Últimos 7 dias</button>
   <button class="sc" onclick="sPeriodo(30)" disabled>Últimos 30 dias</button>
   <button class="sc" onclick="sPeriodo(90)" disabled>Últimos 90 dias</button>
   <button class="sc" onclick="sMes()"       disabled>Mês atual</button>
   <button class="sc" onclick="sAno(2025)"   disabled>2025</button>
   <button class="sc" onclick="sAno(2026)"   disabled>2026</button>
-  <button class="sc on"  onclick="sTodos()">Todos</button>
+  <button class="sc on" onclick="sTodos()">Todos</button>
 </div>
 
 <div class="fbar">
@@ -176,29 +172,38 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 </div>
 
 <script>
-const API = 'https://script.google.com/macros/s/AKfycbw4rX9x64xg4PWvW3Zw_g6rv3rggoqqOP9tRdmBCGW5fcorCt5A4Kkd71cypViYp3c6qw/exec';
-let DAGR=null, DRAW=null, CH={};
+const API='https://script.google.com/macros/s/AKfycbw4rX9x64xg4PWvW3Zw_g6rv3rggoqqOP9tRdmBCGW5fcorCt5A4Kkd71cypViYp3c6qw/exec';
+let DAGR=null,DRAW=null,CH={};
 
-// cols raw: ['dtLead','dtNeg','dtVenda','dtPerda','isPerda','receita','vendedor','plano','origem','motivoPerda']
-const CI={dtLead:0,dtNeg:1,dtVenda:2,dtPerda:3,isPerda:4,receita:5,vendedor:6,plano:7,origem:8,motivoPerda:9};
+// cols: ['dtLead','dtNeg','dtVistoria','dtLibera','dtVenda','dtPerda','isPerda','receita','vendedor','plano','origem','motivoPerda']
+const CI={dtLead:0,dtNeg:1,dtVistoria:2,dtLibera:3,dtVenda:4,dtPerda:5,isPerda:6,receita:7,vendedor:8,plano:9,origem:10,motivoPerda:11};
 
-async function carregar() {
+// Cores e nomes das 5 etapas
+const ETAPAS=[
+  {key:'dtLead',    lbl:'Cotações recebidas',     cor:'#4f7aff'},
+  {key:'dtNeg',     lbl:'Em negociação',           cor:'#f5a623'},
+  {key:'dtVistoria',lbl:'Vistorias',               cor:'#9d7dff'},
+  {key:'dtLibera',  lbl:'Liberadas p/ cadastro',   cor:'#22d3ee'},
+  {key:'dtVenda',   lbl:'Vendas concretizadas',    cor:'#00c896'},
+];
+
+async function carregar(){
   document.getElementById('conteudo').innerHTML='<div class="estado"><div class="spin"></div><h3>Carregando...</h3></div>';
   dis(true);
-  try {
+  try{
     const r=await fetch(API+'?acao=kpis&t='+Date.now());
     const d=await r.json();
     if(d.erro) throw new Error(d.erro);
     DAGR=d;
     renderAgr();
     document.getElementById('pill').style.display='flex';
-  } catch(e) {
+  }catch(e){
     document.getElementById('conteudo').innerHTML=`<div class="estado"><h3>Erro</h3><p>${e.message}</p></div>`;
     return;
   }
   document.getElementById('lbar').classList.add('on');
   document.getElementById('lmsg').classList.add('on');
-  try {
+  try{
     const r2=await fetch(API+'?acao=raw&t='+Date.now());
     const d2=await r2.json();
     if(d2.erro) throw new Error(d2.erro);
@@ -208,27 +213,24 @@ async function carregar() {
     document.getElementById('lbar').classList.remove('on');
     document.getElementById('lmsg').classList.remove('on');
     renderRaw();
-  } catch(e) {
+  }catch(e){
     document.getElementById('lmsg').textContent='filtros indisponíveis: '+e.message;
   }
 }
 
-function dis(v) {
-  ['f-de','f-ate','f-vend','f-plano','f-orig','btn-rst'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.disabled=v;
-  });
-  document.querySelectorAll('.sc').forEach((b,i)=>{ if(i<6) b.disabled=v; });
+function dis(v){
+  ['f-de','f-ate','f-vend','f-plano','f-orig','btn-rst'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=v;});
+  document.querySelectorAll('.sc').forEach((b,i)=>{if(i<6)b.disabled=v;});
 }
 
-function popSelects(dados) {
+function popSelects(dados){
   const vends=[...new Set(dados.map(r=>r[CI.vendedor]).filter(Boolean))].sort();
   const planos=[...new Set(dados.map(r=>r[CI.plano]).filter(Boolean))].sort();
   const origs=[...new Set(dados.map(r=>r[CI.origem]).filter(Boolean))].sort();
   function pop(id,arr){const el=document.getElementById(id);while(el.options.length>1)el.remove(1);arr.forEach(v=>el.add(new Option(v,v)));}
-  pop('f-vend',vends); pop('f-plano',planos); pop('f-orig',origs);
+  pop('f-vend',vends);pop('f-plano',planos);pop('f-orig',origs);
 }
 
-// ── SHORTCUTS ──
 function fD(d){return d.toISOString().slice(0,10);}
 function mAti(r){document.querySelectorAll('.sc').forEach((b,i)=>{b.classList.remove('on');if((r===7&&i===0)||(r===30&&i===1)||(r===90&&i===2)||(r==='mes'&&i===3)||(r===2025&&i===4)||(r===2026&&i===5)||(r==='todos'&&i===6))b.classList.add('on');});}
 function setDE(de,ate){document.getElementById('f-de').value=de;document.getElementById('f-ate').value=ate;}
@@ -239,68 +241,56 @@ function sTodos(){setDE('','');mAti('todos');renderRaw();}
 function resetar(){setDE('','');['f-vend','f-plano','f-orig'].forEach(id=>document.getElementById(id).value='');mAti('todos');renderRaw();}
 function getF(){return{de:document.getElementById('f-de').value,ate:document.getElementById('f-ate').value,vend:document.getElementById('f-vend').value,plano:document.getElementById('f-plano').value,orig:document.getElementById('f-orig').value};}
 
-// ── RENDER AGREGADO (camada 1) ──
-function renderAgr() {
+function renderAgr(){
   if(!DAGR) return;
   const D=DAGR;
-  const tL=+D.totais.total_leads||0, tV=+D.totais.total_vendas||0;
-  const tR=+D.totais.total_receita||0, tP=+D.totais.total_perdas||0;
+  const tL=+D.totais.total_leads||0,tV=+D.totais.total_vendas||0;
+  const tR=+D.totais.total_receita||0,tP=+D.totais.total_perdas||0;
   const conv=tL>0?((tV/tL)*100).toFixed(1):0;
   const tk=tV>0?(tR/tV):0;
-
   document.getElementById('hsub').textContent=fmt(tL)+' leads · '+fmt(tV)+' vendas · '+fmtR(tR)+' em prêmios';
 
-  // Funil estático provisório (dados agregados)
-  const fProv=[
-    {lbl:'Leads',      val:tL,  cor:'var(--blue)',   pctTotal:100},
-    {lbl:'Negociação', val:'?', cor:'var(--amber)',  pctTotal:null},
-    {lbl:'Vendas',     val:tV,  cor:'var(--green)',  pctTotal:tL>0?((tV/tL)*100).toFixed(0):0},
-  ];
-
-  document.getElementById('conteudo').innerHTML=buildHTML(
-    tR, tk, conv, null,
-    fProv, tP,
-    D.porMes, D.porVendedor, D.motivosPerda, D.porOrigem, D.porPlano
-  );
+  // Funil provisório com dados agregados (sem vistorias/liberadas ainda)
+  const vols=[tL, null, null, null, tV];
+  document.getElementById('conteudo').innerHTML=buildHTML(tR,tk,conv,null,vols,tP,D.porMes,D.porVendedor,D.motivosPerda,D.porOrigem,D.porPlano);
   renderCharts(D.porMes,D.porVendedor,D.porOrigem,D.porPlano);
   renderMotivos(D.motivosPerda);
   renderRanking(D.porVendedor);
   setFooter();
 }
 
-// ── RENDER RAW (camada 2) ──
-function renderRaw() {
+function renderRaw(){
   if(!DRAW){renderAgr();return;}
   const f=getF();
 
-  // Filtrar por data do lead e dimensões
   const fil=DRAW.filter(r=>{
     const dt=r[CI.dtLead];
-    if(f.de  && dt<f.de)  return false;
-    if(f.ate && dt>f.ate) return false;
-    if(f.vend  && r[CI.vendedor]!==f.vend)  return false;
-    if(f.plano && r[CI.plano]!==f.plano)    return false;
-    if(f.orig  && r[CI.origem]!==f.orig)    return false;
+    if(f.de&&dt<f.de) return false;
+    if(f.ate&&dt>f.ate) return false;
+    if(f.vend&&r[CI.vendedor]!==f.vend)   return false;
+    if(f.plano&&r[CI.plano]!==f.plano)    return false;
+    if(f.orig&&r[CI.origem]!==f.orig)     return false;
     return true;
   });
 
-  const tL=fil.length;
-
-  // Funil estático — conta por DATA DE PASSAGEM na etapa dentro do período
-  const inPer=dt=>{
+  const inP=dt=>{
     if(!dt||dt==='') return false;
-    if(f.de  && dt<f.de)  return false;
-    if(f.ate && dt>f.ate) return false;
+    if(f.de&&dt<f.de)   return false;
+    if(f.ate&&dt>f.ate) return false;
     return true;
   };
 
-  const tNeg  = fil.filter(r=>inPer(r[CI.dtNeg])).length;
-  const tVenda= fil.filter(r=>inPer(r[CI.dtVenda])).length;
-  const tPerda= fil.filter(r=>r[CI.isPerda]===1).length;
-  const tR    = fil.filter(r=>inPer(r[CI.dtVenda])).reduce((s,r)=>s+(+r[CI.receita]||0),0);
+  // Volume por etapa (funil estático — conta data de passagem no período)
+  const tL    = fil.length;
+  const tNeg  = fil.filter(r=>inP(r[CI.dtNeg])).length;
+  const tVist = fil.filter(r=>inP(r[CI.dtVistoria])).length;
+  const tLib  = fil.filter(r=>inP(r[CI.dtLibera])).length;
+  const tVend = fil.filter(r=>inP(r[CI.dtVenda])).length;
+  const tPerd = fil.filter(r=>r[CI.isPerda]===1).length;
+  const tR    = fil.filter(r=>inP(r[CI.dtVenda])).reduce((s,r)=>s+(+r[CI.receita]||0),0);
 
-  // Ciclo médio (dias entre dtLead e dtVenda, apenas vendidos)
-  const vendidos=fil.filter(r=>inPer(r[CI.dtVenda])&&r[CI.dtLead]&&r[CI.dtVenda]);
+  // Ciclo médio
+  const vendidos=fil.filter(r=>inP(r[CI.dtVenda])&&r[CI.dtLead]&&r[CI.dtVenda]);
   let ciclo=null;
   if(vendidos.length>0){
     const soma=vendidos.reduce((s,r)=>{
@@ -310,26 +300,22 @@ function renderRaw() {
     ciclo=Math.round(soma/vendidos.length);
   }
 
-  const conv=tL>0?((tVenda/tL)*100).toFixed(1):0;
-  const tk=tVenda>0?(tR/tVenda):0;
-
-  // Funil com conversões entre etapas
-  const funilEtapas=[
-    {lbl:'Leads',       val:tL,     cor:'var(--blue)',  pctTotal:100,                                    convProx:tL>0?((tNeg/tL)*100).toFixed(0):null},
-    {lbl:'Negociação',  val:tNeg,   cor:'var(--amber)', pctTotal:tL>0?((tNeg/tL)*100).toFixed(0):0,     convProx:tNeg>0?((tVenda/tNeg)*100).toFixed(0):null},
-    {lbl:'Vendas',      val:tVenda, cor:'var(--green)', pctTotal:tL>0?((tVenda/tL)*100).toFixed(0):0,   convProx:null},
-  ];
+  const conv=tL>0?((tVend/tL)*100).toFixed(1):0;
+  const tk=tVend>0?(tR/tVend):0;
+  const vols=[tL,tNeg,tVist,tLib,tVend];
 
   // Por mês
   const mMap={};
   fil.forEach(r=>{
-    const dt=r[CI.dtLead]; if(!dt) return;
+    const dt=r[CI.dtLead];if(!dt)return;
     const m=dt.slice(0,7);
-    if(!mMap[m]) mMap[m]={mes:m,leads:0,neg:0,vendas:0,receita:0,perdas:0};
+    if(!mMap[m])mMap[m]={mes:m,leads:0,neg:0,vistoria:0,libera:0,vendas:0,receita:0,perdas:0};
     mMap[m].leads++;
-    if(inPer(r[CI.dtNeg]))   mMap[m].neg++;
-    if(inPer(r[CI.dtVenda])){mMap[m].vendas++;mMap[m].receita+=+r[CI.receita]||0;}
-    if(r[CI.isPerda]===1)    mMap[m].perdas++;
+    if(inP(r[CI.dtNeg]))    mMap[m].neg++;
+    if(inP(r[CI.dtVistoria]))mMap[m].vistoria++;
+    if(inP(r[CI.dtLibera])) mMap[m].libera++;
+    if(inP(r[CI.dtVenda])){mMap[m].vendas++;mMap[m].receita+=+r[CI.receita]||0;}
+    if(r[CI.isPerda]===1)   mMap[m].perdas++;
   });
   const mArr=Object.values(mMap).sort((a,b)=>a.mes.localeCompare(b.mes));
 
@@ -337,10 +323,10 @@ function renderRaw() {
   const vMap={};
   fil.forEach(r=>{
     const v=r[CI.vendedor]||'Sem vendedor';
-    if(!vMap[v]) vMap[v]={vendedor:v,leads:0,vendas:0,receita:0,perdas:0};
+    if(!vMap[v])vMap[v]={vendedor:v,leads:0,vendas:0,receita:0,perdas:0};
     vMap[v].leads++;
-    if(inPer(r[CI.dtVenda])){vMap[v].vendas++;vMap[v].receita+=+r[CI.receita]||0;}
-    if(r[CI.isPerda]===1) vMap[v].perdas++;
+    if(inP(r[CI.dtVenda])){vMap[v].vendas++;vMap[v].receita+=+r[CI.receita]||0;}
+    if(r[CI.isPerda]===1)vMap[v].perdas++;
   });
   const vArr=Object.values(vMap).map(v=>({...v,conversao:v.leads>0?((v.vendas/v.leads)*100).toFixed(1):0})).sort((a,b)=>b.vendas-a.vendas);
 
@@ -352,59 +338,76 @@ function renderRaw() {
   // Origem / Plano
   const oMap={},pMap={};
   fil.forEach(r=>{
-    const o=r[CI.origem]||'Sem origem'; oMap[o]=(oMap[o]||0)+1;
-    const p=r[CI.plano]||'Sem plano';   pMap[p]=(pMap[p]||0)+1;
+    const o=r[CI.origem]||'Sem origem';oMap[o]=(oMap[o]||0)+1;
+    const p=r[CI.plano]||'Sem plano';pMap[p]=(pMap[p]||0)+1;
   });
   const oArr=Object.entries(oMap).map(([o,q])=>({origem:o,quantidade:q})).sort((a,b)=>b.quantidade-a.quantidade);
   const pArr=Object.entries(pMap).map(([p,q])=>({plano:p,quantidade:q})).sort((a,b)=>b.quantidade-a.quantidade);
 
-  document.getElementById('hsub').textContent=fmt(tL)+' leads · '+fmt(tVenda)+' vendas · '+fmtR(tR)+' em prêmios';
-  document.getElementById('conteudo').innerHTML=buildHTML(tR,tk,conv,ciclo,funilEtapas,tPerda,mArr,vArr,mpArr,oArr,pArr);
+  document.getElementById('hsub').textContent=fmt(tL)+' leads · '+fmt(tVend)+' vendas · '+fmtR(tR)+' em prêmios';
+  document.getElementById('conteudo').innerHTML=buildHTML(tR,tk,conv,ciclo,vols,tPerd,mArr,vArr,mpArr,oArr,pArr);
   renderCharts(mArr,vArr,oArr,pArr);
   renderMotivos(mpArr);
   renderRanking(vArr);
   setFooter();
 }
 
-// ── BUILD HTML ──
-function buildHTML(tR,tk,conv,ciclo,funil,tPerda,meses,vends,motivos,orig,plano) {
+function buildHTML(tR,tk,conv,ciclo,vols,tPerd,meses,vends,motivos,orig,plano){
   const dM=(arr,c)=>{if(!arr||arr.length<2)return null;const u=arr[arr.length-1][c]||0,p=arr[arr.length-2][c]||0;return p>0?((u-p)/p*100).toFixed(0):null;};
 
   // KPIs financeiros
-  const kfHTML=`<div class="kfi">
-    ${KF('Receita total',  'var(--purple)', fmtR(tR),          'prêmios no período',     dM(meses,'receita'))}
-    ${KF('Ticket médio',   'var(--blue)',   fmtR(tk),          'por contrato fechado',    null)}
-    ${KF('Conversão geral','var(--green)',  conv+'%',          'lead → venda',            null)}
+  const kfi=`<div class="kfi">
+    ${KF('Receita total',  'var(--purple)', fmtR(tR), 'prêmios no período',  dM(meses,'receita'))}
+    ${KF('Ticket médio',   'var(--blue)',   fmtR(tk), 'por contrato',        null)}
+    ${KF('Conversão geral','var(--green)',  conv+'%', 'lead → venda',        null)}
     ${KF('Ciclo médio',    'var(--amber)',  ciclo!=null?ciclo+' dias':'—', 'lead até venda', null)}
   </div>`;
 
-  // Funil estático
-  const funilHTML=`<div class="funil-wrap" style="animation-delay:.05s">
-    <div class="funil-title">Funil estático — passagem por etapa no período</div>
-    <div class="funil-row">
-      ${funil.map((e,i)=>`
-        <div class="fe" style="${i===0?'border-radius:var(--r2) 0 0 var(--r2);':''}" >
-          <div class="fe-lbl">${e.lbl}</div>
-          <div class="fe-val" style="color:${e.cor}">${e.val==='?'?'<span style="color:var(--mu);font-size:16px">carregando...</span>':fmt(e.val)}</div>
-          <div class="fe-pct">${e.pctTotal!=null?e.pctTotal+'% do total':''}</div>
-        </div>
-        ${i<funil.length-1?`<div class="fe-sep">
-          <div class="fe-sep-pct">${funil[i].convProx!=null?funil[i].convProx+'%':'—'}</div>
-          <div class="fe-sep-arr">›</div>
-        </div>`:''}
-      `).join('')}
-      <div class="fe-perda">
-        <div class="fe-lbl">Perdas</div>
-        <div class="fe-val" style="color:var(--red)">${fmt(tPerda)}</div>
-        <div class="fe-pct" style="color:var(--mu2)">${funil[0]&&funil[0].val&&funil[0].val!=='?'&&+funil[0].val>0?((tPerda/+funil[0].val)*100).toFixed(0)+'% do total':''}</div>
-      </div>
-    </div>
+  // Funil 5 etapas
+  const base=vols[0]||1;
+  let funilParts='';
+  ETAPAS.forEach((e,i)=>{
+    const v=vols[i];
+    const pctTotal=v!=null?Math.round((v/base)*100):null;
+    const barW=v!=null?Math.round((v/base)*100):0;
+    // Conversão para próxima etapa
+    let convProx=null;
+    if(i<ETAPAS.length-1&&v!=null&&v>0&&vols[i+1]!=null){
+      convProx=Math.round((vols[i+1]/v)*100);
+    }
+
+    funilParts+=`<div class="fe" ${i===0?'style="border-radius:var(--r2) 0 0 var(--r2)"':''}>
+      <div class="fe-lbl">${e.lbl}</div>
+      <div class="fe-val" style="color:${e.cor}">${v!=null?fmt(v):'<span style="color:var(--mu);font-size:14px">—</span>'}</div>
+      <div class="fe-pct-total">${pctTotal!=null?pctTotal+'% do total':''}</div>
+      <div class="fe-bar"><div class="fe-bar-fill" style="width:${barW}%;background:${e.cor};opacity:.4"></div></div>
+    </div>`;
+
+    if(i<ETAPAS.length-1){
+      funilParts+=`<div class="fe-arrow">
+        <div class="fe-arrow-pct">${convProx!=null?convProx+'%':'—'}</div>
+        <div class="fe-arrow-icon">›</div>
+      </div>`;
+    }
+  });
+
+  const pctPerd=base>0?Math.round((tPerd/base)*100):0;
+  funilParts+=`<div class="fe-perda">
+    <div class="fe-lbl">Perdas</div>
+    <div class="fe-val">${fmt(tPerd)}</div>
+    <div class="fe-pct-total" style="color:rgba(255,79,106,.5)">${pctPerd}% do total</div>
+    <div class="fe-bar"><div class="fe-bar-fill" style="width:${pctPerd}%;background:var(--red);opacity:.4"></div></div>
   </div>`;
 
-  return kfHTML + funilHTML + `
+  const funil=`<div class="funil-wrap">
+    <div class="funil-label">Funil estático — passagem por etapa no período</div>
+    <div class="funil-row">${funilParts}</div>
+  </div>`;
+
+  return kfi+funil+`
   <div class="row r32">
     <div class="card" style="animation-delay:.1s">
-      <div class="ct">Evolução mensal</div><div class="cs">leads, negociação, vendas e perdas</div>
+      <div class="ct">Evolução mensal</div><div class="cs">passagem por etapa mês a mês</div>
       <canvas id="c-ev" height="210"></canvas>
     </div>
     <div class="card" style="animation-delay:.14s">
@@ -434,13 +437,12 @@ function buildHTML(tR,tk,conv,ciclo,funil,tPerda,meses,vends,motivos,orig,plano)
   </div>`;
 }
 
-// ── CHARTS ──
 Chart.defaults.color='#55576e';
 Chart.defaults.font={family:"'Plus Jakarta Sans',sans-serif",size:11,weight:'500'};
 const GR={x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#55576e'}},y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#55576e'}}};
 function D2(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
 
-function renderCharts(meses,vends,orig,plano) {
+function renderCharts(meses,vends,orig,plano){
   D2('ev');
   const ev=document.getElementById('c-ev');
   if(ev&&meses&&meses.length){
@@ -448,10 +450,11 @@ function renderCharts(meses,vends,orig,plano) {
       data:{
         labels:meses.map(m=>fmtM(m.mes)),
         datasets:[
-          {label:'Leads',      data:meses.map(m=>m.leads||0),  borderColor:'#4f7aff',backgroundColor:'rgba(79,122,255,0.08)',tension:.4,fill:true,pointRadius:3},
-          {label:'Negociação', data:meses.map(m=>m.neg||0),    borderColor:'#f5a623',backgroundColor:'transparent',tension:.4,pointRadius:3},
-          {label:'Vendas',     data:meses.map(m=>m.vendas||0), borderColor:'#00c896',backgroundColor:'transparent',tension:.4,pointRadius:3},
-          {label:'Perdas',     data:meses.map(m=>m.perdas||0), borderColor:'#ff4f6a',backgroundColor:'transparent',tension:.4,pointRadius:2,borderDash:[4,3]},
+          {label:'Leads',     data:meses.map(m=>m.leads||0),   borderColor:'#4f7aff',backgroundColor:'rgba(79,122,255,0.08)',tension:.4,fill:true,pointRadius:3},
+          {label:'Negociação',data:meses.map(m=>m.neg||0),     borderColor:'#f5a623',backgroundColor:'transparent',tension:.4,pointRadius:3},
+          {label:'Vistoria',  data:meses.map(m=>m.vistoria||0),borderColor:'#9d7dff',backgroundColor:'transparent',tension:.4,pointRadius:3},
+          {label:'Liberadas', data:meses.map(m=>m.libera||0),  borderColor:'#22d3ee',backgroundColor:'transparent',tension:.4,pointRadius:2},
+          {label:'Vendas',    data:meses.map(m=>m.vendas||0),  borderColor:'#00c896',backgroundColor:'transparent',tension:.4,pointRadius:3},
         ]
       },
       options:{plugins:{legend:{display:true,labels:{color:'#8a8da8',boxWidth:10,usePointStyle:true,font:{size:11}}}},scales:GR}
@@ -465,12 +468,12 @@ function renderCharts(meses,vends,orig,plano) {
       options:{plugins:{legend:{display:false}},scales:{x:GR.x,y:{...GR.y,ticks:{color:'#55576e',callback:v=>'R$'+fK(v)}}}}
     });
   }
-  rDonut('c-orig', orig||[], 'origem');
+  rDonut('c-orig',orig||[],'origem');
   rDonut('c-plano',plano||[],'plano');
 }
 
 function rDonut(id,arr,key){
-  D2(id);const el=document.getElementById(id);if(!el) return;
+  D2(id);const el=document.getElementById(id);if(!el)return;
   const top=arr.slice(0,6),cores=['#4f7aff','#00c896','#f5a623','#ff4f6a','#9d7dff','#22d3ee'];
   CH[id]=new Chart(el,{type:'doughnut',
     data:{labels:top.map(i=>i[key]),datasets:[{data:top.map(i=>i.quantidade),backgroundColor:cores,borderWidth:0,hoverOffset:8}]},
@@ -479,16 +482,16 @@ function rDonut(id,arr,key){
 }
 
 function renderMotivos(arr){
-  const w=document.getElementById('motivos');if(!w) return;
-  if(!arr||!arr.length){w.innerHTML='<p style="color:var(--mu);font-size:12px;padding:8px 0">Nenhum motivo registrado</p>';return;}
+  const w=document.getElementById('motivos');if(!w)return;
+  if(!arr||!arr.length){w.innerHTML='<p style="color:var(--mu);font-size:12px;padding:8px 0">Nenhum motivo</p>';return;}
   const top=arr.slice(0,9),max=Math.max(...top.map(m=>m.quantidade),1);
-  w.innerHTML=top.map(m=>`<div class="mr"><div class="ml">${m.motivo}</div><div class="mbw"><div class="mb" style="width:${(m.quantidade/max*100).toFixed(0)}%"></div></div><div class="mn">${fmt(m.quantidade)}</div></div>`).join('');
+  w.innerHTML=top.map(m=>`<div class="mr"><div class="ml">${m.motivo}</div><div class="mbw"><div class="mb" style="width:${Math.round(m.quantidade/max*100)}%"></div></div><div class="mn">${fmt(m.quantidade)}</div></div>`).join('');
 }
 
 function renderRanking(vs){
-  const w=document.getElementById('ranking');if(!w) return;
+  const w=document.getElementById('ranking');if(!w)return;
   const top=vs.slice(0,8),maxV=Math.max(...top.map(v=>v.vendas),1);
-  w.innerHTML=top.map((v,i)=>`<li class="ri"><span class="rn">${i+1}</span><span class="rname">${v.vendedor}</span><div class="rbar"><div class="rfill" style="width:${(v.vendas/maxV*100).toFixed(0)}%"></div></div><span class="rval">${fmt(v.vendas)} vd</span><span class="rpct">${v.conversao}%</span></li>`).join('');
+  w.innerHTML=top.map((v,i)=>`<li class="ri"><span class="rn">${i+1}</span><span class="rname">${v.vendedor}</span><div class="rbar"><div class="rfill" style="width:${Math.round(v.vendas/maxV*100)}%"></div></div><span class="rval">${fmt(v.vendas)} vd</span><span class="rpct">${v.conversao}%</span></li>`).join('');
 }
 
 function setFooter(){
@@ -496,7 +499,6 @@ function setFooter(){
   document.getElementById('footer').textContent=ult?'última sincronização: '+new Date(ult).toLocaleString('pt-BR'):'';
 }
 
-// ── HELPERS ──
 function KF(lb,cor,val,sub,d){
   const dh=d!=null?`<div class="kf-d ${+d>=0?'up':'dn'}">${+d>=0?'↑':'↓'} ${Math.abs(d)}% vs mês ant.</div>`:'';
   return`<div class="kf"><div class="kf-bar" style="background:${cor}"></div><div class="kf-lbl">${lb}</div><div class="kf-val">${val}</div><div class="kf-sub">${sub}</div>${dh}</div>`;
