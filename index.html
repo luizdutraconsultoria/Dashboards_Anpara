@@ -113,12 +113,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14
 </header>
 
 <div class="filters">
-  <div class="fg"><label>Ano</label>
-    <select id="f-ano" onchange="render()">
-      <option value="" selected>Todos</option>
-      <option value="2025">2025</option>
-      <option value="2026">2026</option>
-    </select>
+  <div class="fg"><label>De</label>
+    <input type="month" id="f-de" onchange="render()" style="background:var(--s2);border:1px solid var(--border2);color:var(--text);padding:6px 10px;border-radius:var(--r);font-family:var(--font);font-size:12px;outline:none;min-width:130px;" />
+  </div>
+  <div class="fg"><label>Até</label>
+    <input type="month" id="f-ate" onchange="render()" style="background:var(--s2);border:1px solid var(--border2);color:var(--text);padding:6px 10px;border-radius:var(--r);font-family:var(--font);font-size:12px;outline:none;min-width:130px;" />
   </div>
   <div class="fsep"></div>
   <div class="fg"><label>Vendedor</label><select id="f-vend" onchange="render()"><option value="">Todos</option></select></div>
@@ -166,7 +165,8 @@ function popularSelects() {
 
 function getF() {
   return {
-    ano:  document.getElementById('f-ano').value,
+    de:   document.getElementById('f-de').value,
+    ate:  document.getElementById('f-ate').value,
     vend: document.getElementById('f-vend').value,
     plano:document.getElementById('f-plano').value,
     orig: document.getElementById('f-orig').value,
@@ -174,13 +174,17 @@ function getF() {
 }
 
 function reset() {
-  ['f-ano','f-vend','f-plano','f-orig'].forEach(id => document.getElementById(id).value = '');
+  ['f-de','f-ate','f-vend','f-plano','f-orig'].forEach(id => document.getElementById(id).value = '');
   render();
 }
 
 function filtrarMeses(meses) {
   const f = getF();
-  return meses.filter(m => !f.ano || m.mes.startsWith(f.ano));
+  return meses.filter(m => {
+    if (f.de  && m.mes < f.de)  return false;
+    if (f.ate && m.mes > f.ate) return false;
+    return true;
+  });
 }
 
 function filtrarVendedores(vs) {
@@ -192,12 +196,27 @@ function render() {
   if (!D) return;
   const meses = filtrarMeses(D.porMes);
   const vends  = filtrarVendedores(D.porVendedor);
+  const f = getF();
+  const semFiltro = !f.de && !f.ate && !f.vend && !f.plano && !f.orig;
 
-  const tL = meses.reduce((s,m)=>s+m.leads,0);
-  const tV = meses.reduce((s,m)=>s+m.vendas,0);
-  const tR = meses.reduce((s,m)=>s+m.receita,0);
-  const tP = meses.reduce((s,m)=>s+m.perdas,0);
-  const tPr= meses.reduce((s,m)=>s+m.propostas,0);
+  // Usa totais da API como fallback quando porMes vier vazio
+  let tL, tV, tR, tP, tPr;
+  if (meses.length > 0) {
+    tL  = meses.reduce((s,m)=>s+m.leads,0);
+    tV  = meses.reduce((s,m)=>s+m.vendas,0);
+    tR  = meses.reduce((s,m)=>s+m.receita,0);
+    tP  = meses.reduce((s,m)=>s+m.perdas,0);
+    tPr = meses.reduce((s,m)=>s+m.propostas,0);
+  } else if (semFiltro && D.totais) {
+    // porMes veio vazio da API (bug no Sheets) — usa totais direto
+    tL  = Number(D.totais.total_leads)   || 0;
+    tV  = Number(D.totais.total_vendas)  || 0;
+    tR  = Number(D.totais.total_receita) || 0;
+    tP  = Number(D.totais.total_perdas)  || 0;
+    tPr = 0;
+  } else {
+    tL = tV = tR = tP = tPr = 0;
+  }
   const conv= tL>0?((tV/tL)*100).toFixed(1):0;
   const tk  = tV>0?(tR/tV):0;
 
@@ -389,7 +408,7 @@ function fmtM(s){const[y,m]=s.split('-');return['Jan','Fev','Mar','Abr','Mai','J
 
 window.addEventListener('load', () => {
   // Reseta filtros para evitar cache do browser
-  ['f-ano','f-vend','f-plano','f-orig'].forEach(id => document.getElementById(id).value = '');
+  ['f-de','f-ate','f-vend','f-plano','f-orig'].forEach(id => document.getElementById(id).value = '');
   carregar();
 });
 </script>
