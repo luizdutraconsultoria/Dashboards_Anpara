@@ -242,7 +242,7 @@ function sMes(){const h=new Date();setDE(fD(new Date(h.getFullYear(),h.getMonth(
 function sAno(a){setDE(a+'-01-01',a+'-12-31');mAti(a);renderRaw();}
 function sTodos(){setDE('','');mAti('todos');renderRaw();}
 function resetar(){setDE('','');['f-vend','f-plano','f-orig'].forEach(id=>document.getElementById(id).value='');mAti('todos');renderRaw();}
-function getF(){return{de:document.getElementById('f-de').value,ate:document.getElementById('f-ate').value,vend:document.getElementById('f-vend').value,plano:document.getElementById('f-plano').value,orig:document.getElementById('f-orig').value};}
+function getF(){return{de:document.getElementById('f-de').value,ate:document.getElementById('f-ate').value,vend:document.getElementById('f-vend').value,plano:document.getElementById('f-plano').value,orig:document.getElementById('f-orig').value,unid:document.getElementById('f-unid').value};}
 
 function renderAgr(){
   if(!DAGR) return;
