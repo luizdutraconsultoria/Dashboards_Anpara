@@ -147,6 +147,42 @@ input[type=range].green{--ac:var(--green);}
   </div>
 </div>
 
+<!-- HORIZONTE E RAMP-UP -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;">
+  <div class="alav">
+    <div class="alav-header">
+      <div class="alav-icon" style="background:rgba(0,200,150,.12);">📅</div>
+      <div class="alav-titulo">Horizonte de projeção</div>
+    </div>
+    <div class="alav-desc">Quantos meses à frente projetar</div>
+    <div class="sl-row">
+      <div class="sl-header"><span class="sl-name">Meses de projeção</span><span class="sl-val"><span id="v-meses">12</span> meses</span></div>
+      <input type="range" id="s-meses" class="green" min="3" max="24" step="1" value="12" oninput="calcular()"/>
+      <div class="sl-minmax"><span>3</span><span>24</span></div>
+    </div>
+    <div class="alav-resultado">
+      <span class="alav-res-lbl">Período projetado</span>
+      <span class="alav-res-val" style="color:var(--green)" id="r-periodo">—</span>
+    </div>
+  </div>
+  <div class="alav" style="border-color:rgba(245,166,35,.25);background:rgba(245,166,35,.04);">
+    <div class="alav-header">
+      <div class="alav-icon" style="background:rgba(245,166,35,.15);">⏳</div>
+      <div class="alav-titulo">Ramp-up do projeto</div>
+    </div>
+    <div class="alav-desc">Meses iniciais sem impacto — treinamento ainda em andamento</div>
+    <div class="sl-row">
+      <div class="sl-header"><span class="sl-name">Meses de ramp-up</span><span class="sl-val"><span id="v-rampup">2</span> meses</span></div>
+      <input type="range" id="s-rampup" class="amber" min="0" max="6" step="1" value="2" oninput="calcular()"/>
+      <div class="sl-minmax"><span>0</span><span>6</span></div>
+    </div>
+    <div class="alav-resultado">
+      <span class="alav-res-lbl">Projeto ativo a partir de</span>
+      <span class="alav-res-val" style="color:var(--amber)" id="r-rampup-mes">—</span>
+    </div>
+  </div>
+</div>
+
 <!-- RESULTADO COM PROJETO -->
 <div class="resultado-final">
   <div class="rf-titulo">Resultado com o projeto</div>
@@ -177,8 +213,8 @@ input[type=range].green{--ac:var(--green);}
 
 <!-- GRÁFICO PRINCIPAL -->
 <div class="grafico-card">
-  <div class="grafico-titulo">Evolução da base de clientes (placas) — abril a dezembro 2026</div>
-  <div class="grafico-sub">Partindo de 4.200 clientes hoje. Linha tracejada vermelha = sem intervenção. Linha roxa = com o projeto.</div>
+  <div class="grafico-titulo">Evolução da base de clientes (placas)</div>
+  <div class="grafico-sub">Partindo de 4.200 clientes hoje. Linha tracejada vermelha = sem intervenção. Linha roxa = com o projeto. <span id="grafico-rampup-note" style="color:var(--amber);font-weight:700;"></span></div>
   <div class="grafico-legenda">
     <span class="leg"><span class="leg-line" style="background:rgba(255,79,106,.7);border-top:2px dashed rgba(255,79,106,.7);height:0;"></span><span style="color:var(--mu2)">Sem intervenção (atual)</span></span>
     <span class="leg"><span class="leg-line" style="background:var(--purple);"></span><span style="color:var(--purple)">Com o projeto</span></span>
@@ -353,9 +389,19 @@ input[type=range].green{--ac:var(--green);}
 const ETAPAS = ['Cotações recebidas','Em negociação','Lib. vistoria','Vistoria finalizada','Vendas'];
 const BASE_INICIAL = 4200;
 const META = 4800;
-// Abril a Dez 2026 = 9 meses
-const LABELS_MESES = ['Abr/26','Mai/26','Jun/26','Jul/26','Ago/26','Set/26','Out/26','Nov/26','Dez/26'];
-const N_MESES = 9;
+const TODOS_MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function gerarLabels(nMeses){
+  // começa em Abr/2026 (índice 3)
+  const inicio = { mes: 3, ano: 2026 };
+  const labels = [];
+  for(let i = 0; i < nMeses; i++){
+    const m = (inicio.mes + i) % 12;
+    const a = inicio.ano + Math.floor((inicio.mes + i) / 12);
+    labels.push(TODOS_MESES[m] + '/' + String(a).slice(2));
+  }
+  return labels;
+}
 
 let chartPrincipal = null;
 let detalheAberto = false;
@@ -383,6 +429,8 @@ function calcular(){
   g('v-conv-proj').textContent  = v('s-conv-proj');
   g('v-churn-base').textContent = v('s-churn-base');
   g('v-churn-proj').textContent = v('s-churn-proj');
+  g('v-meses').textContent      = v('s-meses');
+  g('v-rampup').textContent     = v('s-rampup');
   g('v-c1-base').textContent    = v('s-c1-base');
   g('v-c2-base').textContent    = v('s-c2-base');
   g('v-c3-base').textContent    = v('s-c3-base');
@@ -398,15 +446,19 @@ function calcular(){
     s.style.setProperty('--pct', pct+'%');
   });
 
-  const indB   = v('s-ind-base') / 100;  // % indicacao atual
-  const indP   = v('s-ind-proj') / 100;  // % indicacao projetada
-  const churnB = v('s-churn-base');
-  const churnP = v('s-churn-proj');
-  const convB  = v('s-conv-base');
-  const convP  = v('s-conv-proj');
+  const N_MESES  = v('s-meses');
+  const RAMPUP   = v('s-rampup');
+  const indB     = v('s-ind-base') / 100;
+  const indP     = v('s-ind-proj') / 100;
+  const churnB   = v('s-churn-base');
+  const churnP   = v('s-churn-proj');
+  const convB    = v('s-conv-base');
+  const convP    = v('s-conv-proj');
+  const LABELS_MESES = gerarLabels(N_MESES);
 
-  // Loop dinamico: leads = base do mes anterior x % indicacao
-  // A cada mes: leads = base_anterior * ind; vendas = leads * conv; base = base_anterior + vendas - churn
+  // Loop dinamico com ramp-up:
+  // meses 1..RAMPUP: usa parametros base (sem projeto)
+  // meses RAMPUP+1..N_MESES: usa parametros projetados
   const curvaAtual = [BASE_INICIAL];
   const curvaProj  = [BASE_INICIAL];
   const leadsAtualSerie = [];
@@ -416,28 +468,37 @@ function calcular(){
     const baseAnteriorB = curvaAtual[curvaAtual.length - 1];
     const baseAnteriorP = curvaProj[curvaProj.length - 1];
 
+    // Durante ramp-up, projecao usa mesmos parametros do base
+    const emRampup = m < RAMPUP;
+    const indEfetivo  = emRampup ? indB  : indP;
+    const convEfetivo = emRampup ? convB : convP;
+    const churnEfetivo = emRampup ? churnB : churnP;
+
     const leadsB = Math.round(baseAnteriorB * indB);
-    const leadsP = Math.round(baseAnteriorP * indP);
+    const leadsP = Math.round(baseAnteriorP * indEfetivo);
     leadsAtualSerie.push(leadsB);
     leadsProjSerie.push(leadsP);
 
     const vendB = Math.round(leadsB * convB / 100);
-    const vendP = Math.round(leadsP * convP / 100);
+    const vendP = Math.round(leadsP * convEfetivo / 100);
 
     curvaAtual.push(Math.max(0, baseAnteriorB + vendB - churnB));
-    curvaProj.push(Math.max(0, baseAnteriorP + vendP - churnP));
+    curvaProj.push(Math.max(0, baseAnteriorP + vendP - churnEfetivo));
   }
 
-  // Vendas e leads do ultimo mes para KPIs
-  const leadsB_m1  = leadsAtualSerie[0];
-  const leadsP_m1  = leadsProjSerie[0];
-  const leadsP_m9  = leadsProjSerie[N_MESES - 1];
-  const vendB_m1   = Math.round(leadsB_m1 * convB / 100);
-  const vendP_m1   = Math.round(leadsP_m1 * convP / 100);
-  const vendP_last = Math.round(leadsP_m9 * convP / 100);
-  const liqB = vendB_m1 - churnB;
-  const liqP_m1 = vendP_m1 - churnP;
-  const liqP_last = vendP_last - churnP;
+  // KPIs: primeiro mes pos-rampup e ultimo mes
+  const mPosRampup = Math.min(RAMPUP, N_MESES - 1); // indice do primeiro mes ativo
+  const mLast = N_MESES - 1;
+
+  const leadsB_m1   = leadsAtualSerie[mPosRampup];
+  const leadsP_m1   = leadsProjSerie[mPosRampup];
+  const leadsP_last = leadsProjSerie[mLast];
+  const vendB_m1    = Math.round(leadsB_m1 * convB / 100);
+  const vendP_m1    = Math.round(leadsP_m1 * convP / 100);
+  const vendP_last  = Math.round(leadsP_last * convP / 100);
+  const liqB        = vendB_m1 - churnB;
+  const liqP_m1     = vendP_m1 - churnP;
+  const liqP_last   = vendP_last - churnP;
 
   const dadosAtual = curvaAtual.slice(1);
   const dadosProj  = curvaProj.slice(1);
@@ -467,12 +528,22 @@ function calcular(){
   }
 
   // Alavancas resultado
-  g('r-leads-m1').textContent = leadsP_m1 + ' leads';
-  g('r-leads-m9').textContent = leadsP_m9 + ' leads';
+  const mesAtivo = RAMPUP + 1;
+  g('r-leads-m1').textContent = leadsP_m1 + ' leads (mês ' + mesAtivo + ')';
+  g('r-leads-m9').textContent = leadsP_last + ' leads (mês ' + N_MESES + ')';
   g('r-vend-base').textContent = vendB_m1;
   g('r-vend-proj').textContent = vendP_m1 + ' → ' + vendP_last;
   const deltaChurn = churnB - churnP;
   g('r-churn-delta').textContent = (deltaChurn >= 0 ? '+' : '') + deltaChurn + ' retidos/mês';
+
+  // Horizonte e ramp-up
+  const labelFinal = LABELS_MESES[N_MESES - 1];
+  g('r-periodo').textContent = 'Abr/26 → ' + labelFinal;
+  const labelAtivo = RAMPUP < N_MESES ? LABELS_MESES[RAMPUP] : labelFinal;
+  g('r-rampup-mes').textContent = RAMPUP === 0 ? 'imediato (sem ramp-up)' : labelAtivo;
+  g('grafico-rampup-note').textContent = RAMPUP > 0
+    ? '⏳ Ramp-up: primeiros ' + RAMPUP + ' meses sem impacto do projeto.'
+    : '';
 
   // Resultado final — 2 pares: placas e receita
   const ticket = 195; // ticket medio
@@ -480,9 +551,15 @@ function calcular(){
   const recFinal = baseFinalCom * ticket;
   const recB_m1  = curvaAtual[1] * ticket;
 
-  // Par 1: placas
-  g('rf-placas-m1').textContent     = curvaProj[1].toLocaleString('pt-BR') + ' placas';
-  g('rf-placas-m1-sub').textContent = (liqP_m1 >= 0 ? '+' : '') + liqP_m1 + ' vs base atual';
+  // Par 1: placas — usa primeiro mes pos ramp-up e mes final
+  const idxAtivo = Math.min(RAMPUP + 1, N_MESES);
+  const basePosRampupProj = curvaProj[idxAtivo];
+  const basePosRampupBase = curvaAtual[idxAtivo];
+  const labelMesAtivo = LABELS_MESES[Math.min(RAMPUP, N_MESES - 1)];
+  const labelMesFinal = LABELS_MESES[N_MESES - 1];
+
+  g('rf-placas-m1').textContent     = basePosRampupProj.toLocaleString('pt-BR') + ' placas';
+  g('rf-placas-m1-sub').textContent = labelMesAtivo + ' (1° mês ativo)';
 
   g('rf-base-final').textContent = baseFinalCom.toLocaleString('pt-BR') + ' placas';
   const metaDiff = baseFinalCom - META;
@@ -495,10 +572,16 @@ function calcular(){
   }
 
   // Par 2: receita
-  g('rf-receita-m1').textContent     = fmtR(recM1);
-  g('rf-receita-m1-sub').textContent = 'era ' + fmtR(recB_m1) + ' sem projeto';
+  const ticket = 195;
+  const recAtivo    = basePosRampupProj * ticket;
+  const recFinal    = baseFinalCom * ticket;
+  const recBaseAtivo = basePosRampupBase * ticket;
+  const recBaseFinal = baseFinalSem * ticket;
+
+  g('rf-receita-m1').textContent     = fmtR(recAtivo);
+  g('rf-receita-m1-sub').textContent = labelMesAtivo + ' · era ' + fmtR(recBaseAtivo) + ' sem projeto';
   g('rf-receita-final').textContent  = fmtR(recFinal);
-  g('rf-receita-final-sub').textContent = '+' + fmtR(recFinal - recB_m1) + ' vs sem projeto';
+  g('rf-receita-final-sub').textContent = '+' + fmtR(recFinal - recBaseFinal) + ' vs sem projeto (' + labelMesFinal + ')'
 
   // Alerta final
   const al = g('alerta-final');
@@ -514,9 +597,9 @@ function calcular(){
     al.textContent = `✓ Efeito bola de neve: crescimento líquido vai de +${liqP_m1} (mês 1) a +${liqP_last} (mês 9). Base atinge ${baseFinalCom.toLocaleString('pt-BR')} clientes em dez/2026 — ${(baseFinalCom-META).toLocaleString('pt-BR')} acima da meta.`;
   }
 
-  // Funil comparativo
-  const fB = [leadsB, Math.round(leadsB*v('s-c1-base')/100), Math.round(leadsB*v('s-c1-base')/100*v('s-c2-base')/100), Math.round(leadsB*v('s-c1-base')/100*v('s-c2-base')/100*v('s-c3-base')/100), vendB];
-  const fP = [leadsP, Math.round(leadsP*v('s-c1-proj')/100), Math.round(leadsP*v('s-c1-proj')/100*v('s-c2-proj')/100), Math.round(leadsP*v('s-c1-proj')/100*v('s-c2-proj')/100*v('s-c3-proj')/100), vendP];
+  // Funil comparativo — usa leads e vendas do mes 1
+  const fB = [leadsB_m1, Math.round(leadsB_m1*v('s-c1-base')/100), Math.round(leadsB_m1*v('s-c1-base')/100*v('s-c2-base')/100), Math.round(leadsB_m1*v('s-c1-base')/100*v('s-c2-base')/100*v('s-c3-base')/100), vendB_m1];
+  const fP = [leadsP_m1, Math.round(leadsP_m1*v('s-c1-proj')/100), Math.round(leadsP_m1*v('s-c1-proj')/100*v('s-c2-proj')/100), Math.round(leadsP_m1*v('s-c1-proj')/100*v('s-c2-proj')/100*v('s-c3-proj')/100), vendP_m1];
   const maxF = Math.max(...fP, 1);
   g('funil-rows').innerHTML = ETAPAS.map((lbl,i) => `<div class="fe">
     <span class="fe-lbl">${lbl}</span>
@@ -531,6 +614,7 @@ function calcular(){
   // Gráfico
   const metaLine = Array(N_MESES).fill(META);
 
+  // Zona de ramp-up: primeiros RAMPUP meses ficam mais opacos no tooltip
   if(chartPrincipal) chartPrincipal.destroy();
   chartPrincipal = new Chart(g('chartPrincipal'),{
     type:'line',
