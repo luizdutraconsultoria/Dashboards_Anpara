@@ -266,7 +266,9 @@ input[type=range].amber{--ac:var(--amber);}
       <div class="alav-icon" style="background:rgba(79,122,255,.15);">📈</div>
       <div class="alav-titulo">1. Aumentar volume</div>
     </div>
-    <div class="alav-desc">% da base que indica por mês — leads crescem junto com a base (efeito bola de neve)</div>
+    <div class="alav-desc">% da base ativa que indica por mês + pedido de indicação no funil e na vistoria</div>
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--mu);margin-bottom:6px;margin-top:2px;">Base ativa</div>
     <div class="sl-row">
       <div class="sl-header"><span class="sl-name">% indicação atual</span><span class="sl-val"><span id="v-ind-base">5</span>%</span></div>
       <input type="range" id="s-ind-base" min="1" max="20" step="0.5" value="5" oninput="calcular()"/>
@@ -277,14 +279,31 @@ input[type=range].amber{--ac:var(--amber);}
       <input type="range" id="s-ind-proj" class="purple" min="1" max="20" step="0.5" value="7" oninput="calcular()"/>
       <div class="sl-minmax"><span>1%</span><span>20%</span></div>
     </div>
+
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--mu);margin-bottom:6px;margin-top:10px;border-top:1px solid var(--b);padding-top:10px;">Pedido de indicação no funil e vistoria</div>
+    <div class="sl-row">
+      <div class="sl-header"><span class="sl-name">% dos leads que indicam</span><span class="sl-val"><span id="v-ind-leads">7</span>%</span></div>
+      <input type="range" id="s-ind-leads" class="purple" min="0" max="20" step="0.5" value="7" oninput="calcular()"/>
+      <div class="sl-minmax"><span>0%</span><span>20%</span></div>
+    </div>
+    <div class="sl-row">
+      <div class="sl-header"><span class="sl-name">% das vistorias que indicam</span><span class="sl-val"><span id="v-ind-vistoria">7</span>%</span></div>
+      <input type="range" id="s-ind-vistoria" class="purple" min="0" max="20" step="0.5" value="7" oninput="calcular()"/>
+      <div class="sl-minmax"><span>0%</span><span>20%</span></div>
+    </div>
+
     <div class="alav-resultado">
       <div class="alav-res-row">
-        <span class="alav-res-lbl">Leads mês 1 ativo</span>
+        <span class="alav-res-lbl">Leads base mês 1</span>
         <span class="alav-res-val" style="color:var(--blue)" id="r-leads-m1">—</span>
       </div>
       <div class="alav-res-row">
-        <span class="alav-res-lbl">Leads mês final</span>
-        <span class="alav-res-val" style="color:var(--purple)" id="r-leads-mfinal">—</span>
+        <span class="alav-res-lbl">+ Leads funil/vistoria</span>
+        <span class="alav-res-val" style="color:var(--purple)" id="r-leads-extra">—</span>
+      </div>
+      <div class="alav-res-row" style="border-top:1px solid var(--b);margin-top:4px;padding-top:4px;">
+        <span class="alav-res-lbl">Total leads mês 1</span>
+        <span class="alav-res-val" style="color:var(--tx)" id="r-leads-total">—</span>
       </div>
     </div>
   </div>
@@ -486,32 +505,36 @@ function toggleDetalhe(){
 
 function calcular(){
   // — leitura dos sliders —
-  const nMeses  = v('s-meses');
-  const rampup  = v('s-rampup');
-  const indB    = v('s-ind-base') / 100;
-  const indP    = v('s-ind-proj') / 100;
-  const convB   = v('s-conv-base');
-  const convP   = v('s-conv-proj');
-  const churnB  = v('s-churn-base');
-  const churnP  = v('s-churn-proj');
+  const nMeses    = v('s-meses');
+  const rampup    = v('s-rampup');
+  const indB      = v('s-ind-base') / 100;
+  const indP      = v('s-ind-proj') / 100;
+  const convB     = v('s-conv-base');
+  const convP     = v('s-conv-proj');
+  const churnB    = v('s-churn-base');
+  const churnP    = v('s-churn-proj');
+  const indLeads  = v('s-ind-leads') / 100;    // % dos leads que indicam
+  const indVist   = v('s-ind-vistoria') / 100; // % das vistorias que indicam
 
   // — atualizar displays —
-  g('v-ind-base').textContent  = v('s-ind-base');
-  g('v-ind-proj').textContent  = v('s-ind-proj');
-  g('v-conv-base').textContent = convB;
-  g('v-conv-proj').textContent = convP;
-  g('v-churn-base').textContent = churnB;
-  g('v-churn-proj').textContent = churnP;
-  g('v-meses').textContent     = nMeses;
-  g('v-rampup').textContent    = rampup;
-  g('v-c1-base').textContent   = v('s-c1-base');
-  g('v-c2-base').textContent   = v('s-c2-base');
-  g('v-c3-base').textContent   = v('s-c3-base');
-  g('v-c4-base').textContent   = v('s-c4-base');
-  g('v-c1-proj').textContent   = v('s-c1-proj');
-  g('v-c2-proj').textContent   = v('s-c2-proj');
-  g('v-c3-proj').textContent   = v('s-c3-proj');
-  g('v-c4-proj').textContent   = v('s-c4-proj');
+  g('v-ind-base').textContent    = v('s-ind-base');
+  g('v-ind-proj').textContent    = v('s-ind-proj');
+  g('v-ind-leads').textContent   = v('s-ind-leads');
+  g('v-ind-vistoria').textContent = v('s-ind-vistoria');
+  g('v-conv-base').textContent   = convB;
+  g('v-conv-proj').textContent   = convP;
+  g('v-churn-base').textContent  = churnB;
+  g('v-churn-proj').textContent  = churnP;
+  g('v-meses').textContent       = nMeses;
+  g('v-rampup').textContent      = rampup;
+  g('v-c1-base').textContent     = v('s-c1-base');
+  g('v-c2-base').textContent     = v('s-c2-base');
+  g('v-c3-base').textContent     = v('s-c3-base');
+  g('v-c4-base').textContent     = v('s-c4-base');
+  g('v-c1-proj').textContent     = v('s-c1-proj');
+  g('v-c2-proj').textContent     = v('s-c2-proj');
+  g('v-c3-proj').textContent     = v('s-c3-proj');
+  g('v-c4-proj').textContent     = v('s-c4-proj');
 
   // — gradientes dos sliders —
   document.querySelectorAll('input[type=range]').forEach(s => {
@@ -530,15 +553,24 @@ function calcular(){
     const prevP = curvaP[curvaP.length - 1];
     const emRampup = m < rampup;
 
-    // Leads: % da base anterior
-    const lB = Math.round(prevB * indB);
-    const lP = Math.round(prevP * (emRampup ? indB : indP));
+    // Leads da base ativa
+    const lBaseB = Math.round(prevB * indB);
+    const lBaseP = Math.round(prevP * (emRampup ? indB : indP));
+
+    // Leads extras por pedido de indicação (só no projetado, só pós ramp-up)
+    // = % dos leads do mês que indicam + % das vistorias que indicam
+    const convEfetivo = emRampup ? convB : convP;
+    const vistoriasP  = Math.round(lBaseP * convEfetivo / 100); // estimativa vistorias
+    const lExtrasP    = emRampup ? 0 : Math.round(lBaseP * indLeads) + Math.round(vistoriasP * indVist);
+
+    const lB = lBaseB;
+    const lP = lBaseP + lExtrasP;
     leadsB_serie.push(lB);
     leadsP_serie.push(lP);
 
-    // Vendas: leads × conversão
+    // Vendas: total de leads × conversão
     const vB = Math.round(lB * convB / 100);
-    const vP = Math.round(lP * (emRampup ? convB : convP) / 100);
+    const vP = Math.round(lP * convEfetivo / 100);
 
     // Churn efetivo
     const cP = emRampup ? churnB : churnP;
@@ -633,8 +665,10 @@ function calcular(){
   }
 
   // — alavancas resultado —
-  g('r-leads-m1').textContent    = lP1 + ' leads';
-  g('r-leads-mfinal').textContent = lPfinal + ' leads';
+  const lExtrasM1 = Math.round(lP1 - Math.round(curvaP[idxAtivo] * indP));
+  g('r-leads-m1').textContent     = Math.round(curvaP[idxAtivo] * indP) + ' leads';
+  g('r-leads-extra').textContent  = '+' + lExtrasM1 + ' leads';
+  g('r-leads-total').textContent  = lP1 + ' leads/mês';
   g('r-vend-base').textContent   = vB1 + '/mês';
   g('r-vend-proj').textContent   = vP1 + '/mês';
   const deltaC = churnB - churnP;
