@@ -149,27 +149,27 @@ input[type=range].green{--ac:var(--green);}
 
 <!-- RESULTADO COM PROJETO -->
 <div class="resultado-final">
-  <div class="rf-titulo">Resultado com o projeto — saldo mensal projetado</div>
+  <div class="rf-titulo">Resultado com o projeto</div>
   <div class="rf-grid">
     <div class="rf-item">
-      <span class="rf-lbl">Vendas brutas/mês</span>
-      <span class="rf-val" style="color:var(--purple)" id="rf-vendas">—</span>
-      <span class="rf-sub" id="rf-vendas-sub">—</span>
+      <span class="rf-lbl">Placas no mês 1</span>
+      <span class="rf-val" style="color:var(--purple)" id="rf-placas-m1">—</span>
+      <span class="rf-sub" id="rf-placas-m1-sub">—</span>
     </div>
     <div class="rf-item">
-      <span class="rf-lbl">Churn projetado/mês</span>
-      <span class="rf-val" style="color:var(--red)" id="rf-churn">—</span>
-      <span class="rf-sub" id="rf-churn-sub">—</span>
-    </div>
-    <div class="rf-item">
-      <span class="rf-lbl">Crescimento líquido/mês</span>
-      <span class="rf-val" id="rf-liquido">—</span>
-      <span class="rf-sub" id="rf-liquido-sub">—</span>
-    </div>
-    <div class="rf-item">
-      <span class="rf-lbl">Base em dez/2026</span>
+      <span class="rf-lbl">Placas em dez/2026</span>
       <span class="rf-val" style="color:var(--purple)" id="rf-base-final">—</span>
       <span class="rf-sub" id="rf-meta-sub">—</span>
+    </div>
+    <div class="rf-item">
+      <span class="rf-lbl">Receita recorrente/mês 1</span>
+      <span class="rf-val" style="color:var(--green)" id="rf-receita-m1">—</span>
+      <span class="rf-sub" id="rf-receita-m1-sub">—</span>
+    </div>
+    <div class="rf-item">
+      <span class="rf-lbl">Receita recorrente dez/2026</span>
+      <span class="rf-val" style="color:var(--green)" id="rf-receita-final">—</span>
+      <span class="rf-sub" id="rf-receita-final-sub">—</span>
     </div>
   </div>
   <div id="alerta-final" class="alerta" style="margin-top:12px;"></div>
@@ -193,26 +193,32 @@ input[type=range].green{--ac:var(--green);}
 <div class="alavancas-titulo">As 3 alavancas do projeto — ajuste para ver o impacto em tempo real</div>
 <div class="alavancas">
 
-  <!-- ALAVANCA 1: Volume -->
+  <!-- ALAVANCA 1: Volume via indicacao -->
   <div class="alav">
     <div class="alav-header">
       <div class="alav-icon" style="background:rgba(79,122,255,.15);">📈</div>
       <div class="alav-titulo">1. Aumentar volume</div>
     </div>
-    <div class="alav-desc">Mais leads entrando no funil por mês</div>
+    <div class="alav-desc">% da base que indica por mês — leads crescem conforme a base cresce</div>
     <div class="sl-row">
-      <div class="sl-header"><span class="sl-name">Leads/mês atual</span><span class="sl-val"><span id="v-leads-base">240</span></span></div>
-      <input type="range" id="s-leads-base" min="50" max="600" step="10" value="240" oninput="calcular()"/>
-      <div class="sl-minmax"><span>50</span><span>600</span></div>
+      <div class="sl-header"><span class="sl-name">% indicação atual</span><span class="sl-val"><span id="v-ind-base">5</span>%</span></div>
+      <input type="range" id="s-ind-base" min="1" max="20" step="0.5" value="5" oninput="calcular()"/>
+      <div class="sl-minmax"><span>1%</span><span>20%</span></div>
     </div>
     <div class="sl-row">
-      <div class="sl-header"><span class="sl-name">Leads/mês projetado</span><span class="sl-val"><span id="v-leads-proj">310</span></span></div>
-      <input type="range" id="s-leads-proj" class="purple" min="50" max="600" step="10" value="310" oninput="calcular()"/>
-      <div class="sl-minmax"><span>50</span><span>600</span></div>
+      <div class="sl-header"><span class="sl-name">% indicação projetada</span><span class="sl-val"><span id="v-ind-proj">7</span>%</span></div>
+      <input type="range" id="s-ind-proj" class="purple" min="1" max="20" step="0.5" value="7" oninput="calcular()"/>
+      <div class="sl-minmax"><span>1%</span><span>20%</span></div>
     </div>
-    <div class="alav-resultado">
-      <span class="alav-res-lbl">Impacto em leads</span>
-      <span class="alav-res-val" style="color:var(--blue)" id="r-leads-delta">—</span>
+    <div class="alav-resultado" style="flex-direction:column;align-items:flex-start;gap:6px;">
+      <div style="display:flex;justify-content:space-between;width:100%;">
+        <span class="alav-res-lbl">Leads no mês 1</span>
+        <span class="alav-res-val" style="color:var(--blue)" id="r-leads-m1">—</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;width:100%;">
+        <span class="alav-res-lbl">Leads no mês 9</span>
+        <span class="alav-res-val" style="color:var(--purple)" id="r-leads-m9">—</span>
+      </div>
     </div>
   </div>
 
@@ -356,6 +362,12 @@ let detalheAberto = false;
 
 function g(id){ return document.getElementById(id); }
 function v(id){ return +g(id).value; }
+function fmtR(n){
+  if(n < 0) return '-' + fmtR(Math.abs(n));
+  if(n >= 1e6) return 'R$ ' + (n/1e6).toFixed(1).replace('.',',') + 'M';
+  if(n >= 1000) return 'R$ ' + (n/1000).toFixed(1).replace('.',',') + 'k';
+  return 'R$ ' + Math.round(n).toLocaleString('pt-BR');
+}
 
 function toggleDetalhe(){
   detalheAberto = !detalheAberto;
@@ -365,8 +377,8 @@ function toggleDetalhe(){
 
 function calcular(){
   // Atualizar displays
-  g('v-leads-base').textContent = v('s-leads-base');
-  g('v-leads-proj').textContent = v('s-leads-proj');
+  g('v-ind-base').textContent   = v('s-ind-base');
+  g('v-ind-proj').textContent   = v('s-ind-proj');
   g('v-conv-base').textContent  = v('s-conv-base');
   g('v-conv-proj').textContent  = v('s-conv-proj');
   g('v-churn-base').textContent = v('s-churn-base');
@@ -386,29 +398,47 @@ function calcular(){
     s.style.setProperty('--pct', pct+'%');
   });
 
-  const leadsB = v('s-leads-base');
-  const leadsP = v('s-leads-proj');
+  const indB   = v('s-ind-base') / 100;  // % indicacao atual
+  const indP   = v('s-ind-proj') / 100;  // % indicacao projetada
   const churnB = v('s-churn-base');
   const churnP = v('s-churn-proj');
   const convB  = v('s-conv-base');
   const convP  = v('s-conv-proj');
 
-  // Vendas brutas = leads x conversao total (alavanca 2 controla direto)
-  const vendB = Math.round(leadsB * convB / 100);
-  const vendP = Math.round(leadsP * convP / 100);
-
-  // Saldos
-  const liqB = vendB - churnB;
-  const liqP = vendP - churnP;
-
-  // Evolução da base
+  // Loop dinamico: leads = base do mes anterior x % indicacao
+  // A cada mes: leads = base_anterior * ind; vendas = leads * conv; base = base_anterior + vendas - churn
   const curvaAtual = [BASE_INICIAL];
   const curvaProj  = [BASE_INICIAL];
+  const leadsAtualSerie = [];
+  const leadsProjSerie  = [];
+
   for(let m = 0; m < N_MESES; m++){
-    curvaAtual.push(Math.max(0, curvaAtual[curvaAtual.length-1] + liqB));
-    curvaProj.push(Math.max(0, curvaProj[curvaProj.length-1]  + liqP));
+    const baseAnteriorB = curvaAtual[curvaAtual.length - 1];
+    const baseAnteriorP = curvaProj[curvaProj.length - 1];
+
+    const leadsB = Math.round(baseAnteriorB * indB);
+    const leadsP = Math.round(baseAnteriorP * indP);
+    leadsAtualSerie.push(leadsB);
+    leadsProjSerie.push(leadsP);
+
+    const vendB = Math.round(leadsB * convB / 100);
+    const vendP = Math.round(leadsP * convP / 100);
+
+    curvaAtual.push(Math.max(0, baseAnteriorB + vendB - churnB));
+    curvaProj.push(Math.max(0, baseAnteriorP + vendP - churnP));
   }
-  // remover ponto inicial para labels (labels = 9 meses, não inclui "hoje")
+
+  // Vendas e leads do ultimo mes para KPIs
+  const leadsB_m1  = leadsAtualSerie[0];
+  const leadsP_m1  = leadsProjSerie[0];
+  const leadsP_m9  = leadsProjSerie[N_MESES - 1];
+  const vendB_m1   = Math.round(leadsB_m1 * convB / 100);
+  const vendP_m1   = Math.round(leadsP_m1 * convP / 100);
+  const vendP_last = Math.round(leadsP_m9 * convP / 100);
+  const liqB = vendB_m1 - churnB;
+  const liqP_m1 = vendP_m1 - churnP;
+  const liqP_last = vendP_last - churnP;
+
   const dadosAtual = curvaAtual.slice(1);
   const dadosProj  = curvaProj.slice(1);
   const baseFinalSem = curvaAtual[N_MESES];
@@ -437,21 +467,23 @@ function calcular(){
   }
 
   // Alavancas resultado
-  const deltaLeads = leadsP - leadsB;
-  g('r-leads-delta').textContent = (deltaLeads >= 0 ? '+' : '') + deltaLeads + ' leads/mês';
-  g('r-vend-base').textContent = vendB;
-  g('r-vend-proj').textContent = vendP;
+  g('r-leads-m1').textContent = leadsP_m1 + ' leads';
+  g('r-leads-m9').textContent = leadsP_m9 + ' leads';
+  g('r-vend-base').textContent = vendB_m1;
+  g('r-vend-proj').textContent = vendP_m1 + ' → ' + vendP_last;
   const deltaChurn = churnB - churnP;
   g('r-churn-delta').textContent = (deltaChurn >= 0 ? '+' : '') + deltaChurn + ' retidos/mês';
 
-  // Resultado final
-  g('rf-vendas').textContent     = vendP + ' placas';
-  g('rf-vendas-sub').textContent = 'eram ' + vendB + '/mês antes';
-  g('rf-churn').textContent      = churnP + ' clientes';
-  g('rf-churn-sub').textContent  = 'eram ' + churnB + '/mês antes';
-  g('rf-liquido').textContent    = (liqP >= 0 ? '+' : '') + liqP + ' placas';
-  g('rf-liquido').style.color    = liqP >= 0 ? 'var(--green)' : 'var(--red)';
-  g('rf-liquido-sub').textContent = liqP >= 0 ? 'crescendo todo mês' : 'ainda encolhendo';
+  // Resultado final — 2 pares: placas e receita
+  const ticket = 195; // ticket medio
+  const recM1   = curvaProj[1] * ticket;
+  const recFinal = baseFinalCom * ticket;
+  const recB_m1  = curvaAtual[1] * ticket;
+
+  // Par 1: placas
+  g('rf-placas-m1').textContent     = curvaProj[1].toLocaleString('pt-BR') + ' placas';
+  g('rf-placas-m1-sub').textContent = (liqP_m1 >= 0 ? '+' : '') + liqP_m1 + ' vs base atual';
+
   g('rf-base-final').textContent = baseFinalCom.toLocaleString('pt-BR') + ' placas';
   const metaDiff = baseFinalCom - META;
   if(metaDiff >= 0){
@@ -462,18 +494,24 @@ function calcular(){
     g('rf-meta-sub').style.color = 'var(--red)';
   }
 
+  // Par 2: receita
+  g('rf-receita-m1').textContent     = fmtR(recM1);
+  g('rf-receita-m1-sub').textContent = 'era ' + fmtR(recB_m1) + ' sem projeto';
+  g('rf-receita-final').textContent  = fmtR(recFinal);
+  g('rf-receita-final-sub').textContent = '+' + fmtR(recFinal - recB_m1) + ' vs sem projeto';
+
   // Alerta final
   const al = g('alerta-final');
-  if(liqP <= 0){
+  if(liqP_m1 <= 0){
     al.className = 'alerta alerta-red';
-    al.textContent = `✗ Com churn projetado (${churnP}/mês) maior que as vendas (${vendP}/mês), a base continua encolhendo. Reduza mais o churn ou aumente as vendas.`;
+    al.textContent = `✗ Com churn projetado (${churnP}/mês) maior que as vendas iniciais (${vendP_m1}/mês), a base começa encolhendo. Reduza mais o churn ou aumente a % de indicação.`;
   } else if(!atingeMeta){
     const falta = META - baseFinalCom;
     al.className = 'alerta alerta-amber';
-    al.textContent = `⚠ A base cresce +${liqP} placas/mês, mas ainda faltam ${falta.toLocaleString('pt-BR')} placas para atingir 4.800 em dez/2026. Ajuste as alavancas.`;
+    al.textContent = `⚠ A base cresce de +${liqP_m1} no mês 1 até +${liqP_last} no mês 9, mas ainda faltam ${falta.toLocaleString('pt-BR')} placas para atingir 4.800. Ajuste as alavancas.`;
   } else {
     al.className = 'alerta alerta-green';
-    al.textContent = `✓ Com +${liqP} placas líquidas por mês, a base atinge ${baseFinalCom.toLocaleString('pt-BR')} clientes em dez/2026 — ${(baseFinalCom-META).toLocaleString('pt-BR')} acima da meta.`;
+    al.textContent = `✓ Efeito bola de neve: crescimento líquido vai de +${liqP_m1} (mês 1) a +${liqP_last} (mês 9). Base atinge ${baseFinalCom.toLocaleString('pt-BR')} clientes em dez/2026 — ${(baseFinalCom-META).toLocaleString('pt-BR')} acima da meta.`;
   }
 
   // Funil comparativo
