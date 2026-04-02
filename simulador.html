@@ -147,28 +147,6 @@ input[type=range].green{--ac:var(--green);}
   </div>
 </div>
 
-<!-- META BOX -->
-<div class="meta-box">
-  <div class="meta-box-txt">
-    <h3 id="meta-status-titulo">—</h3>
-    <p id="meta-status-sub">—</p>
-  </div>
-  <div class="meta-box-nums">
-    <div class="meta-num">
-      <div class="meta-num-lbl">Sem projeto</div>
-      <div class="meta-num-val" style="color:var(--red)" id="meta-sem">—</div>
-    </div>
-    <div class="meta-num">
-      <div class="meta-num-lbl">Com projeto</div>
-      <div class="meta-num-val" style="color:var(--purple)" id="meta-com">—</div>
-    </div>
-    <div class="meta-num">
-      <div class="meta-num-lbl">Diferença</div>
-      <div class="meta-num-val" style="color:var(--green)" id="meta-diff">—</div>
-    </div>
-  </div>
-</div>
-
 <!-- GRÁFICO PRINCIPAL -->
 <div class="grafico-card">
   <div class="grafico-titulo">Evolução da base de clientes (placas) — abril a dezembro 2026</div>
@@ -286,6 +264,28 @@ input[type=range].green{--ac:var(--green);}
   <div id="alerta-final" class="alerta" style="margin-top:12px;"></div>
 </div>
 
+<!-- META BOX -->
+<div class="meta-box">
+  <div class="meta-box-txt">
+    <h3 id="meta-status-titulo">—</h3>
+    <p id="meta-status-sub">—</p>
+  </div>
+  <div class="meta-box-nums">
+    <div class="meta-num">
+      <div class="meta-num-lbl">Sem projeto</div>
+      <div class="meta-num-val" style="color:var(--red)" id="meta-sem">—</div>
+    </div>
+    <div class="meta-num">
+      <div class="meta-num-lbl">Com projeto</div>
+      <div class="meta-num-val" style="color:var(--purple)" id="meta-com">—</div>
+    </div>
+    <div class="meta-num">
+      <div class="meta-num-lbl">Diferença</div>
+      <div class="meta-num-val" style="color:var(--green)" id="meta-diff">—</div>
+    </div>
+  </div>
+</div>
+
 <!-- DETALHE FUNIL (colapsável) -->
 <div class="detalhe">
   <div class="detalhe-header" onclick="toggleDetalhe()">
@@ -390,16 +390,12 @@ function calcular(){
   const leadsP = v('s-leads-proj');
   const churnB = v('s-churn-base');
   const churnP = v('s-churn-proj');
+  const convB  = v('s-conv-base');
+  const convP  = v('s-conv-proj');
 
-  // Calcular vendas brutas via funil detalhado
-  const vendB = Math.round(leadsB * v('s-c1-base')/100 * v('s-c2-base')/100 * v('s-c3-base')/100 * v('s-c4-base')/100);
-  const vendP = Math.round(leadsP * v('s-c1-proj')/100 * v('s-c2-proj')/100 * v('s-c3-proj')/100 * v('s-c4-proj')/100);
-
-  // Sincronizar conversão total com resultado do funil
-  const convBReal = leadsB > 0 ? Math.round(vendB/leadsB*100) : 0;
-  const convPReal = leadsP > 0 ? Math.round(vendP/leadsP*100) : 0;
-  g('v-conv-base').textContent = convBReal;
-  g('v-conv-proj').textContent = convPReal;
+  // Vendas brutas = leads x conversao total (alavanca 2 controla direto)
+  const vendB = Math.round(leadsB * convB / 100);
+  const vendP = Math.round(leadsP * convP / 100);
 
   // Saldos
   const liqB = vendB - churnB;
