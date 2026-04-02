@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Simulador Comercial</title>
+<title>Simulador Comercial — Anpara</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -15,124 +15,103 @@
   --font:'Plus Jakarta Sans',sans-serif;--r:10px;--r2:16px;
 }
 body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px;min-height:100vh;}
-.wrap{max-width:1180px;margin:0 auto;padding:32px 28px;}
+.wrap{max-width:1100px;margin:0 auto;padding:32px 28px;}
 
-.hdr{margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid var(--b);}
-.hdr-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;}
-.hdr h1{font-size:18px;font-weight:800;letter-spacing:-.4px;display:flex;align-items:center;gap:10px;}
-.hdr-dot{width:8px;height:8px;border-radius:50%;background:var(--purple);box-shadow:0 0 12px rgba(157,125,255,.6);}
-.hdr p{font-size:12px;color:var(--mu2);font-weight:500;}
-.btn-back{background:var(--s2);border:1px solid var(--b2);color:var(--mu2);padding:6px 14px;border-radius:var(--r);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}
+.hdr{margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--b);}
+.hdr-top{display:flex;justify-content:space-between;align-items:center;}
+.hdr h1{font-size:17px;font-weight:800;letter-spacing:-.3px;display:flex;align-items:center;gap:10px;}
+.hdr-dot{width:8px;height:8px;border-radius:50%;background:var(--purple);box-shadow:0 0 10px rgba(157,125,255,.6);}
+.hdr p{font-size:12px;color:var(--mu2);font-weight:500;margin-top:4px;}
+.btn-back{background:var(--s2);border:1px solid var(--b2);color:var(--mu2);padding:6px 14px;border-radius:var(--r);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;}
 .btn-back:hover{background:var(--s3);color:var(--tx);}
 
-.layout{display:grid;grid-template-columns:420px 1fr;gap:24px;align-items:start;}
-@media(max-width:900px){.layout{grid-template-columns:1fr;}}
+/* HERO: situação atual */
+.hero{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;}
+.hero-card{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:18px 20px;position:relative;overflow:hidden;}
+.hero-card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--hc,var(--mu));}
+.hero-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--mu2);margin-bottom:8px;}
+.hero-val{font-size:32px;font-weight:800;letter-spacing:-1.5px;line-height:1;}
+.hero-sub{font-size:11px;color:var(--mu);font-weight:500;margin-top:6px;}
+.hero-badge{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700;}
+.badge-red{background:rgba(255,79,106,.12);color:var(--red);}
+.badge-green{background:rgba(0,200,150,.12);color:var(--green);}
+.badge-amber{background:rgba(245,166,35,.12);color:var(--amber);}
 
-.painel{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:24px;}
-.painel-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--mu2);margin-bottom:20px;}
-.secao{margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--b);}
-.secao:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none;}
-.secao-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);margin-bottom:14px;}
-.secao.churn-secao{border:1px solid rgba(255,79,106,.18);border-radius:var(--r2);padding:16px;background:rgba(255,79,106,.04);}
-.secao.churn-secao .secao-label{color:var(--red);}
+/* GRÁFICO PRINCIPAL */
+.grafico-card{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:24px;margin-bottom:20px;}
+.grafico-titulo{font-size:13px;font-weight:700;color:var(--tx);margin-bottom:4px;}
+.grafico-sub{font-size:11px;color:var(--mu2);margin-bottom:20px;}
+.grafico-legenda{display:flex;gap:20px;margin-bottom:16px;flex-wrap:wrap;}
+.leg{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;}
+.leg-line{width:28px;height:3px;border-radius:2px;}
 
-.slider-row{margin-bottom:14px;}
-.slider-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
-.slider-name{font-size:12px;font-weight:600;color:var(--mu2);}
-.slider-val{font-size:14px;font-weight:800;color:var(--tx);}
-.slider-val span{font-size:10px;font-weight:600;color:var(--mu);margin-left:2px;}
+/* META BADGE */
+.meta-box{background:rgba(157,125,255,.08);border:1px solid rgba(157,125,255,.25);border-radius:var(--r2);padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+.meta-box-txt h3{font-size:14px;font-weight:800;color:var(--purple);margin-bottom:2px;}
+.meta-box-txt p{font-size:11px;color:var(--mu2);}
+.meta-box-nums{display:flex;gap:24px;}
+.meta-num{text-align:right;}
+.meta-num-val{font-size:22px;font-weight:800;letter-spacing:-.5px;}
+.meta-num-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--mu2);}
 
-input[type=range]{width:100%;height:4px;border-radius:2px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background:linear-gradient(to right, var(--accent,var(--blue)) 0%, var(--accent,var(--blue)) var(--pct,50%), var(--s3) var(--pct,50%), var(--s3) 100%);}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent,var(--blue));cursor:pointer;border:2px solid var(--bg);}
-input[type=range].green{--accent:var(--green);}
-input[type=range].amber{--accent:var(--amber);}
-input[type=range].purple{--accent:var(--purple);}
-input[type=range].red{--accent:var(--red);}
-input[type=range].teal{--accent:var(--teal);}
+/* ALAVANCAS */
+.alavancas-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu2);margin-bottom:12px;}
+.alavancas{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px;}
+.alav{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:16px;}
+.alav-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.alav-icon{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;}
+.alav-titulo{font-size:12px;font-weight:700;color:var(--tx);}
+.alav-desc{font-size:11px;color:var(--mu);margin-bottom:10px;line-height:1.5;}
 
-.slider-minmax{display:flex;justify-content:space-between;margin-top:4px;}
-.slider-minmax span{font-size:10px;color:var(--mu);font-weight:500;}
+/* SLIDER inline */
+.sl-row{margin-bottom:10px;}
+.sl-header{display:flex;justify-content:space-between;margin-bottom:5px;}
+.sl-name{font-size:11px;font-weight:600;color:var(--mu2);}
+.sl-val{font-size:12px;font-weight:800;color:var(--tx);}
+input[type=range]{width:100%;height:4px;border-radius:2px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;background:linear-gradient(to right,var(--ac,var(--blue)) 0%,var(--ac,var(--blue)) var(--pct,50%),var(--s3) var(--pct,50%),var(--s3) 100%);}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--ac,var(--blue));cursor:pointer;border:2px solid var(--bg);}
+input[type=range].purple{--ac:var(--purple);}
+input[type=range].red{--ac:var(--red);}
+input[type=range].green{--ac:var(--green);}
+.sl-minmax{display:flex;justify-content:space-between;margin-top:3px;}
+.sl-minmax span{font-size:10px;color:var(--mu);}
 
-.resultado{display:flex;flex-direction:column;gap:16px;}
+.alav-resultado{background:var(--s2);border-radius:var(--r);padding:8px 10px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;}
+.alav-res-lbl{font-size:10px;font-weight:700;color:var(--mu2);text-transform:uppercase;letter-spacing:.5px;}
+.alav-res-val{font-size:13px;font-weight:800;}
 
-.res-kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.res-kpi{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:16px 18px;position:relative;overflow:hidden;}
-.res-kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kc);}
-.res-kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--mu2);margin-bottom:8px;}
-.res-kpi-val{font-size:28px;font-weight:800;letter-spacing:-1px;line-height:1;margin-bottom:4px;}
-.res-kpi-sub{font-size:11px;color:var(--mu);font-weight:500;}
-.res-kpi-delta{font-size:11px;font-weight:700;margin-top:6px;}
-.res-kpi-delta.up{color:var(--green);}.res-kpi-delta.dn{color:var(--red);}
+/* RESULTADO FINAL */
+.resultado-final{background:var(--s1);border:1px solid rgba(157,125,255,.3);border-radius:var(--r2);padding:20px;margin-bottom:20px;}
+.rf-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--purple);margin-bottom:16px;}
+.rf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.rf-item{display:flex;flex-direction:column;gap:4px;}
+.rf-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--mu2);}
+.rf-val{font-size:20px;font-weight:800;letter-spacing:-.5px;}
+.rf-sub{font-size:11px;color:var(--mu);}
 
-.base-growth-card{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:20px;}
-.base-growth-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu2);margin-bottom:16px;}
+/* ALERTA */
+.alerta{padding:10px 14px;border-radius:var(--r);font-size:11px;font-weight:600;margin-top:8px;}
+.alerta-red{background:rgba(255,79,106,.1);border-left:2px solid var(--red);color:var(--red);}
+.alerta-green{background:rgba(0,200,150,.1);border-left:2px solid var(--green);color:var(--green);}
+.alerta-amber{background:rgba(245,166,35,.1);border-left:2px solid var(--amber);color:var(--amber);}
 
-.bg-cenarios{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:20px;}
-.bg-cen{border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:4px;}
-.bg-cen.bc1{background:rgba(79,122,255,.08);border:1px solid rgba(79,122,255,.2);}
-.bg-cen.bc2{background:rgba(255,79,106,.08);border:1px solid rgba(255,79,106,.2);}
-.bg-cen.bc3{background:rgba(157,125,255,.08);border:1px solid rgba(157,125,255,.25);}
-.bg-cen.bc4{background:rgba(0,212,200,.08);border:1px solid rgba(0,212,200,.2);}
-.bg-cen-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;}
-.bc1 .bg-cen-lbl{color:rgba(79,122,255,.8);}
-.bc2 .bg-cen-lbl{color:rgba(255,79,106,.8);}
-.bc3 .bg-cen-lbl{color:var(--purple);}
-.bc4 .bg-cen-lbl{color:var(--teal);}
-.bg-cen-val{font-size:22px;font-weight:800;letter-spacing:-.5px;line-height:1.1;}
-.bc1 .bg-cen-val{color:var(--blue);}
-.bc2 .bg-cen-val{color:var(--red);}
-.bc3 .bg-cen-val{color:var(--purple);}
-.bc4 .bg-cen-val{color:var(--teal);}
-.bg-cen-sub{font-size:10px;color:var(--mu);font-weight:500;line-height:1.3;}
+/* DETALHE FUNIL — colapsável */
+.detalhe{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);overflow:hidden;}
+.detalhe-header{padding:14px 20px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;}
+.detalhe-header:hover{background:rgba(255,255,255,.02);}
+.detalhe-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu2);}
+.detalhe-toggle{font-size:11px;color:var(--mu);font-weight:600;}
+.detalhe-body{display:none;padding:0 20px 20px;}
+.detalhe-body.open{display:block;}
 
-.churn-banner{background:rgba(255,79,106,.06);border:1px solid rgba(255,79,106,.18);border-radius:var(--r2);padding:14px 18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
-.cb-item{display:flex;flex-direction:column;gap:4px;}
-.cb-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,79,106,.7);}
-.cb-val{font-size:18px;font-weight:800;letter-spacing:-.5px;color:var(--red);}
-.cb-val.ok{color:var(--green);}
-.cb-sub{font-size:11px;color:var(--mu);font-weight:500;}
-
-.funil-comp{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:20px;}
-.funil-comp-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu2);margin-bottom:6px;}
-.funil-legenda{display:flex;gap:16px;margin-bottom:16px;}
-.leg{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;color:var(--mu2);}
-.leg-sq{width:10px;height:10px;border-radius:2px;}
-
-.fe{display:grid;grid-template-columns:140px 1fr 64px 64px;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--b);}
+.fe{display:grid;grid-template-columns:160px 1fr 60px 60px;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--b);}
 .fe:last-child{border-bottom:none;}
 .fe-lbl{font-size:11px;font-weight:600;color:var(--mu2);}
 .fe-bars{display:flex;flex-direction:column;gap:4px;}
-.fe-bar-b{height:8px;border-radius:4px;background:rgba(79,122,255,.35);transition:width .4s ease;}
-.fe-bar-p{height:8px;border-radius:4px;background:rgba(157,125,255,.7);transition:width .4s ease;}
-.fe-num-b{font-size:12px;font-weight:700;color:var(--mu2);text-align:right;}
-.fe-num-p{font-size:12px;font-weight:700;color:var(--purple);text-align:right;}
-
-.tabela-card{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:20px;}
-.tabela-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu2);margin-bottom:12px;}
-
-.tab-toggle{display:flex;gap:6px;margin-bottom:12px;}
-.ttab{padding:5px 14px;border-radius:var(--r);border:1px solid var(--b);background:var(--s2);color:var(--mu2);font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.5px;}
-.ttab.on{background:rgba(157,125,255,.12);border-color:rgba(157,125,255,.35);color:var(--purple);}
-
-.tab-wrap{overflow-x:auto;}
-table{width:100%;border-collapse:collapse;}
-thead th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;padding:6px 10px;border-bottom:1px solid var(--b2);white-space:nowrap;text-align:right;}
-thead th:first-child{text-align:left;color:var(--mu);}
-thead th.th-b{color:rgba(79,122,255,.7);}
-thead th.th-bc{color:var(--red);}
-thead th.th-p{color:var(--purple);}
-thead th.th-pc{color:var(--teal);}
-tbody tr{border-bottom:1px solid var(--b);}
-tbody tr:last-child{border-bottom:none;}
-tbody tr:hover{background:rgba(255,255,255,.02);}
-td{padding:7px 10px;font-size:12px;font-weight:600;text-align:right;white-space:nowrap;}
-td:first-child{text-align:left;color:var(--mu2);}
-td.td-b{color:var(--mu2);}
-td.td-bc{color:var(--red);}
-td.td-p{color:var(--purple);}
-td.td-pc{color:var(--teal);}
-
-.nota{font-size:11px;color:var(--mu);font-weight:500;padding:12px 16px;background:var(--s2);border-radius:var(--r);border-left:2px solid var(--amber);}
+.fe-bar-b{height:7px;border-radius:4px;background:rgba(255,79,106,.4);}
+.fe-bar-p{height:7px;border-radius:4px;background:rgba(157,125,255,.7);}
+.fe-nb{font-size:11px;font-weight:700;color:var(--mu2);text-align:right;}
+.fe-np{font-size:11px;font-weight:700;color:var(--purple);text-align:right;}
 </style>
 </head>
 <body>
@@ -140,307 +119,258 @@ td.td-pc{color:var(--teal);}
 
 <header class="hdr">
   <div class="hdr-top">
-    <h1><div class="hdr-dot"></div>Simulador Comercial</h1>
+    <h1><div class="hdr-dot"></div>Simulador de crescimento — <span id="nome-cliente-titulo">Anpara</span></h1>
     <a href="index.html" class="btn-back">← Dashboard</a>
   </div>
-  <p>Projete crescimento da base de clientes ajustando leads, conversões e churn</p>
+  <p>Projeção da base de clientes até dez/2026 — impacto das 3 alavancas do projeto</p>
 </header>
 
-<div class="layout">
-
-  <!-- PAINEL -->
-  <div class="painel">
-    <div class="painel-titulo">Parâmetros da simulação</div>
-
-    <div class="secao">
-      <div class="secao-label">Cliente</div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Nome do cliente</span></div>
-        <input type="text" id="nome-cliente" value="Anpara" placeholder="Nome do cliente"
-          style="width:100%;background:var(--s2);border:1px solid var(--b2);color:var(--tx);padding:8px 12px;border-radius:var(--r);font-family:var(--font);font-size:13px;font-weight:600;outline:none;" oninput="calcular()"/>
-      </div>
-      <div class="slider-row" style="margin-top:12px">
-        <div class="slider-header"><span class="slider-name">Ticket médio</span><span class="slider-val">R$ <span id="v-ticket">195</span></span></div>
-        <input type="range" id="s-ticket" class="purple" min="50" max="1000" step="5" value="195" oninput="calcular()"/>
-        <div class="slider-minmax"><span>R$50</span><span>R$1.000</span></div>
-      </div>
-      <div class="slider-row" style="margin-top:4px">
-        <div class="slider-header"><span class="slider-name">Taxa de ativação</span><span class="slider-val">R$ <span id="v-ativacao">50</span></span></div>
-        <input type="range" id="s-ativacao" class="amber" min="0" max="500" step="10" value="50" oninput="calcular()"/>
-        <div class="slider-minmax"><span>R$0</span><span>R$500</span></div>
-      </div>
-    </div>
-
-    <div class="secao">
-      <div class="secao-label">Cenário base (atual)</div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Leads/mês</span><span class="slider-val"><span id="v-leads-base">240</span> <span>leads</span></span></div>
-        <input type="range" id="s-leads-base" min="50" max="1000" step="10" value="240" oninput="calcular()"/>
-        <div class="slider-minmax"><span>50</span><span>1.000</span></div>
-      </div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Lead → Negociação</span><span class="slider-val"><span id="v-c1-base">98</span><span>%</span></span></div>
-        <input type="range" id="s-c1-base" min="1" max="100" value="98" oninput="calcular()"/>
-        <div class="slider-minmax"><span>1%</span><span>100%</span></div>
-      </div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Negociação → Lib. Vistoria</span><span class="slider-val"><span id="v-c2-base">36</span><span>%</span></span></div>
-        <input type="range" id="s-c2-base" min="1" max="100" value="36" oninput="calcular()"/>
-        <div class="slider-minmax"><span>1%</span><span>100%</span></div>
-      </div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Lib. Vistoria → Vistoria</span><span class="slider-val"><span id="v-c3-base">92</span><span>%</span></span></div>
-        <input type="range" id="s-c3-base" min="1" max="100" value="92" oninput="calcular()"/>
-        <div class="slider-minmax"><span>1%</span><span>100%</span></div>
-      </div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Vistoria → Venda</span><span class="slider-val"><span id="v-c4-base">98</span><span>%</span></span></div>
-        <input type="range" id="s-c4-base" min="1" max="100" value="98" oninput="calcular()"/>
-        <div class="slider-minmax"><span>1%</span><span>100%</span></div>
-      </div>
-    </div>
-
-    <div class="secao">
-      <div class="secao-label">Cenário projetado</div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Leads/mês</span><span class="slider-val"><span id="v-leads-proj">310</span> <span>leads</span></span></div>
-        <input type="range" id="s-leads-proj" min="50" max="1000" step="10" value="310" oninput="calcular()"/>
-        <div class="slider-minmax"><span>50</span><span>1.000</span></div>
-      </div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Lead → Negociação</span><span class="slider-val"><span id="v-c1-proj">98</span><span>%</span></span></div>
-        <input type="range" id="s-c1-proj" class="purple" min="1" max="100" value="98" oninput="calcular()"/>
-        <div class="slider-minmax"><span>1%</span><span>100%</span></div>
-      </div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Negociação → Lib. Vistoria</span><span class="slider-val"><span id="v-c2-proj">45</span><span>%</span></span></div>
-        <input type="range" id="s-c2-proj" class="purple" min="1" max="100" value="45" oninput="calcular()"/>
-        <div class="slider-minmax"><span>1%</span><span>100%</span></div>
-      </div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Lib. Vistoria → Vistoria</span><span class="slider-val"><span id="v-c3-proj">92</span><span>%</span></span></div>
-        <input type="range" id="s-c3-proj" class="purple" min="1" max="100" value="92" oninput="calcular()"/>
-        <div class="slider-minmax"><span>1%</span><span>100%</span></div>
-      </div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Vistoria → Venda</span><span class="slider-val"><span id="v-c4-proj">98</span><span>%</span></span></div>
-        <input type="range" id="s-c4-proj" class="purple" min="1" max="100" value="98" oninput="calcular()"/>
-        <div class="slider-minmax"><span>1%</span><span>100%</span></div>
-      </div>
-    </div>
-
-    <div class="secao churn-secao">
-      <div class="secao-label">Churn mensal</div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Churn atual (clientes/mês)</span><span class="slider-val"><span id="v-churn-base">100</span> <span>clientes</span></span></div>
-        <input type="range" id="s-churn-base" class="red" min="0" max="500" step="5" value="100" oninput="calcular()"/>
-        <div class="slider-minmax"><span>0</span><span>500</span></div>
-      </div>
-      <div class="slider-row" style="margin-top:4px">
-        <div class="slider-header"><span class="slider-name">Churn projetado (clientes/mês)</span><span class="slider-val"><span id="v-churn-proj">70</span> <span>clientes</span></span></div>
-        <input type="range" id="s-churn-proj" class="teal" min="0" max="500" step="5" value="70" oninput="calcular()"/>
-        <div class="slider-minmax"><span>0</span><span>500</span></div>
-      </div>
-      <div id="churn-msg" style="margin-top:10px;font-size:11px;font-weight:600;padding:8px 12px;border-radius:var(--r);"></div>
-    </div>
-
-    <div class="secao">
-      <div class="secao-label">Horizonte</div>
-      <div class="slider-row">
-        <div class="slider-header"><span class="slider-name">Meses de projeção</span><span class="slider-val"><span id="v-meses">12</span><span> meses</span></span></div>
-        <input type="range" id="s-meses" class="green" min="1" max="24" value="12" oninput="calcular()"/>
-        <div class="slider-minmax"><span>1</span><span>24</span></div>
-      </div>
-    </div>
-
+<!-- SITUAÇÃO ATUAL -->
+<div class="hero">
+  <div class="hero-card" style="--hc:var(--red)">
+    <div class="hero-label">Base atual</div>
+    <div class="hero-val" id="h-base">4.200</div>
+    <div class="hero-sub">clientes ativos hoje</div>
+    <div class="hero-badge badge-red">↓ encolhendo</div>
   </div>
-
-  <!-- RESULTADO -->
-  <div class="resultado">
-
-    <!-- BLOCO PRINCIPAL: crescimento da base -->
-    <div class="base-growth-card">
-      <div class="base-growth-titulo">Base de clientes (placas) ao final do período — <span id="bg-periodo">12</span> meses</div>
-      <div class="bg-cenarios">
-        <div class="bg-cen bc1">
-          <span class="bg-cen-lbl">Base s/ churn</span>
-          <span class="bg-cen-val" id="bg-b">—</span>
-          <span class="bg-cen-sub">novas placas acumuladas</span>
-        </div>
-        <div class="bg-cen bc2">
-          <span class="bg-cen-lbl">Base c/ churn atual</span>
-          <span class="bg-cen-val" id="bg-bc">—</span>
-          <span class="bg-cen-sub">placas líquidas acumuladas</span>
-        </div>
-        <div class="bg-cen bc3">
-          <span class="bg-cen-lbl">Projetado s/ churn</span>
-          <span class="bg-cen-val" id="bg-p">—</span>
-          <span class="bg-cen-sub">novas placas acumuladas</span>
-        </div>
-        <div class="bg-cen bc4">
-          <span class="bg-cen-lbl">Projetado c/ churn proj.</span>
-          <span class="bg-cen-val" id="bg-pc">—</span>
-          <span class="bg-cen-sub">placas líquidas acumuladas</span>
-        </div>
-      </div>
-
-      <div style="position:relative;width:100%;height:220px;">
-        <canvas id="chartBase"></canvas>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;">
-        <span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--mu2)"><span style="width:24px;height:3px;background:rgba(79,122,255,.7);border-radius:2px;display:inline-block;"></span>Base s/ churn</span>
-        <span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--red)"><span style="width:24px;height:3px;background:rgba(255,79,106,.7);border-radius:2px;display:inline-block;border-top:2px dashed rgba(255,79,106,.7);height:0;"></span>Base c/ churn</span>
-        <span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--purple)"><span style="width:24px;height:3px;background:var(--purple);border-radius:2px;display:inline-block;"></span>Projetado s/ churn</span>
-        <span style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--teal)"><span style="width:24px;height:3px;background:var(--teal);border-radius:2px;display:inline-block;border-top:2px dashed var(--teal);height:0;"></span>Projetado c/ churn</span>
-      </div>
-    </div>
-
-    <!-- KPIs receita -->
-    <div class="res-kpis">
-      <div class="res-kpi" style="--kc:var(--purple)">
-        <div class="res-kpi-lbl">Vendas brutas/mês projetadas</div>
-        <div class="res-kpi-val" id="r-vendas-proj">—</div>
-        <div class="res-kpi-sub">vs <span id="r-vendas-base">—</span> atual</div>
-        <div class="res-kpi-delta" id="r-vendas-delta"></div>
-      </div>
-      <div class="res-kpi" style="--kc:var(--teal)">
-        <div class="res-kpi-lbl">Crescimento líquido/mês (proj.)</div>
-        <div class="res-kpi-val" id="r-liquido-proj">—</div>
-        <div class="res-kpi-sub">vendas brutas − churn projetado</div>
-        <div class="res-kpi-delta" id="r-liquido-delta"></div>
-      </div>
-      <div class="res-kpi" style="--kc:var(--green)">
-        <div class="res-kpi-lbl">Receita recorrente/mês (proj.)</div>
-        <div class="res-kpi-val" id="r-receita-proj">—</div>
-        <div class="res-kpi-sub">vs <span id="r-receita-base">—</span> atual</div>
-        <div class="res-kpi-delta" id="r-receita-delta"></div>
-      </div>
-      <div class="res-kpi" style="--kc:var(--amber)">
-        <div class="res-kpi-lbl">Receita de ativação/mês (proj.)</div>
-        <div class="res-kpi-val" id="r-ativ-proj">—</div>
-        <div class="res-kpi-sub">vs <span id="r-ativ-base">—</span> atual</div>
-        <div class="res-kpi-delta" id="r-ativ-delta"></div>
-      </div>
-    </div>
-
-    <!-- Churn banner -->
-    <div class="churn-banner">
-      <div class="cb-item">
-        <span class="cb-lbl">Perda atual (clientes/mês)</span>
-        <span class="cb-val" id="cb-churn-base">—</span>
-        <span class="cb-sub" id="cb-rec-base">—</span>
-      </div>
-      <div class="cb-item">
-        <span class="cb-lbl">Perda projetada (clientes/mês)</span>
-        <span class="cb-val" id="cb-churn-proj">—</span>
-        <span class="cb-sub" id="cb-rec-proj">—</span>
-      </div>
-      <div class="cb-item">
-        <span class="cb-lbl">Clientes retidos c/ redução</span>
-        <span class="cb-val ok" id="cb-economia">—</span>
-        <span class="cb-sub" id="cb-rec-eco">—</span>
-      </div>
-    </div>
-
-    <!-- Funil limpo -->
-    <div class="funil-comp">
-      <div class="funil-comp-titulo">Funil de conversão — base vs projetado</div>
-      <div class="funil-legenda">
-        <span class="leg"><span class="leg-sq" style="background:rgba(79,122,255,.4)"></span>Base atual</span>
-        <span class="leg"><span class="leg-sq" style="background:rgba(157,125,255,.75)"></span>Projetado</span>
-      </div>
-      <div id="funil-rows"></div>
-    </div>
-
-    <!-- Tabela toggle -->
-    <div class="tabela-card">
-      <div class="tabela-titulo">Evolução mês a mês</div>
-      <div class="tab-toggle">
-        <button class="ttab on" id="ttab-clientes" onclick="setTabela('clientes')">Placas (clientes)</button>
-        <button class="ttab" id="ttab-receita" onclick="setTabela('receita')">Receita recorrente</button>
-      </div>
-      <div class="tab-wrap">
-        <table id="tabela-main"></table>
-      </div>
-    </div>
-
-    <div class="nota">
-      <strong>S/ churn</strong>: acumulado de novas vendas apenas. <strong>C/ churn</strong>: clientes líquidos ativos, crescendo pelo saldo mensal (vendas − churn). Linhas sólidas = sem churn; tracejadas = com churn.
-    </div>
-
+  <div class="hero-card" style="--hc:var(--amber)">
+    <div class="hero-label">Saldo mensal atual</div>
+    <div class="hero-val" id="h-saldo-atual">−35</div>
+    <div class="hero-sub">vendas (~65/mês) − churn (100/mês)</div>
+    <div class="hero-badge badge-red" id="h-badge-atual">sem intervenção</div>
+  </div>
+  <div class="hero-card" style="--hc:var(--purple)">
+    <div class="hero-label">Meta</div>
+    <div class="hero-val">4.800</div>
+    <div class="hero-sub">clientes até dez/2026</div>
+    <div class="hero-badge badge-amber" id="h-gap">faltam <span id="h-gap-val">—</span> placas</div>
   </div>
 </div>
+
+<!-- META BOX -->
+<div class="meta-box">
+  <div class="meta-box-txt">
+    <h3 id="meta-status-titulo">—</h3>
+    <p id="meta-status-sub">—</p>
+  </div>
+  <div class="meta-box-nums">
+    <div class="meta-num">
+      <div class="meta-num-lbl">Sem projeto</div>
+      <div class="meta-num-val" style="color:var(--red)" id="meta-sem">—</div>
+    </div>
+    <div class="meta-num">
+      <div class="meta-num-lbl">Com projeto</div>
+      <div class="meta-num-val" style="color:var(--purple)" id="meta-com">—</div>
+    </div>
+    <div class="meta-num">
+      <div class="meta-num-lbl">Diferença</div>
+      <div class="meta-num-val" style="color:var(--green)" id="meta-diff">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- GRÁFICO PRINCIPAL -->
+<div class="grafico-card">
+  <div class="grafico-titulo">Evolução da base de clientes (placas) — abril a dezembro 2026</div>
+  <div class="grafico-sub">Partindo de 4.200 clientes hoje. Linha tracejada vermelha = sem intervenção. Linha roxa = com o projeto.</div>
+  <div class="grafico-legenda">
+    <span class="leg"><span class="leg-line" style="background:rgba(255,79,106,.7);border-top:2px dashed rgba(255,79,106,.7);height:0;"></span><span style="color:var(--mu2)">Sem intervenção (atual)</span></span>
+    <span class="leg"><span class="leg-line" style="background:var(--purple);"></span><span style="color:var(--purple)">Com o projeto</span></span>
+    <span class="leg"><span class="leg-line" style="background:rgba(245,166,35,.6);border-top:1px dashed rgba(245,166,35,.6);height:0;"></span><span style="color:var(--amber)">Meta: 4.800</span></span>
+  </div>
+  <div style="position:relative;width:100%;height:280px;">
+    <canvas id="chartPrincipal"></canvas>
+  </div>
+</div>
+
+<!-- 3 ALAVANCAS -->
+<div class="alavancas-titulo">As 3 alavancas do projeto — ajuste para ver o impacto em tempo real</div>
+<div class="alavancas">
+
+  <!-- ALAVANCA 1: Volume -->
+  <div class="alav">
+    <div class="alav-header">
+      <div class="alav-icon" style="background:rgba(79,122,255,.15);">📈</div>
+      <div class="alav-titulo">1. Aumentar volume</div>
+    </div>
+    <div class="alav-desc">Mais leads entrando no funil por mês</div>
+    <div class="sl-row">
+      <div class="sl-header"><span class="sl-name">Leads/mês atual</span><span class="sl-val"><span id="v-leads-base">240</span></span></div>
+      <input type="range" id="s-leads-base" min="50" max="600" step="10" value="240" oninput="calcular()"/>
+      <div class="sl-minmax"><span>50</span><span>600</span></div>
+    </div>
+    <div class="sl-row">
+      <div class="sl-header"><span class="sl-name">Leads/mês projetado</span><span class="sl-val"><span id="v-leads-proj">310</span></span></div>
+      <input type="range" id="s-leads-proj" class="purple" min="50" max="600" step="10" value="310" oninput="calcular()"/>
+      <div class="sl-minmax"><span>50</span><span>600</span></div>
+    </div>
+    <div class="alav-resultado">
+      <span class="alav-res-lbl">Impacto em leads</span>
+      <span class="alav-res-val" style="color:var(--blue)" id="r-leads-delta">—</span>
+    </div>
+  </div>
+
+  <!-- ALAVANCA 2: Conversão -->
+  <div class="alav">
+    <div class="alav-header">
+      <div class="alav-icon" style="background:rgba(157,125,255,.15);">🎯</div>
+      <div class="alav-titulo">2. Melhorar conversão</div>
+    </div>
+    <div class="alav-desc">Taxa de lead que vira venda (funil completo)</div>
+    <div class="sl-row">
+      <div class="sl-header"><span class="sl-name">Conversão total atual</span><span class="sl-val"><span id="v-conv-base">32</span>%</span></div>
+      <input type="range" id="s-conv-base" min="1" max="100" value="32" oninput="calcular()"/>
+      <div class="sl-minmax"><span>1%</span><span>100%</span></div>
+    </div>
+    <div class="sl-row">
+      <div class="sl-header"><span class="sl-name">Conversão total projetada</span><span class="sl-val"><span id="v-conv-proj">40</span>%</span></div>
+      <input type="range" id="s-conv-proj" class="purple" min="1" max="100" value="40" oninput="calcular()"/>
+      <div class="sl-minmax"><span>1%</span><span>100%</span></div>
+    </div>
+    <div class="alav-resultado">
+      <span class="alav-res-lbl">Vendas brutas/mês</span>
+      <span class="alav-res-val" style="color:var(--purple)"><span id="r-vend-base">—</span> → <span id="r-vend-proj">—</span></span>
+    </div>
+  </div>
+
+  <!-- ALAVANCA 3: Churn -->
+  <div class="alav">
+    <div class="alav-header">
+      <div class="alav-icon" style="background:rgba(255,79,106,.12);">🔒</div>
+      <div class="alav-titulo">3. Reduzir churn</div>
+    </div>
+    <div class="alav-desc">Menos clientes saindo por mês da base</div>
+    <div class="sl-row">
+      <div class="sl-header"><span class="sl-name">Churn atual (clientes/mês)</span><span class="sl-val"><span id="v-churn-base">100</span></span></div>
+      <input type="range" id="s-churn-base" class="red" min="0" max="300" step="5" value="100" oninput="calcular()"/>
+      <div class="sl-minmax"><span>0</span><span>300</span></div>
+    </div>
+    <div class="sl-row">
+      <div class="sl-header"><span class="sl-name">Churn projetado (clientes/mês)</span><span class="sl-val"><span id="v-churn-proj">60</span></span></div>
+      <input type="range" id="s-churn-proj" class="green" min="0" max="300" step="5" value="60" oninput="calcular()"/>
+      <div class="sl-minmax"><span>0</span><span>300</span></div>
+    </div>
+    <div class="alav-resultado">
+      <span class="alav-res-lbl">Clientes retidos/mês</span>
+      <span class="alav-res-val" style="color:var(--green)" id="r-churn-delta">—</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- RESULTADO COM PROJETO -->
+<div class="resultado-final">
+  <div class="rf-titulo">Resultado com o projeto — saldo mensal projetado</div>
+  <div class="rf-grid">
+    <div class="rf-item">
+      <span class="rf-lbl">Vendas brutas/mês</span>
+      <span class="rf-val" style="color:var(--purple)" id="rf-vendas">—</span>
+      <span class="rf-sub" id="rf-vendas-sub">—</span>
+    </div>
+    <div class="rf-item">
+      <span class="rf-lbl">Churn projetado/mês</span>
+      <span class="rf-val" style="color:var(--red)" id="rf-churn">—</span>
+      <span class="rf-sub" id="rf-churn-sub">—</span>
+    </div>
+    <div class="rf-item">
+      <span class="rf-lbl">Crescimento líquido/mês</span>
+      <span class="rf-val" id="rf-liquido">—</span>
+      <span class="rf-sub" id="rf-liquido-sub">—</span>
+    </div>
+    <div class="rf-item">
+      <span class="rf-lbl">Base em dez/2026</span>
+      <span class="rf-val" style="color:var(--purple)" id="rf-base-final">—</span>
+      <span class="rf-sub" id="rf-meta-sub">—</span>
+    </div>
+  </div>
+  <div id="alerta-final" class="alerta" style="margin-top:12px;"></div>
+</div>
+
+<!-- DETALHE FUNIL (colapsável) -->
+<div class="detalhe">
+  <div class="detalhe-header" onclick="toggleDetalhe()">
+    <span class="detalhe-titulo">Detalhamento do funil de conversão</span>
+    <span class="detalhe-toggle" id="det-toggle">▼ ver detalhes</span>
+  </div>
+  <div class="detalhe-body" id="detalhe-body">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--mu);margin-bottom:12px;">Etapas do funil</div>
+        <div id="funil-rows"></div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--mu);margin-bottom:12px;">Configurações avançadas</div>
+        <div class="sl-row">
+          <div class="sl-header"><span class="sl-name">Lead → Negociação (base)</span><span class="sl-val"><span id="v-c1-base">98</span>%</span></div>
+          <input type="range" id="s-c1-base" min="1" max="100" value="98" oninput="calcular()"/>
+        </div>
+        <div class="sl-row">
+          <div class="sl-header"><span class="sl-name">Negociação → Lib. Vistoria (base)</span><span class="sl-val"><span id="v-c2-base">36</span>%</span></div>
+          <input type="range" id="s-c2-base" min="1" max="100" value="36" oninput="calcular()"/>
+        </div>
+        <div class="sl-row">
+          <div class="sl-header"><span class="sl-name">Lib. Vistoria → Vistoria (base)</span><span class="sl-val"><span id="v-c3-base">92</span>%</span></div>
+          <input type="range" id="s-c3-base" min="1" max="100" value="92" oninput="calcular()"/>
+        </div>
+        <div class="sl-row">
+          <div class="sl-header"><span class="sl-name">Vistoria → Venda (base)</span><span class="sl-val"><span id="v-c4-base">98</span>%</span></div>
+          <input type="range" id="s-c4-base" min="1" max="100" value="98" oninput="calcular()"/>
+        </div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--b)">
+        <div class="sl-row">
+          <div class="sl-header"><span class="sl-name">Lead → Negociação (proj.)</span><span class="sl-val"><span id="v-c1-proj">98</span>%</span></div>
+          <input type="range" id="s-c1-proj" class="purple" min="1" max="100" value="98" oninput="calcular()"/>
+        </div>
+        <div class="sl-row">
+          <div class="sl-header"><span class="sl-name">Negociação → Lib. Vistoria (proj.)</span><span class="sl-val"><span id="v-c2-proj">45</span>%</span></div>
+          <input type="range" id="s-c2-proj" class="purple" min="1" max="100" value="45" oninput="calcular()"/>
+        </div>
+        <div class="sl-row">
+          <div class="sl-header"><span class="sl-name">Lib. Vistoria → Vistoria (proj.)</span><span class="sl-val"><span id="v-c3-proj">92</span>%</span></div>
+          <input type="range" id="s-c3-proj" class="purple" min="1" max="100" value="92" oninput="calcular()"/>
+        </div>
+        <div class="sl-row">
+          <div class="sl-header"><span class="sl-name">Vistoria → Venda (proj.)</span><span class="sl-val"><span id="v-c4-proj">98</span>%</span></div>
+          <input type="range" id="s-c4-proj" class="purple" min="1" max="100" value="98" oninput="calcular()"/>
+        </div>
+        </div>
+        <div style="margin-top:12px;font-size:10px;color:var(--mu);font-weight:500;">Nota: as taxas de etapa do funil sobrescrevem a conversão total quando alteradas individualmente.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-const ETAPAS = ['Cotações recebidas','Em negociação','Lib. vistoria','Vistoria finalizada','Vendas concretizadas'];
-const MESES_NOMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const ETAPAS = ['Cotações recebidas','Em negociação','Lib. vistoria','Vistoria finalizada','Vendas'];
+const BASE_INICIAL = 4200;
+const META = 4800;
+// Abril a Dez 2026 = 9 meses
+const LABELS_MESES = ['Abr/26','Mai/26','Jun/26','Jul/26','Ago/26','Set/26','Out/26','Nov/26','Dez/26'];
+const N_MESES = 9;
 
-let chartBase = null;
-let modoTabela = 'clientes';
-let snapshots = {};
+let chartPrincipal = null;
+let detalheAberto = false;
 
 function g(id){ return document.getElementById(id); }
 function v(id){ return +g(id).value; }
 
-function fmtR(n){
-  if(n < 0) return '−' + fmtR(Math.abs(n));
-  if(n >= 1e6) return 'R$ ' + (n/1e6).toFixed(1).replace('.',',') + 'M';
-  if(n >= 1000) return 'R$ ' + (n/1000).toFixed(1).replace('.',',') + 'k';
-  return 'R$ ' + Math.round(n).toLocaleString('pt-BR');
-}
-
-function setTabela(modo){
-  modoTabela = modo;
-  g('ttab-clientes').className = 'ttab' + (modo === 'clientes' ? ' on' : '');
-  g('ttab-receita').className  = 'ttab' + (modo === 'receita'  ? ' on' : '');
-  renderTabela();
-}
-
-function renderTabela(){
-  const { labMeses, sB, sBC, sP, sPC } = snapshots;
-  if(!labMeses) return;
-  const ticket = v('s-ticket');
-  const meses = labMeses.length;
-
-  const isClientes = modoTabela === 'clientes';
-  let html = `<thead><tr>
-    <th>Mês</th>
-    <th class="th-b">${isClientes ? 'Base s/ churn' : 'Base s/ churn'}</th>
-    <th class="th-bc">${isClientes ? 'Base c/ churn' : 'Base c/ churn'}</th>
-    <th class="th-p">${isClientes ? 'Proj. s/ churn' : 'Proj. s/ churn'}</th>
-    <th class="th-pc">${isClientes ? 'Proj. c/ churn' : 'Proj. c/ churn'}</th>
-  </tr></thead><tbody>`;
-
-  for(let m = 0; m < meses; m++){
-    if(isClientes){
-      html += `<tr>
-        <td>${labMeses[m]}</td>
-        <td class="td-b">${sB[m].toLocaleString('pt-BR')} pl.</td>
-        <td class="td-bc">${sBC[m].toLocaleString('pt-BR')} pl.</td>
-        <td class="td-p">${sP[m].toLocaleString('pt-BR')} pl.</td>
-        <td class="td-pc">${sPC[m].toLocaleString('pt-BR')} pl.</td>
-      </tr>`;
-    } else {
-      html += `<tr>
-        <td>${labMeses[m]}</td>
-        <td class="td-b">${fmtR(sB[m] * ticket)}</td>
-        <td class="td-bc">${fmtR(sBC[m] * ticket)}</td>
-        <td class="td-p">${fmtR(sP[m] * ticket)}</td>
-        <td class="td-pc">${fmtR(sPC[m] * ticket)}</td>
-      </tr>`;
-    }
-  }
-  html += '</tbody>';
-  g('tabela-main').innerHTML = html;
+function toggleDetalhe(){
+  detalheAberto = !detalheAberto;
+  g('detalhe-body').className = 'detalhe-body' + (detalheAberto ? ' open' : '');
+  g('det-toggle').textContent = detalheAberto ? '▲ fechar' : '▼ ver detalhes';
 }
 
 function calcular(){
-  g('v-ticket').textContent     = v('s-ticket');
-  g('v-ativacao').textContent   = v('s-ativacao');
+  // Atualizar displays
   g('v-leads-base').textContent = v('s-leads-base');
   g('v-leads-proj').textContent = v('s-leads-proj');
+  g('v-conv-base').textContent  = v('s-conv-base');
+  g('v-conv-proj').textContent  = v('s-conv-proj');
+  g('v-churn-base').textContent = v('s-churn-base');
+  g('v-churn-proj').textContent = v('s-churn-proj');
   g('v-c1-base').textContent    = v('s-c1-base');
   g('v-c2-base').textContent    = v('s-c2-base');
   g('v-c3-base').textContent    = v('s-c3-base');
@@ -449,156 +379,190 @@ function calcular(){
   g('v-c2-proj').textContent    = v('s-c2-proj');
   g('v-c3-proj').textContent    = v('s-c3-proj');
   g('v-c4-proj').textContent    = v('s-c4-proj');
-  g('v-meses').textContent      = v('s-meses');
-  g('v-churn-base').textContent = v('s-churn-base');
-  g('v-churn-proj').textContent = v('s-churn-proj');
 
+  // Gradientes sliders
   document.querySelectorAll('input[type=range]').forEach(s => {
-    const pct = ((s.value - s.min) / (s.max - s.min) * 100).toFixed(1);
-    s.style.setProperty('--pct', pct + '%');
+    const pct = ((s.value - s.min)/(s.max - s.min)*100).toFixed(1);
+    s.style.setProperty('--pct', pct+'%');
   });
 
-  const ticket    = v('s-ticket');
-  const ativacao  = v('s-ativacao');
-  const meses     = v('s-meses');
-  const churnBase = v('s-churn-base');
-  const churnProj = v('s-churn-proj');
+  const leadsB = v('s-leads-base');
+  const leadsP = v('s-leads-proj');
+  const churnB = v('s-churn-base');
+  const churnP = v('s-churn-proj');
 
-  const lB   = v('s-leads-base');
-  const negB = Math.round(lB * v('s-c1-base') / 100);
-  const lvB  = Math.round(negB * v('s-c2-base') / 100);
-  const vstB = Math.round(lvB  * v('s-c3-base') / 100);
-  const vendB= Math.round(vstB * v('s-c4-base') / 100);
-  const fBase = [lB, negB, lvB, vstB, vendB];
+  // Calcular vendas brutas via funil detalhado
+  const vendB = Math.round(leadsB * v('s-c1-base')/100 * v('s-c2-base')/100 * v('s-c3-base')/100 * v('s-c4-base')/100);
+  const vendP = Math.round(leadsP * v('s-c1-proj')/100 * v('s-c2-proj')/100 * v('s-c3-proj')/100 * v('s-c4-proj')/100);
 
-  const lP   = v('s-leads-proj');
-  const negP = Math.round(lP * v('s-c1-proj') / 100);
-  const lvP  = Math.round(negP * v('s-c2-proj') / 100);
-  const vstP = Math.round(lvP  * v('s-c3-proj') / 100);
-  const vendP= Math.round(vstP * v('s-c4-proj') / 100);
-  const fProj = [lP, negP, lvP, vstP, vendP];
+  // Sincronizar conversão total com resultado do funil
+  const convBReal = leadsB > 0 ? Math.round(vendB/leadsB*100) : 0;
+  const convPReal = leadsP > 0 ? Math.round(vendP/leadsP*100) : 0;
+  g('v-conv-base').textContent = convBReal;
+  g('v-conv-proj').textContent = convPReal;
 
-  const liqBase = vendB - churnBase;
-  const liqProj = vendP - churnProj;
+  // Saldos
+  const liqB = vendB - churnB;
+  const liqP = vendP - churnP;
 
-  // Mês a mês: acumulado de clientes
-  const hoje = new Date();
-  const labMeses = [];
-  const sB = [], sBC = [], sP = [], sPC = [];
-  let cliBC = 0, cliPC = 0;
-
-  for(let m = 1; m <= meses; m++){
-    labMeses.push(MESES_NOMES[(hoje.getMonth() + m - 1) % 12] + '/' + (hoje.getFullYear() + Math.floor((hoje.getMonth() + m - 1) / 12)).toString().slice(2));
-    sB.push(vendB * m);
-    sP.push(vendP * m);
-    cliBC += liqBase;
-    cliPC += liqProj;
-    sBC.push(cliBC);
-    sPC.push(cliPC);
+  // Evolução da base
+  const curvaAtual = [BASE_INICIAL];
+  const curvaProj  = [BASE_INICIAL];
+  for(let m = 0; m < N_MESES; m++){
+    curvaAtual.push(Math.max(0, curvaAtual[curvaAtual.length-1] + liqB));
+    curvaProj.push(Math.max(0, curvaProj[curvaProj.length-1]  + liqP));
   }
+  // remover ponto inicial para labels (labels = 9 meses, não inclui "hoje")
+  const dadosAtual = curvaAtual.slice(1);
+  const dadosProj  = curvaProj.slice(1);
+  const baseFinalSem = curvaAtual[N_MESES];
+  const baseFinalCom = curvaProj[N_MESES];
 
-  snapshots = { labMeses, sB, sBC, sP, sPC };
+  // Hero
+  g('h-saldo-atual').textContent = (liqB >= 0 ? '+' : '') + liqB;
+  const gapAtual = META - BASE_INICIAL;
+  g('h-gap-val').textContent = gapAtual.toLocaleString('pt-BR');
 
-  // Cards base
-  g('bg-periodo').textContent = meses;
-  g('bg-b').textContent  = sB[meses-1].toLocaleString('pt-BR');
-  g('bg-bc').textContent = sBC[meses-1].toLocaleString('pt-BR');
-  g('bg-p').textContent  = sP[meses-1].toLocaleString('pt-BR');
-  g('bg-pc').textContent = sPC[meses-1].toLocaleString('pt-BR');
-
-  // KPIs receita
-  const recBase = vendB * ticket;
-  const recProj = vendP * ticket;
-  const atBase  = vendB * ativacao;
-  const atProj  = vendP * ativacao;
-  const dVend = vendB > 0 ? Math.round((vendP - vendB) / vendB * 100) : 0;
-  const dRec  = recBase > 0 ? Math.round((recProj - recBase) / recBase * 100) : 0;
-  const dAt   = atBase > 0 ? Math.round((atProj - atBase) / atBase * 100) : 0;
-
-  g('r-vendas-proj').textContent  = vendP;
-  g('r-vendas-base').textContent  = vendB;
-  g('r-vendas-delta').textContent = (dVend >= 0 ? '↑ +' : '↓ ') + dVend + '% vs base';
-  g('r-vendas-delta').className   = 'res-kpi-delta ' + (dVend >= 0 ? 'up' : 'dn');
-
-  g('r-liquido-proj').textContent  = (liqProj >= 0 ? '+' : '') + liqProj + ' placas';
-  g('r-liquido-delta').textContent = liqProj >= 0 ? '✓ churn coberto' : '✗ churn supera vendas';
-  g('r-liquido-delta').className   = 'res-kpi-delta ' + (liqProj >= 0 ? 'up' : 'dn');
-
-  g('r-receita-proj').textContent  = fmtR(recProj);
-  g('r-receita-base').textContent  = fmtR(recBase);
-  g('r-receita-delta').textContent = (dRec >= 0 ? '↑ +' : '↓ ') + dRec + '% vs base';
-  g('r-receita-delta').className   = 'res-kpi-delta ' + (dRec >= 0 ? 'up' : 'dn');
-
-  g('r-ativ-proj').textContent  = fmtR(atProj);
-  g('r-ativ-base').textContent  = fmtR(atBase);
-  g('r-ativ-delta').textContent = (dAt >= 0 ? '↑ +' : '↓ ') + dAt + '% vs base';
-  g('r-ativ-delta').className   = 'res-kpi-delta ' + (dAt >= 0 ? 'up' : 'dn');
-
-  // Churn banner
-  const impB = churnBase * ticket;
-  const impP = churnProj * ticket;
-  const difC = churnBase - churnProj;
-  const difR = impB - impP;
-  g('cb-churn-base').textContent = churnBase + ' clientes';
-  g('cb-rec-base').textContent   = fmtR(impB) + ' perdidos/mês';
-  g('cb-churn-proj').textContent = churnProj + ' clientes';
-  g('cb-rec-proj').textContent   = fmtR(impP) + ' perdidos/mês';
-  g('cb-economia').textContent   = (difC >= 0 ? '+' : '') + difC + ' clientes/mês';
-  g('cb-rec-eco').textContent    = (difR >= 0 ? '+' + fmtR(difR) : fmtR(difR)) + ' em receita/mês';
-
-  // Churn msg
-  const msgEl = g('churn-msg');
-  if(liqProj > 0){
-    msgEl.style.cssText = 'margin-top:10px;background:rgba(0,200,150,.1);border-left:2px solid var(--green);padding:8px 12px;font-size:11px;font-weight:600;color:var(--green);border-radius:var(--r)';
-    msgEl.textContent = `✓ Saldo líquido projetado: +${liqProj} placas/mês. Em ${meses} meses: ${sPC[meses-1].toLocaleString('pt-BR')} placas líquidas acumuladas.`;
-  } else if(liqProj === 0){
-    msgEl.style.cssText = 'margin-top:10px;background:rgba(245,166,35,.1);border-left:2px solid var(--amber);padding:8px 12px;font-size:11px;font-weight:600;color:var(--amber);border-radius:var(--r)';
-    msgEl.textContent = `⚠ Break-even: ${vendP} vendas/mês = ${churnProj} churn/mês. Sem crescimento líquido.`;
+  // Meta box
+  const atingeMeta = baseFinalCom >= META;
+  const diffFinal = baseFinalCom - baseFinalSem;
+  g('meta-sem').textContent  = baseFinalSem.toLocaleString('pt-BR');
+  g('meta-com').textContent  = baseFinalCom.toLocaleString('pt-BR');
+  g('meta-diff').textContent = (diffFinal >= 0 ? '+' : '') + diffFinal.toLocaleString('pt-BR');
+  if(atingeMeta){
+    g('meta-status-titulo').textContent = 'Meta de 4.800 atingida com o projeto ✓';
+    g('meta-status-titulo').style.color = 'var(--green)';
+    g('meta-status-sub').textContent = `Com as 3 alavancas, a base chega a ${baseFinalCom.toLocaleString('pt-BR')} clientes em dez/2026.`;
   } else {
-    msgEl.style.cssText = 'margin-top:10px;background:rgba(255,79,106,.1);border-left:2px solid var(--red);padding:8px 12px;font-size:11px;font-weight:600;color:var(--red);border-radius:var(--r)';
-    msgEl.textContent = `✗ Churn (${churnProj}/mês) supera vendas (${vendP}/mês) em ${Math.abs(liqProj)} placas. A base encolhe ${Math.abs(liqProj)} placas por mês.`;
+    const falta = META - baseFinalCom;
+    g('meta-status-titulo').textContent = 'Ajuste as alavancas para atingir 4.800';
+    g('meta-status-titulo').style.color = 'var(--amber)';
+    g('meta-status-sub').textContent = `Com a configuração atual, a base chega a ${baseFinalCom.toLocaleString('pt-BR')} — faltam ${falta.toLocaleString('pt-BR')} placas.`;
   }
 
-  // Funil
-  const maxF = Math.max(...fProj, 1);
-  g('funil-rows').innerHTML = ETAPAS.map((lbl, i) => `<div class="fe">
+  // Alavancas resultado
+  const deltaLeads = leadsP - leadsB;
+  g('r-leads-delta').textContent = (deltaLeads >= 0 ? '+' : '') + deltaLeads + ' leads/mês';
+  g('r-vend-base').textContent = vendB;
+  g('r-vend-proj').textContent = vendP;
+  const deltaChurn = churnB - churnP;
+  g('r-churn-delta').textContent = (deltaChurn >= 0 ? '+' : '') + deltaChurn + ' retidos/mês';
+
+  // Resultado final
+  g('rf-vendas').textContent     = vendP + ' placas';
+  g('rf-vendas-sub').textContent = 'eram ' + vendB + '/mês antes';
+  g('rf-churn').textContent      = churnP + ' clientes';
+  g('rf-churn-sub').textContent  = 'eram ' + churnB + '/mês antes';
+  g('rf-liquido').textContent    = (liqP >= 0 ? '+' : '') + liqP + ' placas';
+  g('rf-liquido').style.color    = liqP >= 0 ? 'var(--green)' : 'var(--red)';
+  g('rf-liquido-sub').textContent = liqP >= 0 ? 'crescendo todo mês' : 'ainda encolhendo';
+  g('rf-base-final').textContent = baseFinalCom.toLocaleString('pt-BR') + ' placas';
+  const metaDiff = baseFinalCom - META;
+  if(metaDiff >= 0){
+    g('rf-meta-sub').textContent = '✓ ' + metaDiff.toLocaleString('pt-BR') + ' acima da meta';
+    g('rf-meta-sub').style.color = 'var(--green)';
+  } else {
+    g('rf-meta-sub').textContent = Math.abs(metaDiff).toLocaleString('pt-BR') + ' abaixo da meta';
+    g('rf-meta-sub').style.color = 'var(--red)';
+  }
+
+  // Alerta final
+  const al = g('alerta-final');
+  if(liqP <= 0){
+    al.className = 'alerta alerta-red';
+    al.textContent = `✗ Com churn projetado (${churnP}/mês) maior que as vendas (${vendP}/mês), a base continua encolhendo. Reduza mais o churn ou aumente as vendas.`;
+  } else if(!atingeMeta){
+    const falta = META - baseFinalCom;
+    al.className = 'alerta alerta-amber';
+    al.textContent = `⚠ A base cresce +${liqP} placas/mês, mas ainda faltam ${falta.toLocaleString('pt-BR')} placas para atingir 4.800 em dez/2026. Ajuste as alavancas.`;
+  } else {
+    al.className = 'alerta alerta-green';
+    al.textContent = `✓ Com +${liqP} placas líquidas por mês, a base atinge ${baseFinalCom.toLocaleString('pt-BR')} clientes em dez/2026 — ${(baseFinalCom-META).toLocaleString('pt-BR')} acima da meta.`;
+  }
+
+  // Funil comparativo
+  const fB = [leadsB, Math.round(leadsB*v('s-c1-base')/100), Math.round(leadsB*v('s-c1-base')/100*v('s-c2-base')/100), Math.round(leadsB*v('s-c1-base')/100*v('s-c2-base')/100*v('s-c3-base')/100), vendB];
+  const fP = [leadsP, Math.round(leadsP*v('s-c1-proj')/100), Math.round(leadsP*v('s-c1-proj')/100*v('s-c2-proj')/100), Math.round(leadsP*v('s-c1-proj')/100*v('s-c2-proj')/100*v('s-c3-proj')/100), vendP];
+  const maxF = Math.max(...fP, 1);
+  g('funil-rows').innerHTML = ETAPAS.map((lbl,i) => `<div class="fe">
     <span class="fe-lbl">${lbl}</span>
     <div class="fe-bars">
-      <div class="fe-bar-b" style="width:${Math.round(fBase[i]/maxF*100)}%"></div>
-      <div class="fe-bar-p" style="width:${Math.round(fProj[i]/maxF*100)}%"></div>
+      <div class="fe-bar-b" style="width:${Math.round(fB[i]/maxF*100)}%"></div>
+      <div class="fe-bar-p" style="width:${Math.round(fP[i]/maxF*100)}%"></div>
     </div>
-    <span class="fe-num-b">${fBase[i]}</span>
-    <span class="fe-num-p">${fProj[i]}</span>
+    <span class="fe-nb">${fB[i]}</span>
+    <span class="fe-np">${fP[i]}</span>
   </div>`).join('');
 
   // Gráfico
-  if(chartBase) chartBase.destroy();
-  chartBase = new Chart(g('chartBase'), {
-    type: 'line',
-    data: {
-      labels: labMeses,
-      datasets: [
-        { label: 'Base s/ churn', data: sB, borderColor: 'rgba(79,122,255,.7)', backgroundColor: 'transparent', borderWidth: 2, pointRadius: meses <= 12 ? 3 : 0, tension: 0.3 },
-        { label: 'Base c/ churn', data: sBC, borderColor: 'rgba(255,79,106,.75)', backgroundColor: 'transparent', borderWidth: 2, borderDash: [5,3], pointRadius: meses <= 12 ? 3 : 0, tension: 0.3 },
-        { label: 'Projetado s/ churn', data: sP, borderColor: 'rgba(157,125,255,.95)', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: meses <= 12 ? 3 : 0, tension: 0.3 },
-        { label: 'Projetado c/ churn', data: sPC, borderColor: 'rgba(0,212,200,.85)', backgroundColor: 'transparent', borderWidth: 2.5, borderDash: [5,3], pointRadius: meses <= 12 ? 3 : 0, tension: 0.3 },
+  const metaLine = Array(N_MESES).fill(META);
+
+  if(chartPrincipal) chartPrincipal.destroy();
+  chartPrincipal = new Chart(g('chartPrincipal'),{
+    type:'line',
+    data:{
+      labels: LABELS_MESES,
+      datasets:[
+        {
+          label:'Sem intervenção',
+          data: dadosAtual,
+          borderColor:'rgba(255,79,106,.7)',
+          backgroundColor:'transparent',
+          borderWidth:2,
+          borderDash:[6,4],
+          pointRadius:4,
+          pointBackgroundColor:'rgba(255,79,106,.7)',
+          tension:0.2
+        },
+        {
+          label:'Com o projeto',
+          data: dadosProj,
+          borderColor:'rgba(157,125,255,1)',
+          backgroundColor:'rgba(157,125,255,.05)',
+          borderWidth:3,
+          pointRadius:4,
+          pointBackgroundColor:'rgba(157,125,255,1)',
+          fill:true,
+          tension:0.2
+        },
+        {
+          label:'Meta 4.800',
+          data: metaLine,
+          borderColor:'rgba(245,166,35,.5)',
+          backgroundColor:'transparent',
+          borderWidth:1.5,
+          borderDash:[3,3],
+          pointRadius:0,
+          tension:0
+        }
       ]
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString('pt-BR')} placas` } }
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ display:false },
+        tooltip:{
+          callbacks:{
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString('pt-BR')} placas`
+          }
+        }
       },
-      scales: {
-        x: { ticks: { color: '#55576e', font: { size: 10, family: 'Plus Jakarta Sans' }, maxRotation: 45, autoSkip: true }, grid: { color: 'rgba(255,255,255,.05)' } },
-        y: { ticks: { color: '#55576e', font: { size: 10, family: 'Plus Jakarta Sans' }, callback: v => v.toLocaleString('pt-BR') }, grid: { color: 'rgba(255,255,255,.05)' } }
+      scales:{
+        x:{
+          ticks:{ color:'#55576e', font:{ size:11, family:'Plus Jakarta Sans', weight:'600' } },
+          grid:{ color:'rgba(255,255,255,.04)' }
+        },
+        y:{
+          ticks:{ color:'#55576e', font:{ size:11, family:'Plus Jakarta Sans' }, callback: v => v.toLocaleString('pt-BR') },
+          grid:{ color:'rgba(255,255,255,.04)' },
+          suggestedMin: Math.min(baseFinalSem, BASE_INICIAL) - 200,
+          suggestedMax: Math.max(baseFinalCom, META) + 200
+        }
       }
     }
   });
-
-  renderTabela();
 }
 
 calcular();
