@@ -11,11 +11,11 @@
   --bg:#09090f;--s1:#0f1019;--s2:#15161f;--s3:#1c1d2a;
   --b:rgba(255,255,255,0.07);--b2:rgba(255,255,255,0.13);
   --tx:#ecedf5;--mu:#55576e;--mu2:#8a8da8;
-  --blue:#4f7aff;--green:#00c896;--amber:#f5a623;--red:#ff4f6a;--purple:#9d7dff;
+  --blue:#4f7aff;--green:#00c896;--amber:#f5a623;--red:#ff4f6a;--purple:#9d7dff;--teal:#00d4c8;
   --font:'Plus Jakarta Sans',sans-serif;--r:10px;--r2:16px;
 }
 body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px;min-height:100vh;}
-.wrap{max-width:1100px;margin:0 auto;padding:32px 28px;}
+.wrap{max-width:1180px;margin:0 auto;padding:32px 28px;}
 
 /* HEADER */
 .hdr{margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid var(--b);}
@@ -26,17 +26,20 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 .btn-back{background:var(--s2);border:1px solid var(--b2);color:var(--mu2);padding:6px 14px;border-radius:var(--r);font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}
 .btn-back:hover{background:var(--s3);color:var(--tx);}
 
-/* LAYOUT DOIS PAINEIS */
+/* LAYOUT */
 .layout{display:grid;grid-template-columns:420px 1fr;gap:24px;align-items:start;}
 @media(max-width:900px){.layout{grid-template-columns:1fr;}}
 
-/* PAINEL DE INPUTS */
+/* PAINEL */
 .painel{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:24px;}
 .painel-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--mu2);margin-bottom:20px;}
-
 .secao{margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--b);}
 .secao:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none;}
 .secao-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);margin-bottom:14px;}
+
+/* CHURN SECTION — destaque vermelho */
+.secao.churn-secao{border:1px solid rgba(255,79,106,.18);border-radius:var(--r2);padding:16px;background:rgba(255,79,106,.04);}
+.secao.churn-secao .secao-label{color:var(--red);}
 
 /* SLIDER */
 .slider-row{margin-bottom:14px;}
@@ -54,19 +57,22 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 input[type=range].green{--accent:var(--green);}
 input[type=range].amber{--accent:var(--amber);}
 input[type=range].purple{--accent:var(--purple);}
+input[type=range].red{--accent:var(--red);}
+input[type=range].teal{--accent:var(--teal);}
 
 .slider-minmax{display:flex;justify-content:space-between;margin-top:4px;}
 .slider-minmax span{font-size:10px;color:var(--mu);font-weight:500;}
 
-/* TOGGLE BASE vs PROJETADO */
-.toggle-row{display:flex;gap:8px;margin-bottom:20px;}
-.tog{flex:1;padding:8px;border-radius:var(--r);border:1px solid var(--b);background:var(--s2);color:var(--mu2);font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;text-align:center;transition:all .15s;text-transform:uppercase;letter-spacing:.5px;}
-.tog.on{background:rgba(157,125,255,.12);border-color:rgba(157,125,255,.35);color:var(--purple);}
-
-/* RESULTADO — FUNIL VISUAL */
+/* RESULTADO */
 .resultado{display:flex;flex-direction:column;gap:16px;}
 
-.res-kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;}
+/* TABS de view */
+.tabs{display:flex;gap:6px;margin-bottom:4px;}
+.tab{padding:7px 16px;border-radius:var(--r);border:1px solid var(--b);background:var(--s2);color:var(--mu2);font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.5px;}
+.tab.on{background:rgba(157,125,255,.12);border-color:rgba(157,125,255,.35);color:var(--purple);}
+
+/* KPIs — grade 2x2 + bônus */
+.res-kpis{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;}
 .res-kpi{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:16px 18px;position:relative;overflow:hidden;}
 .res-kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kc);}
 .res-kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--mu2);margin-bottom:8px;}
@@ -75,31 +81,49 @@ input[type=range].purple{--accent:var(--purple);}
 .res-kpi-delta{font-size:11px;font-weight:700;margin-top:6px;}
 .res-kpi-delta.up{color:var(--green);}.res-kpi-delta.dn{color:var(--red);}
 
-/* FUNIL COMPARATIVO */
-.funil-comp{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:20px;}
-.funil-comp-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu2);margin-bottom:16px;}
+/* Churn impact banner */
+.churn-banner{background:rgba(255,79,106,.07);border:1px solid rgba(255,79,106,.2);border-radius:var(--r2);padding:14px 18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+.cb-item{display:flex;flex-direction:column;gap:4px;}
+.cb-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,79,106,.7);}
+.cb-val{font-size:18px;font-weight:800;letter-spacing:-.5px;color:var(--red);}
+.cb-sub{font-size:11px;color:var(--mu);font-weight:500;}
+.cb-val.ok{color:var(--green);}
 
-.fe-comp{display:grid;grid-template-columns:140px 1fr 80px 80px;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--b);}
+/* FUNIL COMPARATIVO — agora com 4 barras */
+.funil-comp{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:20px;}
+.funil-comp-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu2);margin-bottom:4px;}
+.funil-legenda{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;}
+.leg{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;color:var(--mu2);}
+.leg-sq{width:10px;height:10px;border-radius:2px;}
+
+.fe-comp{display:grid;grid-template-columns:140px 1fr 58px 58px 58px 58px;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--b);}
 .fe-comp:last-child{border-bottom:none;}
 .fe-comp-lbl{font-size:11px;font-weight:600;color:var(--mu2);}
-.fe-comp-bars{display:flex;flex-direction:column;gap:4px;}
-.fe-bar-base{height:8px;border-radius:4px;background:rgba(79,122,255,.3);transition:width .4s ease;}
-.fe-bar-proj{height:8px;border-radius:4px;background:rgba(157,125,255,.7);transition:width .4s ease;}
-.fe-comp-base{font-size:12px;font-weight:700;color:var(--mu2);text-align:right;}
-.fe-comp-proj{font-size:12px;font-weight:700;color:var(--purple);text-align:right;}
+.fe-comp-bars{display:flex;flex-direction:column;gap:3px;}
+.fe-bar{height:7px;border-radius:4px;transition:width .4s ease;}
+.fe-bar-b{background:rgba(79,122,255,.35);}
+.fe-bar-bc{background:rgba(255,79,106,.5);}
+.fe-bar-p{background:rgba(157,125,255,.7);}
+.fe-bar-pc{background:rgba(0,212,200,.6);}
+.fe-num{font-size:11px;font-weight:700;text-align:right;}
+.fe-num-b{color:var(--mu2);}
+.fe-num-bc{color:var(--red);}
+.fe-num-p{color:var(--purple);}
+.fe-num-pc{color:var(--teal);}
 
-/* RECEITA ACUMULADA */
+/* TABELA ACUMULADA */
 .receita-acum{background:var(--s1);border:1px solid var(--b);border-radius:var(--r2);padding:20px;}
 .receita-titulo{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu2);margin-bottom:16px;}
-.receita-row{display:grid;grid-template-columns:80px 1fr 100px 100px;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--b);}
+.receita-row{display:grid;grid-template-columns:56px 1fr 84px 84px 84px 84px;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--b);}
 .receita-row:last-child{border-bottom:none;}
-.receita-row.header{padding-bottom:10px;}
-.receita-row.header span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);}
+.receita-row.header span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--mu);}
 .receita-mes{font-size:12px;font-weight:600;color:var(--mu2);}
-.receita-bar-wrap{height:6px;background:var(--s2);border-radius:3px;overflow:hidden;}
-.receita-bar{height:100%;border-radius:3px;background:var(--purple);opacity:.7;}
-.receita-base{font-size:12px;font-weight:700;color:var(--mu2);text-align:right;}
-.receita-proj{font-size:12px;font-weight:800;color:var(--purple);text-align:right;}
+.receita-bar-wrap{height:5px;background:var(--s2);border-radius:3px;overflow:hidden;}
+.receita-bar{height:100%;border-radius:3px;background:var(--purple);opacity:.65;}
+.r-b{font-size:11px;font-weight:700;color:var(--mu2);text-align:right;}
+.r-bc{font-size:11px;font-weight:700;color:var(--red);text-align:right;}
+.r-p{font-size:11px;font-weight:800;color:var(--purple);text-align:right;}
+.r-pc{font-size:11px;font-weight:800;color:var(--teal);text-align:right;}
 
 .nota{font-size:11px;color:var(--mu);font-weight:500;padding:12px 16px;background:var(--s2);border-radius:var(--r);border-left:2px solid var(--amber);}
 </style>
@@ -112,12 +136,12 @@ input[type=range].purple{--accent:var(--purple);}
     <h1><div class="hdr-dot"></div>Simulador Comercial</h1>
     <a href="index.html" class="btn-back">← Dashboard</a>
   </div>
-  <p>Projete cenários de crescimento ajustando leads e conversões do funil</p>
+  <p>Projete cenários de crescimento ajustando leads, conversões e churn do funil</p>
 </header>
 
 <div class="layout">
 
-  <!-- PAINEL DE CONTROLES -->
+  <!-- PAINEL -->
   <div class="painel">
     <div class="painel-titulo">Parâmetros da simulação</div>
 
@@ -125,9 +149,7 @@ input[type=range].purple{--accent:var(--purple);}
     <div class="secao">
       <div class="secao-label">Cliente</div>
       <div class="slider-row">
-        <div class="slider-header">
-          <span class="slider-name">Nome do cliente</span>
-        </div>
+        <div class="slider-header"><span class="slider-name">Nome do cliente</span></div>
         <input type="text" id="nome-cliente" value="Anpara" placeholder="Nome do cliente"
           style="width:100%;background:var(--s2);border:1px solid var(--b2);color:var(--tx);padding:8px 12px;border-radius:var(--r);font-family:var(--font);font-size:13px;font-weight:600;outline:none;"
           oninput="calcular()"/>
@@ -154,42 +176,27 @@ input[type=range].purple{--accent:var(--purple);}
     <div class="secao">
       <div class="secao-label">Cenário base (atual)</div>
       <div class="slider-row">
-        <div class="slider-header">
-          <span class="slider-name">Leads/mês</span>
-          <span class="slider-val"><span id="v-leads-base">240</span> <span>leads</span></span>
-        </div>
-        <input type="range" id="s-leads-base" class="" min="50" max="1000" step="10" value="240" oninput="calcular()"/>
+        <div class="slider-header"><span class="slider-name">Leads/mês</span><span class="slider-val"><span id="v-leads-base">240</span> <span>leads</span></span></div>
+        <input type="range" id="s-leads-base" min="50" max="1000" step="10" value="240" oninput="calcular()"/>
         <div class="slider-minmax"><span>50</span><span>1.000</span></div>
       </div>
       <div class="slider-row">
-        <div class="slider-header">
-          <span class="slider-name">Lead → Negociação</span>
-          <span class="slider-val"><span id="v-c1-base">98</span><span>%</span></span>
-        </div>
+        <div class="slider-header"><span class="slider-name">Lead → Negociação</span><span class="slider-val"><span id="v-c1-base">98</span><span>%</span></span></div>
         <input type="range" id="s-c1-base" min="1" max="100" value="98" oninput="calcular()"/>
         <div class="slider-minmax"><span>1%</span><span>100%</span></div>
       </div>
       <div class="slider-row">
-        <div class="slider-header">
-          <span class="slider-name">Negociação → Lib. Vistoria</span>
-          <span class="slider-val"><span id="v-c2-base">36</span><span>%</span></span>
-        </div>
+        <div class="slider-header"><span class="slider-name">Negociação → Lib. Vistoria</span><span class="slider-val"><span id="v-c2-base">36</span><span>%</span></span></div>
         <input type="range" id="s-c2-base" min="1" max="100" value="36" oninput="calcular()"/>
         <div class="slider-minmax"><span>1%</span><span>100%</span></div>
       </div>
       <div class="slider-row">
-        <div class="slider-header">
-          <span class="slider-name">Lib. Vistoria → Vistoria</span>
-          <span class="slider-val"><span id="v-c3-base">92</span><span>%</span></span>
-        </div>
+        <div class="slider-header"><span class="slider-name">Lib. Vistoria → Vistoria</span><span class="slider-val"><span id="v-c3-base">92</span><span>%</span></span></div>
         <input type="range" id="s-c3-base" min="1" max="100" value="92" oninput="calcular()"/>
         <div class="slider-minmax"><span>1%</span><span>100%</span></div>
       </div>
       <div class="slider-row">
-        <div class="slider-header">
-          <span class="slider-name">Vistoria → Venda</span>
-          <span class="slider-val"><span id="v-c4-base">98</span><span>%</span></span>
-        </div>
+        <div class="slider-header"><span class="slider-name">Vistoria → Venda</span><span class="slider-val"><span id="v-c4-base">98</span><span>%</span></span></div>
         <input type="range" id="s-c4-base" min="1" max="100" value="98" oninput="calcular()"/>
         <div class="slider-minmax"><span>1%</span><span>100%</span></div>
       </div>
@@ -199,48 +206,58 @@ input[type=range].purple{--accent:var(--purple);}
     <div class="secao">
       <div class="secao-label">Cenário projetado</div>
       <div class="slider-row">
-        <div class="slider-header">
-          <span class="slider-name">Leads/mês</span>
-          <span class="slider-val"><span id="v-leads-proj">310</span> <span>leads</span></span>
-        </div>
+        <div class="slider-header"><span class="slider-name">Leads/mês</span><span class="slider-val"><span id="v-leads-proj">310</span> <span>leads</span></span></div>
         <input type="range" id="s-leads-proj" min="50" max="1000" step="10" value="310" oninput="calcular()"/>
         <div class="slider-minmax"><span>50</span><span>1.000</span></div>
       </div>
       <div class="slider-row">
-        <div class="slider-header">
-          <span class="slider-name">Lead → Negociação</span>
-          <span class="slider-val"><span id="v-c1-proj">98</span><span>%</span></span>
-        </div>
+        <div class="slider-header"><span class="slider-name">Lead → Negociação</span><span class="slider-val"><span id="v-c1-proj">98</span><span>%</span></span></div>
         <input type="range" id="s-c1-proj" class="purple" min="1" max="100" value="98" oninput="calcular()"/>
         <div class="slider-minmax"><span>1%</span><span>100%</span></div>
       </div>
       <div class="slider-row">
-        <div class="slider-header">
-          <span class="slider-name">Negociação → Lib. Vistoria</span>
-          <span class="slider-val"><span id="v-c2-proj">45</span><span>%</span></span>
-        </div>
+        <div class="slider-header"><span class="slider-name">Negociação → Lib. Vistoria</span><span class="slider-val"><span id="v-c2-proj">45</span><span>%</span></span></div>
         <input type="range" id="s-c2-proj" class="purple" min="1" max="100" value="45" oninput="calcular()"/>
         <div class="slider-minmax"><span>1%</span><span>100%</span></div>
       </div>
       <div class="slider-row">
-        <div class="slider-header">
-          <span class="slider-name">Lib. Vistoria → Vistoria</span>
-          <span class="slider-val"><span id="v-c3-proj">92</span><span>%</span></span>
-        </div>
+        <div class="slider-header"><span class="slider-name">Lib. Vistoria → Vistoria</span><span class="slider-val"><span id="v-c3-proj">92</span><span>%</span></span></div>
         <input type="range" id="s-c3-proj" class="purple" min="1" max="100" value="92" oninput="calcular()"/>
         <div class="slider-minmax"><span>1%</span><span>100%</span></div>
       </div>
       <div class="slider-row">
-        <div class="slider-header">
-          <span class="slider-name">Vistoria → Venda</span>
-          <span class="slider-val"><span id="v-c4-proj">98</span><span>%</span></span>
-        </div>
+        <div class="slider-header"><span class="slider-name">Vistoria → Venda</span><span class="slider-val"><span id="v-c4-proj">98</span><span>%</span></span></div>
         <input type="range" id="s-c4-proj" class="purple" min="1" max="100" value="98" oninput="calcular()"/>
         <div class="slider-minmax"><span>1%</span><span>100%</span></div>
       </div>
     </div>
 
-    <!-- MESES DE PROJEÇÃO -->
+    <!-- CHURN -->
+    <div class="secao churn-secao">
+      <div class="secao-label">⚠ Churn mensal</div>
+
+      <div class="slider-row">
+        <div class="slider-header">
+          <span class="slider-name">Churn atual (clientes/mês)</span>
+          <span class="slider-val"><span id="v-churn-base">100</span> <span>clientes</span></span>
+        </div>
+        <input type="range" id="s-churn-base" class="red" min="0" max="500" step="5" value="100" oninput="calcular()"/>
+        <div class="slider-minmax"><span>0</span><span>500</span></div>
+      </div>
+
+      <div class="slider-row" style="margin-top:4px">
+        <div class="slider-header">
+          <span class="slider-name">Churn projetado (clientes/mês)</span>
+          <span class="slider-val"><span id="v-churn-proj">70</span> <span>clientes</span></span>
+        </div>
+        <input type="range" id="s-churn-proj" class="teal" min="0" max="500" step="5" value="70" oninput="calcular()"/>
+        <div class="slider-minmax"><span>0</span><span>500</span></div>
+      </div>
+
+      <div id="churn-break-even-msg" style="margin-top:10px;font-size:11px;font-weight:600;padding:8px 12px;border-radius:var(--r);"></div>
+    </div>
+
+    <!-- MESES -->
     <div class="secao">
       <div class="secao-label">Horizonte</div>
       <div class="slider-row">
@@ -258,62 +275,88 @@ input[type=range].purple{--accent:var(--purple);}
   <!-- RESULTADO -->
   <div class="resultado">
 
-    <!-- KPIs de impacto -->
+    <!-- KPIs principais -->
     <div class="res-kpis">
       <div class="res-kpi" style="--kc:var(--purple)">
-        <div class="res-kpi-lbl">Vendas/mês projetadas</div>
+        <div class="res-kpi-lbl">Vendas brutas/mês projetadas</div>
         <div class="res-kpi-val" id="r-vendas-proj">—</div>
         <div class="res-kpi-sub">vs <span id="r-vendas-base">—</span> atual</div>
         <div class="res-kpi-delta up" id="r-vendas-delta"></div>
       </div>
+      <div class="res-kpi" style="--kc:var(--teal)">
+        <div class="res-kpi-lbl">Crescimento líquido/mês (proj.)</div>
+        <div class="res-kpi-val" id="r-liquido-proj">—</div>
+        <div class="res-kpi-sub">vendas brutas − churn projetado</div>
+        <div class="res-kpi-delta" id="r-liquido-delta"></div>
+      </div>
       <div class="res-kpi" style="--kc:var(--green)">
-        <div class="res-kpi-lbl">Nova receita recorrente/mês</div>
+        <div class="res-kpi-lbl">Receita recorrente/mês (proj.)</div>
         <div class="res-kpi-val" id="r-receita-proj">—</div>
         <div class="res-kpi-sub">vs <span id="r-receita-base">—</span> atual</div>
         <div class="res-kpi-delta up" id="r-receita-delta"></div>
       </div>
-      <div class="res-kpi" style="--kc:var(--amber)">
-        <div class="res-kpi-lbl">Receita de ativação/mês</div>
-        <div class="res-kpi-val" id="r-ativ-proj">—</div>
-        <div class="res-kpi-sub">vs <span id="r-ativ-base">—</span> atual</div>
-        <div class="res-kpi-delta up" id="r-ativ-delta"></div>
-      </div>
       <div class="res-kpi" style="--kc:var(--blue)">
-        <div class="res-kpi-lbl">Receita acumulada projetada</div>
+        <div class="res-kpi-lbl">Receita acumulada c/ churn (proj.)</div>
         <div class="res-kpi-val" id="r-acum-proj">—</div>
         <div class="res-kpi-sub">em <span id="r-meses-label">12</span> meses</div>
         <div class="res-kpi-delta up" id="r-acum-delta"></div>
       </div>
     </div>
 
-    <!-- Funil comparativo -->
+    <!-- Churn impact banner -->
+    <div class="churn-banner">
+      <div class="cb-item">
+        <span class="cb-label">Impacto churn atual/mês</span>
+        <span class="cb-val" id="cb-impacto-base">—</span>
+        <span class="cb-sub">receita perdida</span>
+      </div>
+      <div class="cb-item">
+        <span class="cb-label">Impacto churn projetado/mês</span>
+        <span class="cb-val" id="cb-impacto-proj">—</span>
+        <span class="cb-sub">receita perdida</span>
+      </div>
+      <div class="cb-item">
+        <span class="cb-label">Economia c/ redução de churn</span>
+        <span class="cb-val ok" id="cb-economia">—</span>
+        <span class="cb-sub">por mês projetado</span>
+      </div>
+    </div>
+
+    <!-- Funil comparativo — 4 cenários -->
     <div class="funil-comp">
-      <div class="funil-comp-titulo">Funil comparativo — base vs projetado</div>
-      <div class="fe-comp" style="padding-top:0">
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu)">Etapa</span>
-        <div style="display:flex;flex-direction:column;gap:4px">
-          <span style="font-size:10px;color:rgba(79,122,255,.6);font-weight:700">■ Base</span>
-          <span style="font-size:10px;color:rgba(157,125,255,.8);font-weight:700">■ Projetado</span>
-        </div>
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);text-align:right">Base</span>
-        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--purple);text-align:right">Proj.</span>
+      <div class="funil-comp-titulo">Funil comparativo — 4 cenários</div>
+      <div class="funil-legenda">
+        <span class="leg"><span class="leg-sq" style="background:rgba(79,122,255,.4)"></span>Base s/ churn</span>
+        <span class="leg"><span class="leg-sq" style="background:rgba(255,79,106,.55)"></span>Base c/ churn</span>
+        <span class="leg"><span class="leg-sq" style="background:rgba(157,125,255,.75)"></span>Projetado s/ churn</span>
+        <span class="leg"><span class="leg-sq" style="background:rgba(0,212,200,.65)"></span>Projetado c/ churn</span>
+      </div>
+      <div class="fe-comp" style="padding-top:0;border-bottom:1px solid var(--b2);">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--mu)">Etapa</span>
+        <span style="font-size:10px;color:var(--mu);font-weight:700">Barras</span>
+        <span style="font-size:10px;font-weight:700;color:rgba(79,122,255,.7);text-align:right">B</span>
+        <span style="font-size:10px;font-weight:700;color:var(--red);text-align:right">B+C</span>
+        <span style="font-size:10px;font-weight:700;color:var(--purple);text-align:right">P</span>
+        <span style="font-size:10px;font-weight:700;color:var(--teal);text-align:right">P+C</span>
       </div>
       <div id="funil-rows"></div>
     </div>
 
-    <!-- Receita acumulada por mês -->
+    <!-- Receita acumulada 4 colunas -->
     <div class="receita-acum">
-      <div class="receita-titulo">Receita recorrente acumulada — mês a mês</div>
+      <div class="receita-titulo">Receita recorrente acumulada — mês a mês (4 cenários)</div>
       <div class="receita-row header">
         <span>Mês</span><span></span>
         <span style="text-align:right">Base</span>
-        <span style="text-align:right;color:var(--purple)">Projetado</span>
+        <span style="text-align:right;color:var(--red)">Base+Churn</span>
+        <span style="text-align:right;color:var(--purple)">Proj.</span>
+        <span style="text-align:right;color:var(--teal)">Proj+Churn</span>
       </div>
       <div id="receita-rows"></div>
     </div>
 
     <div class="nota">
-      Os valores projetados consideram que cada novo contrato fechado gera receita recorrente mensal acumulativa. A receita acumulada soma todas as mensalidades geradas desde o início do período.
+      <strong>Lógica de churn:</strong> O churn reduz o estoque líquido de clientes mês a mês. A receita "com churn" considera crescimento líquido = novas vendas − churn. Valores negativos indicam que o churn supera as novas vendas naquele mês.
     </div>
 
   </div>
@@ -333,70 +376,65 @@ function g(id){ return document.getElementById(id); }
 function v(id){ return +g(id).value; }
 
 function calcular() {
-  // Atualizar displays dos sliders
-  g('v-ticket').textContent   = v('s-ticket');
-  g('v-ativacao').textContent = v('s-ativacao');
+  // Display dos sliders
+  g('v-ticket').textContent    = v('s-ticket');
+  g('v-ativacao').textContent  = v('s-ativacao');
   g('v-leads-base').textContent = v('s-leads-base');
   g('v-leads-proj').textContent = v('s-leads-proj');
-  g('v-c1-base').textContent  = v('s-c1-base');
-  g('v-c2-base').textContent  = v('s-c2-base');
-  g('v-c3-base').textContent  = v('s-c3-base');
-  g('v-c4-base').textContent  = v('s-c4-base');
-  g('v-c1-proj').textContent  = v('s-c1-proj');
-  g('v-c2-proj').textContent  = v('s-c2-proj');
-  g('v-c3-proj').textContent  = v('s-c3-proj');
-  g('v-c4-proj').textContent  = v('s-c4-proj');
-  g('v-meses').textContent    = v('s-meses');
+  g('v-c1-base').textContent   = v('s-c1-base');
+  g('v-c2-base').textContent   = v('s-c2-base');
+  g('v-c3-base').textContent   = v('s-c3-base');
+  g('v-c4-base').textContent   = v('s-c4-base');
+  g('v-c1-proj').textContent   = v('s-c1-proj');
+  g('v-c2-proj').textContent   = v('s-c2-proj');
+  g('v-c3-proj').textContent   = v('s-c3-proj');
+  g('v-c4-proj').textContent   = v('s-c4-proj');
+  g('v-meses').textContent     = v('s-meses');
+  g('v-churn-base').textContent = v('s-churn-base');
+  g('v-churn-proj').textContent = v('s-churn-proj');
 
-  // Atualizar gradiente dos sliders
+  // Gradiente dos sliders
   document.querySelectorAll('input[type=range]').forEach(s => {
     const pct = ((s.value - s.min) / (s.max - s.min) * 100).toFixed(1);
     s.style.setProperty('--pct', pct + '%');
   });
 
-  const ticket   = v('s-ticket');
-  const ativacao = v('s-ativacao');
-  const meses    = v('s-meses');
+  const ticket    = v('s-ticket');
+  const ativacao  = v('s-ativacao');
+  const meses     = v('s-meses');
+  const churnBase = v('s-churn-base');
+  const churnProj = v('s-churn-proj');
 
-  // Calcular funil base
-  const lB  = v('s-leads-base');
+  // Funil base
+  const lB   = v('s-leads-base');
   const negB = Math.round(lB * v('s-c1-base') / 100);
   const lvB  = Math.round(negB * v('s-c2-base') / 100);
-  const vistB= Math.round(lvB  * v('s-c3-base') / 100);
-  const vendB= Math.round(vistB* v('s-c4-base') / 100);
-  const fBase = [lB, negB, lvB, vistB, vendB];
+  const vstB = Math.round(lvB  * v('s-c3-base') / 100);
+  const vendB= Math.round(vstB * v('s-c4-base') / 100);
+  const fBase = [lB, negB, lvB, vstB, vendB];
 
-  // Calcular funil projetado
-  const lP  = v('s-leads-proj');
+  // Funil projetado
+  const lP   = v('s-leads-proj');
   const negP = Math.round(lP * v('s-c1-proj') / 100);
   const lvP  = Math.round(negP * v('s-c2-proj') / 100);
-  const vistP= Math.round(lvP  * v('s-c3-proj') / 100);
-  const vendP= Math.round(vistP* v('s-c4-proj') / 100);
-  const fProj = [lP, negP, lvP, vistP, vendP];
+  const vstP = Math.round(lvP  * v('s-c3-proj') / 100);
+  const vendP= Math.round(vstP * v('s-c4-proj') / 100);
+  const fProj = [lP, negP, lvP, vstP, vendP];
 
-  // KPIs
+  // Líquido (somente na etapa de vendas concretizadas)
+  const liqBase = vendB - churnBase;  // crescimento líquido base
+  const liqProj = vendP - churnProj;  // crescimento líquido projetado
+
+  // "Funil com churn" — apenas a última linha é afetada (vendas líquidas)
+  const fBaseChurn = [...fBase.slice(0, 4), Math.max(0, liqBase)];
+  const fProjChurn = [...fProj.slice(0, 4), Math.max(0, liqProj)];
+
+  // KPIs simples
   const recBase = vendB * ticket;
   const recProj = vendP * ticket;
-  const atBase  = vendB * ativacao;
-  const atProj  = vendP * ativacao;
+  const dVend   = vendB > 0 ? Math.round((vendP - vendB) / vendB * 100) : 0;
+  const dRec    = recBase > 0 ? Math.round((recProj - recBase) / recBase * 100) : 0;
 
-  // Receita acumulada (recorrente — cada mês soma contratos anteriores)
-  let acumBase = 0, acumProj = 0;
-  for (let m = 1; m <= meses; m++) {
-    acumBase += vendB * ticket * (meses - m + 1);
-    acumProj += vendP * ticket * (meses - m + 1);
-  }
-  // Simplificado: receita mensal × meses (sem churn)
-  acumBase = vendB * ticket * meses;
-  acumProj = vendP * ticket * meses;
-
-  // Delta
-  const dVend = vendB > 0 ? Math.round((vendP - vendB) / vendB * 100) : 0;
-  const dRec  = recBase > 0 ? Math.round((recProj - recBase) / recBase * 100) : 0;
-  const dAt   = atBase > 0 ? Math.round((atProj - atBase) / atBase * 100) : 0;
-  const dAcum = acumBase > 0 ? Math.round((acumProj - acumBase) / acumBase * 100) : 0;
-
-  // Atualizar KPIs
   g('r-vendas-proj').textContent  = vendP;
   g('r-vendas-base').textContent  = vendB;
   g('r-vendas-delta').textContent = (dVend >= 0 ? '↑ +' : '↓ ') + dVend + '% vs base';
@@ -407,62 +445,132 @@ function calcular() {
   g('r-receita-delta').textContent = (dRec >= 0 ? '↑ +' : '↓ ') + dRec + '% vs base';
   g('r-receita-delta').className   = 'res-kpi-delta ' + (dRec >= 0 ? 'up' : 'dn');
 
-  g('r-ativ-proj').textContent  = fmtR(atProj);
-  g('r-ativ-base').textContent  = fmtR(atBase);
-  g('r-ativ-delta').textContent = (dAt >= 0 ? '↑ +' : '↓ ') + dAt + '% vs base';
-  g('r-ativ-delta').className   = 'res-kpi-delta ' + (dAt >= 0 ? 'up' : 'dn');
+  // Crescimento líquido projetado
+  g('r-liquido-proj').textContent  = liqProj >= 0 ? '+' + liqProj : liqProj;
+  g('r-liquido-delta').textContent = liqProj >= 0
+    ? '✓ churn coberto pelas vendas'
+    : '✗ churn supera vendas brutas';
+  g('r-liquido-delta').className = 'res-kpi-delta ' + (liqProj >= 0 ? 'up' : 'dn');
 
-  g('r-acum-proj').textContent  = fmtR(acumProj);
-  g('r-acum-delta').textContent = (dAcum >= 0 ? '↑ +' : '↓ ') + dAcum + '% vs base';
-  g('r-acum-delta').className   = 'res-kpi-delta ' + (dAcum >= 0 ? 'up' : 'dn');
-  g('r-meses-label').textContent = meses;
+  // Receita acumulada COM churn (cresce pelo líquido mês a mês, mas receita reflete clientes ativos acumulados)
+  // Lógica: começa com 0 clientes ativos; a cada mês +vendas -churn (mín 0)
+  let clientesAtivosBC = 0, clientesAtivosPC = 0;
+  let acumBC = 0, acumPC = 0;
+  let acumB  = 0, acumP  = 0;
 
-  // Funil comparativo
-  const maxF = Math.max(...fProj, 1);
-  g('funil-rows').innerHTML = ETAPAS_LABELS.map((lbl, i) => {
-    const b = fBase[i], p = fProj[i];
-    const pctB = Math.round(b / maxF * 100);
-    const pctP = Math.round(p / maxF * 100);
-    return `<div class="fe-comp">
-      <span class="fe-comp-lbl">${lbl}</span>
-      <div class="fe-comp-bars">
-        <div class="fe-bar-base" style="width:${pctB}%"></div>
-        <div class="fe-bar-proj" style="width:${pctP}%"></div>
-      </div>
-      <span class="fe-comp-base">${b}</span>
-      <span class="fe-comp-proj">${p}</span>
-    </div>`;
-  }).join('');
+  // Receita acumulada sem churn (simples)
+  const acumBTotal = vendB * ticket * meses;
+  const acumPTotal = vendP * ticket * meses;
 
-  // Receita acumulada por mês
-  const maxRec = vendP * ticket * meses;
-  let acumB = 0, acumP = 0;
-  let rowsHTML = '';
+  // Churn impact banner
+  const impactoChurnBase = churnBase * ticket;
+  const impactoChurnProj = churnProj * ticket;
+  const economia         = impactoChurnBase - impactoChurnProj;
+  g('cb-impacto-base').textContent = fmtR(impactoChurnBase);
+  g('cb-impacto-proj').textContent = fmtR(impactoChurnProj);
+  g('cb-economia').textContent     = economia >= 0 ? '+' + fmtR(economia) : fmtR(economia);
+
+  // Break-even message
+  const beMsg = g('churn-break-even-msg');
+  if (liqProj > 0) {
+    beMsg.style.background = 'rgba(0,200,150,.1)';
+    beMsg.style.borderLeft = '2px solid var(--green)';
+    beMsg.style.color = 'var(--green)';
+    beMsg.textContent = `✓ No cenário projetado, as ${vendP} vendas/mês superam o churn de ${churnProj}/mês. Crescimento líquido: +${liqProj} clientes/mês.`;
+  } else if (liqProj === 0) {
+    beMsg.style.background = 'rgba(245,166,35,.1)';
+    beMsg.style.borderLeft = '2px solid var(--amber)';
+    beMsg.style.color = 'var(--amber)';
+    beMsg.textContent = `⚠ Break-even: as vendas projetadas (${vendP}/mês) exatamente cobrem o churn (${churnProj}/mês). Crescimento líquido zero.`;
+  } else {
+    beMsg.style.background = 'rgba(255,79,106,.1)';
+    beMsg.style.borderLeft = '2px solid var(--red)';
+    beMsg.style.color = 'var(--red)';
+    const falta = Math.abs(liqProj);
+    beMsg.textContent = `✗ Atenção: o churn projetado (${churnProj}/mês) supera as vendas (${vendP}/mês) em ${falta} clientes. Precisa crescer vendas ou reduzir churn.`;
+  }
+
+  // Receita acumulada com e sem churn — mês a mês
   const mesesNomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const hoje = new Date();
+  let rowsHTML = '';
+  let maxAcum = 0;
+
+  const snapshotsB  = [], snapshotsBC = [], snapshotsP = [], snapshotsPC = [];
+  let cliBC = 0, cliPC = 0;
+  let accB = 0, accBC = 0, accP = 0, accPC = 0;
+
   for (let m = 1; m <= meses; m++) {
-    acumB += vendB * ticket;
-    acumP += vendP * ticket;
-    const mesLabel = mesesNomes[(hoje.getMonth() + m - 1) % 12] + '/' + (hoje.getFullYear() + Math.floor((hoje.getMonth() + m - 1) / 12)).toString().slice(2);
-    const pctBar = Math.round(acumP / (vendP * ticket * meses) * 100);
+    accB  += vendB * ticket;
+    accP  += vendP * ticket;
+    cliBC  = Math.max(0, cliBC + liqBase);
+    cliPC  = Math.max(0, cliPC + liqProj);
+    accBC += cliBC * ticket; // receita do mês com churn = clientes ativos × ticket
+    accPC += cliPC * ticket;
+    snapshotsB.push(accB);
+    snapshotsBC.push(accBC);
+    snapshotsP.push(accP);
+    snapshotsPC.push(accPC);
+    maxAcum = Math.max(maxAcum, accP);
+  }
+
+  // Atualizar KPI acumulado
+  const acumProjComChurn = snapshotsPC[meses - 1];
+  const acumBaseComChurn = snapshotsBC[meses - 1];
+  g('r-acum-proj').textContent  = fmtR(acumProjComChurn);
+  g('r-meses-label').textContent = meses;
+  const dAcum = acumBaseComChurn > 0 ? Math.round((acumProjComChurn - acumBaseComChurn) / acumBaseComChurn * 100) : 0;
+  g('r-acum-delta').textContent = (dAcum >= 0 ? '↑ +' : '↓ ') + dAcum + '% vs base c/ churn';
+  g('r-acum-delta').className   = 'res-kpi-delta ' + (dAcum >= 0 ? 'up' : 'dn');
+
+  // Tabela mensal
+  for (let m = 0; m < meses; m++) {
+    const mesLabel = mesesNomes[(hoje.getMonth() + m) % 12] + '/' + (hoje.getFullYear() + Math.floor((hoje.getMonth() + m) / 12)).toString().slice(2);
+    const pctBar = Math.round(snapshotsP[m] / maxAcum * 100);
     rowsHTML += `<div class="receita-row">
       <span class="receita-mes">${mesLabel}</span>
       <div class="receita-bar-wrap"><div class="receita-bar" style="width:${pctBar}%"></div></div>
-      <span class="receita-base">${fmtR(acumB)}</span>
-      <span class="receita-proj">${fmtR(acumP)}</span>
+      <span class="r-b">${fmtR(snapshotsB[m])}</span>
+      <span class="r-bc">${fmtR(snapshotsBC[m])}</span>
+      <span class="r-p">${fmtR(snapshotsP[m])}</span>
+      <span class="r-pc">${fmtR(snapshotsPC[m])}</span>
     </div>`;
   }
   g('receita-rows').innerHTML = rowsHTML;
+
+  // Funil comparativo 4 barras
+  const allVals = [...fBase, ...fBaseChurn, ...fProj, ...fProjChurn];
+  const maxF = Math.max(...allVals, 1);
+
+  g('funil-rows').innerHTML = ETAPAS_LABELS.map((lbl, i) => {
+    const b  = fBase[i];
+    const bc = fBaseChurn[i];
+    const p  = fProj[i];
+    const pc = fProjChurn[i];
+    return `<div class="fe-comp">
+      <span class="fe-comp-lbl">${lbl}</span>
+      <div class="fe-comp-bars">
+        <div class="fe-bar fe-bar-b" style="width:${Math.round(b/maxF*100)}%"></div>
+        <div class="fe-bar fe-bar-bc" style="width:${Math.round(bc/maxF*100)}%"></div>
+        <div class="fe-bar fe-bar-p" style="width:${Math.round(p/maxF*100)}%"></div>
+        <div class="fe-bar fe-bar-pc" style="width:${Math.round(pc/maxF*100)}%"></div>
+      </div>
+      <span class="fe-num fe-num-b">${b}</span>
+      <span class="fe-num fe-num-bc">${bc}</span>
+      <span class="fe-num fe-num-p">${p}</span>
+      <span class="fe-num fe-num-pc">${pc}</span>
+    </div>`;
+  }).join('');
 }
 
 function fmtR(n) {
-  if (!n) return 'R$ 0';
+  if (!n && n !== 0) return 'R$ 0';
+  if (n < 0) return '−' + fmtR(Math.abs(n));
   if (n >= 1e6) return 'R$ ' + (n/1e6).toFixed(1).replace('.',',') + 'M';
   if (n >= 1000) return 'R$ ' + (n/1000).toFixed(1).replace('.',',') + 'k';
   return 'R$ ' + Math.round(n).toLocaleString('pt-BR');
 }
 
-// Inicializar
 calcular();
 </script>
 </body>
