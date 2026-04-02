@@ -184,6 +184,33 @@ input[type=range].amber{--ac:var(--amber);}
   <div id="alerta-final" class="alerta alerta-amber" style="margin-top:14px;"></div>
 </div>
 
+<!-- 2b. SEM PROJETO -->
+<div class="resultado-final" style="border-color:rgba(255,79,106,.2);margin-bottom:20px;">
+  <div class="rf-titulo" style="color:var(--red)">Sem o projeto — onde a empresa vai estar</div>
+  <div class="rf-grid">
+    <div class="rf-item">
+      <span class="rf-lbl">Placas — 1° mês ativo</span>
+      <span class="rf-val" style="color:var(--red)" id="rb-placas-m1">—</span>
+      <span class="rf-sub" id="rb-placas-m1-sub">—</span>
+    </div>
+    <div class="rf-item">
+      <span class="rf-lbl">Placas — mês final</span>
+      <span class="rf-val" style="color:var(--red)" id="rb-base-final">—</span>
+      <span class="rf-sub" id="rb-meta-sub">—</span>
+    </div>
+    <div class="rf-item">
+      <span class="rf-lbl">Receita — 1° mês ativo</span>
+      <span class="rf-val" style="color:rgba(255,79,106,.7)" id="rb-receita-m1">—</span>
+      <span class="rf-sub" id="rb-receita-m1-sub">—</span>
+    </div>
+    <div class="rf-item">
+      <span class="rf-lbl">Receita — mês final</span>
+      <span class="rf-val" style="color:rgba(255,79,106,.7)" id="rb-receita-final">—</span>
+      <span class="rf-sub" id="rb-receita-final-sub">—</span>
+    </div>
+  </div>
+</div>
+
 <!-- 3. GRÁFICO -->
 <div class="grafico-card">
   <div class="grafico-titulo">Evolução da base de clientes (placas)</div>
@@ -563,6 +590,18 @@ function calcular(){
   g('rf-receita-final').textContent  = fmtR(recFinalP);
   const diffRec = recFinalP - recFinalB;
   g('rf-receita-final-sub').textContent = (diffRec >= 0 ? '+' : '−') + fmtR(Math.abs(diffRec)) + ' vs sem projeto (' + lMesFinal + ')';
+
+  // — bloco sem projeto —
+  g('rb-placas-m1').textContent     = baseBM1.toLocaleString('pt-BR') + ' placas';
+  g('rb-placas-m1-sub').textContent = lMesAtivo + ' · ' + (baseBM1 - BASE_INIC > 0 ? '+' : '') + (baseBM1 - BASE_INIC).toLocaleString('pt-BR') + ' vs hoje';
+  g('rb-base-final').textContent    = baseFinalSem.toLocaleString('pt-BR') + ' placas';
+  const perdaVsMeta = baseFinalSem - META;
+  g('rb-meta-sub').textContent      = Math.abs(perdaVsMeta).toLocaleString('pt-BR') + (perdaVsMeta < 0 ? ' abaixo da meta' : ' acima da meta') + ' (' + lMesFinal + ')';
+  g('rb-meta-sub').style.color      = perdaVsMeta < 0 ? 'var(--red)' : 'var(--green)';
+  g('rb-receita-m1').textContent    = fmtR(recBM1);
+  g('rb-receita-m1-sub').textContent = lMesAtivo + ' · ' + (recBM1 < recPM1 ? '−' + fmtR(recPM1 - recBM1) : '+' + fmtR(recBM1 - recPM1)) + ' vs com projeto';
+  g('rb-receita-final').textContent  = fmtR(recFinalB);
+  g('rb-receita-final-sub').textContent = '−' + fmtR(recFinalP - recFinalB) + ' vs com projeto (' + lMesFinal + ')';
 
   // — alerta —
   const al = g('alerta-final');
