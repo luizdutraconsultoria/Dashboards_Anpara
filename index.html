@@ -267,23 +267,11 @@ function setDE(de,ate){document.getElementById('f-de').value=de;document.getElem
 
 function sPeriodo(d){const a=new Date(),de=new Date();de.setDate(de.getDate()-d);setDE(fD(de),fD(a));mAti(d);renderRaw();}
 
-/* "Mês atual" agora detecta o mês mais recente COM DADOS, não usa new Date() */
+/* "Mês atual" = dia 01 do mês corrente até hoje */
 function sMesAtual(){
-  if(!DRAW||!DRAW.length) return;
-  // Encontra a data mais recente nos dados (qualquer coluna de data)
-  let maxDt='';
-  DRAW.forEach(r=>{
-    for(let i=0;i<=5;i++){
-      const dt=r[i];
-      if(dt&&dt>maxDt) maxDt=dt;
-    }
-  });
-  if(!maxDt) return;
-  const y=+maxDt.slice(0,4), m=+maxDt.slice(5,7);
-  const de=`${y}-${String(m).padStart(2,'0')}-01`;
-  const ult=new Date(y,m,0); // último dia do mês
-  const ate=fD(ult);
-  setDE(de,ate);
+  const h=new Date();
+  const de=new Date(h.getFullYear(),h.getMonth(),1);
+  setDE(fD(de),fD(h));
   mAti('mes');
   renderRaw();
 }
