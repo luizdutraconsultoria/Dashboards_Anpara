@@ -77,17 +77,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 .fe-val{font-size:24px;font-weight:800;letter-spacing:-1px;line-height:1;margin-bottom:4px;}
 .fe-pct-total{font-size:11px;font-weight:600;color:var(--mu2);}
 
-/* Seta entre etapas */
 .fe-arrow{display:flex;flex-direction:column;align-items:center;justify-content:center;width:36px;flex-shrink:0;background:var(--s1);border-top:1px solid var(--b);border-bottom:1px solid var(--b);gap:2px;}
 .fe-arrow-pct{font-size:10px;font-weight:700;color:var(--amber);line-height:1;}
 .fe-arrow-icon{font-size:13px;color:var(--mu);line-height:1;}
 
-/* Etapa de perda separada */
 .fe-perda{width:110px;flex-shrink:0;background:var(--s1);border:1px solid var(--b);border-radius:0 var(--r2) var(--r2) 0;padding:16px 14px;border-left:2px solid rgba(255,79,106,.25);}
 .fe-perda .fe-lbl{color:rgba(255,79,106,.6);}
 .fe-perda .fe-val{color:var(--red);}
 
-/* Barra de progresso do funil */
 .fe-bar{height:3px;border-radius:2px;margin-top:8px;background:var(--s3);}
 .fe-bar-fill{height:100%;border-radius:2px;transition:width .8s ease;}
 
@@ -144,15 +141,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 <div class="lbar" id="lbar"><div class="lfill"></div></div>
 <div class="lmsg" id="lmsg">carregando dados para filtros e funil estático...</div>
 
-<div class="scuts">
-  <button class="sc" onclick="sPeriodo(7)"  disabled>Últimos 7 dias</button>
-  <button class="sc" onclick="sPeriodo(30)" disabled>Últimos 30 dias</button>
-  <button class="sc" onclick="sPeriodo(90)" disabled>Últimos 90 dias</button>
-  <button class="sc" onclick="sMes()"       disabled>Mês atual</button>
-  <button class="sc" onclick="sAno(2025)"   disabled>2025</button>
-  <button class="sc" onclick="sAno(2026)"   disabled>2026</button>
-  <button class="sc on" onclick="sTodos()">Todos</button>
-</div>
+<div class="scuts" id="scuts"></div>
 
 <div class="fbar">
   <div class="fg"><label>De</label><input type="date" id="f-de"  onchange="renderRaw()" disabled/></div>
@@ -175,7 +164,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 
 <script>
 const API='https://script.google.com/macros/s/AKfycbw4rX9x64xg4PWvW3Zw_g6rv3rggoqqOP9tRdmBCGW5fcorCt5A4Kkd71cypViYp3c6qw/exec';
-let DAGR=null,DRAW=null,CH={};
+let DAGR=null,DRAW=null,CH={},ANOS_DADOS=[];
 
 const CI={dtLead:0,dtNeg:1,dtLibVist:2,dtVistoria:3,dtVenda:4,dtPerda:5,isPerda:6,receita:7,vendedor:8,plano:9,origem:10,motivoPerda:11,unidade:12};
 
@@ -186,6 +175,41 @@ const ETAPAS=[
   {key:'dtVistoria',lbl:'Vistoria finalizada',     cor:'#22d3ee'},
   {key:'dtVenda',   lbl:'Vendas concretizadas',    cor:'#00c896'},
 ];
+
+/* ============================================================
+   Detecta anos presentes nos dados e gera botões de atalho
+   dinamicamente (evita hardcode de 2025/2026)
+   ============================================================ */
+function detectarAnos(dados){
+  const anos=new Set();
+  dados.forEach(r=>{
+    const dt=r[CI.dtLead];
+    if(dt&&dt.length>=4) anos.add(dt.slice(0,4));
+  });
+  return [...anos].sort();
+}
+
+function buildShortcuts(){
+  const wrap=document.getElementById('scuts');
+  // Atalhos fixos
+  let html='';
+  html+='<button class="sc" data-sc="7"  onclick="sPeriodo(7)"  disabled>Últimos 7 dias</button>';
+  html+='<button class="sc" data-sc="30" onclick="sPeriodo(30)" disabled>Últimos 30 dias</button>';
+  html+='<button class="sc" data-sc="90" onclick="sPeriodo(90)" disabled>Últimos 90 dias</button>';
+  html+='<button class="sc" data-sc="mes" onclick="sMesAtual()" disabled>Mês atual</button>';
+  // Botões de ano dinâmicos
+  ANOS_DADOS.forEach(a=>{
+    html+=`<button class="sc" data-sc="${a}" onclick="sAno(${a})" disabled>${a}</button>`;
+  });
+  html+='<button class="sc on" data-sc="todos" onclick="sTodos()">Todos</button>';
+  wrap.innerHTML=html;
+}
+
+function mAti(tag){
+  document.querySelectorAll('.sc').forEach(b=>{
+    b.classList.toggle('on', b.dataset.sc===String(tag));
+  });
+}
 
 async function carregar(){
   document.getElementById('conteudo').innerHTML='<div class="estado"><div class="spin"></div><h3>Carregando...</h3></div>';
@@ -208,10 +232,13 @@ async function carregar(){
     const d2=await r2.json();
     if(d2.erro) throw new Error(d2.erro);
     DRAW=d2.dados;
+    ANOS_DADOS=detectarAnos(DRAW);
+    buildShortcuts();
     popSelects(DRAW);
     dis(false);
     document.getElementById('lbar').classList.remove('on');
     document.getElementById('lmsg').classList.remove('on');
+    mAti('todos');
     renderRaw();
   }catch(e){
     document.getElementById('lmsg').textContent='filtros indisponíveis: '+e.message;
@@ -220,7 +247,9 @@ async function carregar(){
 
 function dis(v){
   ['f-de','f-ate','f-vend','f-plano','f-orig','f-unid','btn-rst'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=v;});
-  document.querySelectorAll('.sc').forEach((b,i)=>{if(i<6)b.disabled=v;});
+  document.querySelectorAll('.sc').forEach(b=>{
+    if(b.dataset.sc!=='todos') b.disabled=v;
+  });
 }
 
 function popSelects(dados){
@@ -234,10 +263,31 @@ function popSelects(dados){
 }
 
 function fD(d){return d.toISOString().slice(0,10);}
-function mAti(r){document.querySelectorAll('.sc').forEach((b,i)=>{b.classList.remove('on');if((r===7&&i===0)||(r===30&&i===1)||(r===90&&i===2)||(r==='mes'&&i===3)||(r===2025&&i===4)||(r===2026&&i===5)||(r==='todos'&&i===6))b.classList.add('on');});}
 function setDE(de,ate){document.getElementById('f-de').value=de;document.getElementById('f-ate').value=ate;}
+
 function sPeriodo(d){const a=new Date(),de=new Date();de.setDate(de.getDate()-d);setDE(fD(de),fD(a));mAti(d);renderRaw();}
-function sMes(){const h=new Date();setDE(fD(new Date(h.getFullYear(),h.getMonth(),1)),fD(new Date(h.getFullYear(),h.getMonth()+1,0)));mAti('mes');renderRaw();}
+
+/* "Mês atual" agora detecta o mês mais recente COM DADOS, não usa new Date() */
+function sMesAtual(){
+  if(!DRAW||!DRAW.length) return;
+  // Encontra a data mais recente nos dados (qualquer coluna de data)
+  let maxDt='';
+  DRAW.forEach(r=>{
+    for(let i=0;i<=5;i++){
+      const dt=r[i];
+      if(dt&&dt>maxDt) maxDt=dt;
+    }
+  });
+  if(!maxDt) return;
+  const y=+maxDt.slice(0,4), m=+maxDt.slice(5,7);
+  const de=`${y}-${String(m).padStart(2,'0')}-01`;
+  const ult=new Date(y,m,0); // último dia do mês
+  const ate=fD(ult);
+  setDE(de,ate);
+  mAti('mes');
+  renderRaw();
+}
+
 function sAno(a){setDE(a+'-01-01',a+'-12-31');mAti(a);renderRaw();}
 function sTodos(){setDE('','');mAti('todos');renderRaw();}
 function resetar(){setDE('','');['f-vend','f-plano','f-orig','f-unid'].forEach(id=>document.getElementById(id).value='');mAti('todos');renderRaw();}
@@ -263,28 +313,28 @@ function renderAgr(){
 function norm(v,fb){return v&&v.trim()?v.trim():fb;}
 
 /* ================================================================
-   CORREÇÃO PRINCIPAL: filtro de datas aplicado POR ETAPA
-   - Filtros de vendedor/plano/origem/unidade: excluem o registro inteiro
-   - Filtro de data: aplicado INDIVIDUALMENTE a cada etapa do funil
-     (um lead de abril que virou venda em maio APARECE na contagem
-      de vendas quando o filtro é "maio")
+   CORREÇÃO: filtro de data aplicado POR ETAPA
+   - vendedor/plano/origem/unidade filtram o registro inteiro
+   - data é verificada individualmente em cada contagem de etapa
+   - perdas sem dtPerda usam dtLead como fallback
    ================================================================ */
 function renderRaw(){
   if(!DRAW){renderAgr();return;}
   const f=getF();
 
-  // Verifica se uma data cai dentro do período filtrado
+  const temDt=!!(f.de||f.ate);
+
+  // Verifica se uma data cai no período
   const inP=dt=>{
     if(!dt||dt==='') return false;
-    if(f.de&&dt<f.de)   return false;
+    if(f.de&&dt<f.de) return false;
     if(f.ate&&dt>f.ate) return false;
     return true;
   };
+  // Sem filtro de data: qualquer data preenchida conta
+  const tem=dt=>dt&&dt!=='';
 
-  // Tem filtro de data ativo?
-  const temFiltroData = !!(f.de || f.ate);
-
-  // Filtro base: apenas vendedor/plano/origem/unidade (SEM filtro de data aqui)
+  // Filtro base: apenas vendedor/plano/origem/unidade
   const base=DRAW.filter(r=>{
     if(f.vend&&norm(r[CI.vendedor],'Sem vendedor')!==f.vend)  return false;
     if(f.plano&&norm(r[CI.plano],'Sem plano')!==f.plano)       return false;
@@ -293,24 +343,30 @@ function renderRaw(){
     return true;
   });
 
-  // Contagem de cada etapa: conta registros cuja DATA DAQUELA ETAPA está no período
-  // Se não há filtro de data, conta todos que possuem a data preenchida (ou todos para leads)
-  const tL    = temFiltroData ? base.filter(r=>inP(r[CI.dtLead])).length      : base.length;
-  const tNeg  = temFiltroData ? base.filter(r=>inP(r[CI.dtNeg])).length       : base.filter(r=>r[CI.dtNeg]&&r[CI.dtNeg]!=='').length;
-  const tLibV = temFiltroData ? base.filter(r=>inP(r[CI.dtLibVist])).length   : base.filter(r=>r[CI.dtLibVist]&&r[CI.dtLibVist]!=='').length;
-  const tVist = temFiltroData ? base.filter(r=>inP(r[CI.dtVistoria])).length  : base.filter(r=>r[CI.dtVistoria]&&r[CI.dtVistoria]!=='').length;
-  const tVend = temFiltroData ? base.filter(r=>inP(r[CI.dtVenda])).length     : base.filter(r=>r[CI.dtVenda]&&r[CI.dtVenda]!=='').length;
-  const tPerd = temFiltroData ? base.filter(r=>r[CI.isPerda]===1&&inP(r[CI.dtPerda])).length : base.filter(r=>r[CI.isPerda]===1).length;
+  // Helper: data de perda — usa dtPerda se existir, senão dtLead como fallback
+  const dtPerdaEfetiva=r=>{
+    const dp=r[CI.dtPerda];
+    if(dp&&dp!=='') return dp;
+    return r[CI.dtLead]||'';
+  };
 
-  // Receita: soma dos que têm dtVenda no período
-  const vendasNoPeriodo = temFiltroData
+  // Contagem por etapa (cada uma usa sua própria data)
+  const tL    = temDt ? base.filter(r=>inP(r[CI.dtLead])).length      : base.length;
+  const tNeg  = temDt ? base.filter(r=>inP(r[CI.dtNeg])).length       : base.filter(r=>tem(r[CI.dtNeg])).length;
+  const tLibV = temDt ? base.filter(r=>inP(r[CI.dtLibVist])).length   : base.filter(r=>tem(r[CI.dtLibVist])).length;
+  const tVist = temDt ? base.filter(r=>inP(r[CI.dtVistoria])).length  : base.filter(r=>tem(r[CI.dtVistoria])).length;
+  const tVend = temDt ? base.filter(r=>inP(r[CI.dtVenda])).length     : base.filter(r=>tem(r[CI.dtVenda])).length;
+  const tPerd = temDt ? base.filter(r=>r[CI.isPerda]===1&&inP(dtPerdaEfetiva(r))).length : base.filter(r=>r[CI.isPerda]===1).length;
+
+  // Receita
+  const vendasNoPeriodo = temDt
     ? base.filter(r=>inP(r[CI.dtVenda]))
-    : base.filter(r=>r[CI.dtVenda]&&r[CI.dtVenda]!=='');
+    : base.filter(r=>tem(r[CI.dtVenda]));
   const tR = vendasNoPeriodo.reduce((s,r)=>s+(+r[CI.receita]||0),0);
 
-  // Ciclo médio (lead→venda) — usa vendas do período
+  // Ciclo médio
   let ciclo=null;
-  const vendidosComDatas=vendasNoPeriodo.filter(r=>r[CI.dtLead]&&r[CI.dtVenda]);
+  const vendidosComDatas=vendasNoPeriodo.filter(r=>tem(r[CI.dtLead])&&tem(r[CI.dtVenda]));
   if(vendidosComDatas.length>0){
     const soma=vendidosComDatas.reduce((s,r)=>{
       const d1=new Date(r[CI.dtLead]),d2=new Date(r[CI.dtVenda]);
@@ -325,97 +381,61 @@ function renderRaw(){
 
   // Por mês — cada série usa a data da respectiva etapa
   const mMap={};
+  const ensureM=m=>{if(!mMap[m])mMap[m]={mes:m,leads:0,neg:0,libvist:0,vistoria:0,vendas:0,receita:0,perdas:0};};
   base.forEach(r=>{
-    // Leads por mês (usa dtLead)
     const dtL=r[CI.dtLead];
-    if(dtL&&dtL!==''&&(!temFiltroData||inP(dtL))){
-      const m=dtL.slice(0,7);
-      if(!mMap[m])mMap[m]={mes:m,leads:0,neg:0,libvist:0,vistoria:0,vendas:0,receita:0,perdas:0};
-      mMap[m].leads++;
-    }
-    // Negociações por mês (usa dtNeg)
+    if(tem(dtL)&&(!temDt||inP(dtL))){const m=dtL.slice(0,7);ensureM(m);mMap[m].leads++;}
     const dtN=r[CI.dtNeg];
-    if(dtN&&dtN!==''&&(!temFiltroData||inP(dtN))){
-      const m=dtN.slice(0,7);
-      if(!mMap[m])mMap[m]={mes:m,leads:0,neg:0,libvist:0,vistoria:0,vendas:0,receita:0,perdas:0};
-      mMap[m].neg++;
-    }
-    // Liberadas por mês (usa dtLibVist)
+    if(tem(dtN)&&(!temDt||inP(dtN))){const m=dtN.slice(0,7);ensureM(m);mMap[m].neg++;}
     const dtLV=r[CI.dtLibVist];
-    if(dtLV&&dtLV!==''&&(!temFiltroData||inP(dtLV))){
-      const m=dtLV.slice(0,7);
-      if(!mMap[m])mMap[m]={mes:m,leads:0,neg:0,libvist:0,vistoria:0,vendas:0,receita:0,perdas:0};
-      mMap[m].libvist++;
-    }
-    // Vistorias por mês (usa dtVistoria)
+    if(tem(dtLV)&&(!temDt||inP(dtLV))){const m=dtLV.slice(0,7);ensureM(m);mMap[m].libvist++;}
     const dtVi=r[CI.dtVistoria];
-    if(dtVi&&dtVi!==''&&(!temFiltroData||inP(dtVi))){
-      const m=dtVi.slice(0,7);
-      if(!mMap[m])mMap[m]={mes:m,leads:0,neg:0,libvist:0,vistoria:0,vendas:0,receita:0,perdas:0};
-      mMap[m].vistoria++;
-    }
-    // Vendas por mês (usa dtVenda)
+    if(tem(dtVi)&&(!temDt||inP(dtVi))){const m=dtVi.slice(0,7);ensureM(m);mMap[m].vistoria++;}
     const dtV=r[CI.dtVenda];
-    if(dtV&&dtV!==''&&(!temFiltroData||inP(dtV))){
-      const m=dtV.slice(0,7);
-      if(!mMap[m])mMap[m]={mes:m,leads:0,neg:0,libvist:0,vistoria:0,vendas:0,receita:0,perdas:0};
-      mMap[m].vendas++;
+    if(tem(dtV)&&(!temDt||inP(dtV))){
+      const m=dtV.slice(0,7);ensureM(m);mMap[m].vendas++;
       mMap[m].receita+=(parseFloat(String(r[CI.receita]||'0').replace('R$','').replace(/\./g,'').replace(',','.'))||0);
     }
-    // Perdas por mês (usa dtPerda)
-    const dtP=r[CI.dtPerda];
-    if(r[CI.isPerda]===1&&dtP&&dtP!==''&&(!temFiltroData||inP(dtP))){
-      const m=dtP.slice(0,7);
-      if(!mMap[m])mMap[m]={mes:m,leads:0,neg:0,libvist:0,vistoria:0,vendas:0,receita:0,perdas:0};
-      mMap[m].perdas++;
+    if(r[CI.isPerda]===1){
+      const dp=dtPerdaEfetiva(r);
+      if(tem(dp)&&(!temDt||inP(dp))){const m=dp.slice(0,7);ensureM(m);mMap[m].perdas++;}
     }
   });
   const mArr=Object.values(mMap).sort((a,b)=>a.mes.localeCompare(b.mes));
 
-  // Por vendedor — vendas contam pela dtVenda no período
+  // Por vendedor
   const vMap={};
   base.forEach(r=>{
     const v=norm(r[CI.vendedor],'Sem vendedor');
     if(!vMap[v])vMap[v]={vendedor:v,leads:0,vendas:0,receita:0,perdas:0};
-    // Conta lead se dtLead no período (ou sem filtro de data)
     const dtL=r[CI.dtLead];
-    if(dtL&&dtL!==''&&(!temFiltroData||inP(dtL))) vMap[v].leads++;
-    // Conta venda se dtVenda no período
+    if(tem(dtL)&&(!temDt||inP(dtL))) vMap[v].leads++;
     const dtV=r[CI.dtVenda];
-    if(dtV&&dtV!==''&&(!temFiltroData||inP(dtV))){vMap[v].vendas++;vMap[v].receita+=+r[CI.receita]||0;}
-    // Conta perda se dtPerda no período
+    if(tem(dtV)&&(!temDt||inP(dtV))){vMap[v].vendas++;vMap[v].receita+=+r[CI.receita]||0;}
     if(r[CI.isPerda]===1){
-      const dtP=r[CI.dtPerda];
-      if(dtP&&dtP!==''&&(!temFiltroData||inP(dtP))) vMap[v].perdas++;
+      const dp=dtPerdaEfetiva(r);
+      if(tem(dp)&&(!temDt||inP(dp))) vMap[v].perdas++;
     }
   });
   const vArr=Object.values(vMap).map(v=>({...v,conversao:v.leads>0?((v.vendas/v.leads)*100).toFixed(1):0})).sort((a,b)=>b.vendas-a.vendas);
 
-  // Motivos de perda — usa dtPerda no período
+  // Motivos de perda
   const mpMap={};
   base.filter(r=>{
     if(r[CI.isPerda]!==1) return false;
-    if(!temFiltroData) return true;
-    return inP(r[CI.dtPerda]);
+    if(!temDt) return true;
+    return inP(dtPerdaEfetiva(r));
   }).forEach(r=>{const m=r[CI.motivoPerda]||'Sem motivo';mpMap[m]=(mpMap[m]||0)+1;});
   const mpArr=Object.entries(mpMap).map(([m,q])=>({motivo:m,quantidade:q})).sort((a,b)=>b.quantidade-a.quantidade);
 
-  // Origem — usa dtLead no período
+  // Origem (usa dtLead)
   const oMap={};
-  base.filter(r=>{
-    const dtL=r[CI.dtLead];
-    if(!temFiltroData) return true;
-    return inP(dtL);
-  }).forEach(r=>{const o=norm(r[CI.origem],'Sem origem');oMap[o]=(oMap[o]||0)+1;});
+  base.filter(r=>!temDt||inP(r[CI.dtLead])).forEach(r=>{const o=norm(r[CI.origem],'Sem origem');oMap[o]=(oMap[o]||0)+1;});
   const oArr=Object.entries(oMap).map(([o,q])=>({origem:o,quantidade:q})).sort((a,b)=>b.quantidade-a.quantidade);
 
-  // Plano — usa dtLead no período
+  // Plano (usa dtLead)
   const pMap={};
-  base.filter(r=>{
-    const dtL=r[CI.dtLead];
-    if(!temFiltroData) return true;
-    return inP(dtL);
-  }).forEach(r=>{const p=norm(r[CI.plano],'Sem plano');pMap[p]=(pMap[p]||0)+1;});
+  base.filter(r=>!temDt||inP(r[CI.dtLead])).forEach(r=>{const p=norm(r[CI.plano],'Sem plano');pMap[p]=(pMap[p]||0)+1;});
   const pArr=Object.entries(pMap).map(([p,q])=>({plano:p,quantidade:q})).sort((a,b)=>b.quantidade-a.quantidade);
 
   document.getElementById('hsub').textContent=fmt(tL)+' leads · '+fmt(tVend)+' vendas · '+fmtR(tR)+' em prêmios';
@@ -522,89 +542,75 @@ Chart.defaults.font={family:"'Plus Jakarta Sans',sans-serif",size:11,weight:'500
 const GR={x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#55576e'}},y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#55576e'}}};
 function D2(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
 
-function detectarGranularidade() {
-  const f = getF();
-  if (!f.de || !f.ate) return 'mes';
-  const d1 = new Date(f.de), d2 = new Date(f.ate);
-  const dias = Math.round((d2 - d1) / (1000*60*60*24));
-  if (dias <= 7)  return 'dia';
-  if (dias <= 31) return 'semana';
+function detectarGranularidade(){
+  const f=getF();
+  if(!f.de||!f.ate) return 'mes';
+  const d1=new Date(f.de),d2=new Date(f.ate);
+  const dias=Math.round((d2-d1)/(1000*60*60*24));
+  if(dias<=7)  return 'dia';
+  if(dias<=31) return 'semana';
   return 'mes';
 }
 
-function agruparPorGranularidade(dados, gran) {
-  if (!dados || !dados.length) return { labels:[], leads:[], opor:[], vendas:[], receita:[] };
-  const f = getF();
-  const inP = dt => {
+function agruparPorGranularidade(dados,gran){
+  if(!dados||!dados.length) return {labels:[],leads:[],opor:[],vendas:[],receita:[]};
+  const f=getF();
+  const inP=dt=>{
     if(!dt||dt==='') return false;
     if(f.de&&dt<f.de) return false;
     if(f.ate&&dt>f.ate) return false;
     return true;
   };
 
-  function chaveGran(dt) {
-    if (gran === 'dia') return dt.slice(0,10);
-    if (gran === 'semana') {
+  function chaveGran(dt){
+    if(gran==='dia') return dt.slice(0,10);
+    if(gran==='semana'){
       const d=new Date(dt);const dow=d.getDay();const diff=dow===0?-6:1-dow;
       d.setDate(d.getDate()+diff);return d.toISOString().slice(0,10);
     }
     return dt.slice(0,7);
   }
 
-  const map = {};
-  const ensure = k => { if(!map[k]) map[k]={leads:0,opor:0,vendas:0,receita:0}; };
+  const map={};
+  const ensure=k=>{if(!map[k])map[k]={leads:0,opor:0,vendas:0,receita:0};};
 
-  dados.forEach(r => {
-    // Leads — agrupados por dtLead
-    const dtL = r[CI.dtLead];
-    if(dtL && dtL!=='' && inP(dtL)){
-      const k=chaveGran(dtL); ensure(k); map[k].leads++;
-    }
-    // Oportunidades — agrupados por dtNeg
-    const dtN = r[CI.dtNeg];
-    if(dtN && dtN!=='' && inP(dtN)){
-      const k=chaveGran(dtN); ensure(k); map[k].opor++;
-    }
-    // Vendas — agrupados por dtVenda
-    const dtV = r[CI.dtVenda];
-    if(dtV && dtV!=='' && inP(dtV)){
-      const k=chaveGran(dtV); ensure(k); map[k].vendas++;
-      map[k].receita += parseFloat(String(r[CI.receita]||'0').replace('R$','').replace(/\./g,'').replace(',','.'))||0;
+  dados.forEach(r=>{
+    const dtL=r[CI.dtLead];
+    if(dtL&&dtL!==''&&inP(dtL)){const k=chaveGran(dtL);ensure(k);map[k].leads++;}
+    const dtN=r[CI.dtNeg];
+    if(dtN&&dtN!==''&&inP(dtN)){const k=chaveGran(dtN);ensure(k);map[k].opor++;}
+    const dtV=r[CI.dtVenda];
+    if(dtV&&dtV!==''&&inP(dtV)){
+      const k=chaveGran(dtV);ensure(k);map[k].vendas++;
+      map[k].receita+=parseFloat(String(r[CI.receita]||'0').replace('R$','').replace(/\./g,'').replace(',','.'))||0;
     }
   });
 
-  const keys = Object.keys(map).sort();
-  const labels = keys.map(k => {
-    if (gran === 'dia') { const [y,m,d]=k.split('-'); return d+'/'+m; }
-    if (gran === 'semana') { const [y,m,d]=k.split('-'); return 'Sem '+d+'/'+m; }
+  const keys=Object.keys(map).sort();
+  const labels=keys.map(k=>{
+    if(gran==='dia'){const[y,m,d]=k.split('-');return d+'/'+m;}
+    if(gran==='semana'){const[y,m,d]=k.split('-');return 'Sem '+d+'/'+m;}
     return fmtM(k);
   });
 
-  const titulos    = {dia:'Vendas por dia',        semana:'Vendas por semana',        mes:'Vendas por mês'};
-  const titulosR   = {dia:'Receita por dia',        semana:'Receita por semana',        mes:'Receita por mês'};
-  const titulosL   = {dia:'Leads por dia',          semana:'Leads por semana',          mes:'Leads por mês'};
-  const titulosO   = {dia:'Oportunidades por dia',  semana:'Oportunidades por semana',  mes:'Oportunidades por mês'};
-  const subs       = {dia:'contratos por dia',      semana:'contratos por semana',      mes:'contratos por mês'};
-  const subsR      = {dia:'prêmios por dia (R$)',   semana:'prêmios por semana (R$)',   mes:'prêmios por mês (R$)'};
-  const subsL      = {dia:'cotações por dia',       semana:'cotações por semana',       mes:'cotações por mês'};
-  const subsO      = {dia:'em negociação por dia',  semana:'em negociação por semana',  mes:'em negociação por mês'};
+  const titulos   ={dia:'Vendas por dia',       semana:'Vendas por semana',       mes:'Vendas por mês'};
+  const titulosR  ={dia:'Receita por dia',       semana:'Receita por semana',       mes:'Receita por mês'};
+  const titulosL  ={dia:'Leads por dia',         semana:'Leads por semana',         mes:'Leads por mês'};
+  const titulosO  ={dia:'Oportunidades por dia', semana:'Oportunidades por semana', mes:'Oportunidades por mês'};
+  const subs      ={dia:'contratos por dia',     semana:'contratos por semana',     mes:'contratos por mês'};
+  const subsR     ={dia:'prêmios por dia (R$)',  semana:'prêmios por semana (R$)',  mes:'prêmios por mês (R$)'};
+  const subsL     ={dia:'cotações por dia',      semana:'cotações por semana',      mes:'cotações por mês'};
+  const subsO     ={dia:'em negociação por dia', semana:'em negociação por semana', mes:'em negociação por mês'};
   const upd=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   upd('ct-vendas',titulos[gran]);  upd('cs-vendas',subs[gran]);
   upd('ct-receita',titulosR[gran]);upd('cs-receita',subsR[gran]);
   upd('ct-leads',titulosL[gran]);  upd('cs-leads',subsL[gran]);
   upd('ct-opor',titulosO[gran]);   upd('cs-opor',subsO[gran]);
 
-  return {
-    labels,
-    leads:   keys.map(k=>map[k].leads),
-    opor:    keys.map(k=>map[k].opor),
-    vendas:  keys.map(k=>map[k].vendas),
-    receita: keys.map(k=>map[k].receita)
-  };
+  return {labels, leads:keys.map(k=>map[k].leads), opor:keys.map(k=>map[k].opor), vendas:keys.map(k=>map[k].vendas), receita:keys.map(k=>map[k].receita)};
 }
 
-// Plugin de label no topo das barras
-const datalabelsPlugin = {
+const datalabelsPlugin={
   id:'topLabels',
   afterDatasetsDraw(chart){
     const ctx=chart.ctx;
@@ -613,13 +619,13 @@ const datalabelsPlugin = {
       meta.data.forEach((bar,i)=>{
         const val=ds.data[i];
         if(!val) return;
-        const label = ds._isReceita ? 'R$'+fK(val) : String(val);
+        const label=ds._isReceita?'R$'+fK(val):String(val);
         ctx.save();
         ctx.fillStyle='rgba(236,237,245,0.8)';
         ctx.font='600 10px Plus Jakarta Sans, sans-serif';
         ctx.textAlign='center';
         ctx.textBaseline='bottom';
-        ctx.fillText(label, bar.x, bar.y-3);
+        ctx.fillText(label,bar.x,bar.y-3);
         ctx.restore();
       });
     });
@@ -628,21 +634,20 @@ const datalabelsPlugin = {
 Chart.register(datalabelsPlugin);
 
 function renderCharts(meses,vends,orig,plano){
-  const gran = detectarGranularidade();
+  const gran=detectarGranularidade();
 
-  let labels, leadsData, oporData, vendasData, receitaData;
-  if (DRAW && (gran === 'dia' || gran === 'semana')) {
-    const f = getF();
-    // Filtro base: apenas vendedor/plano/origem/unidade
-    const fil = DRAW.filter(r=>{
+  let labels,leadsData,oporData,vendasData,receitaData;
+  if(DRAW&&(gran==='dia'||gran==='semana')){
+    const f=getF();
+    const fil=DRAW.filter(r=>{
       if(f.vend&&norm(r[CI.vendedor],'Sem vendedor')!==f.vend)  return false;
       if(f.plano&&norm(r[CI.plano],'Sem plano')!==f.plano)      return false;
       if(f.orig&&norm(r[CI.origem],'Sem origem')!==f.orig)      return false;
       if(f.unid&&norm(r[CI.unidade],'Sem unidade')!==f.unid)   return false;
       return true;
     });
-    const agr = agruparPorGranularidade(fil, gran);
-    labels=agr.labels; leadsData=agr.leads; oporData=agr.opor; vendasData=agr.vendas; receitaData=agr.receita;
+    const agr=agruparPorGranularidade(fil,gran);
+    labels=agr.labels;leadsData=agr.leads;oporData=agr.opor;vendasData=agr.vendas;receitaData=agr.receita;
   } else {
     labels=meses.map(m=>fmtM(m.mes));
     leadsData=meses.map(m=>m.leads||0);
@@ -651,37 +656,32 @@ function renderCharts(meses,vends,orig,plano){
     receitaData=meses.map(m=>m.receita||0);
     const upd=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
     upd('ct-leads','Leads por mês');    upd('cs-leads','cotações por mês');
-    upd('ct-opor','Oportunidades por mês'); upd('cs-opor','em negociação por mês');
+    upd('ct-opor','Oportunidades por mês');upd('cs-opor','em negociação por mês');
     upd('ct-vendas','Vendas por mês');  upd('cs-vendas','contratos por mês');
     upd('ct-receita','Receita por mês');upd('cs-receita','prêmios por mês (R$)');
   }
 
-  const ultimo = labels.length - 1;
+  const ultimo=labels.length-1;
 
-  function mkBar(canvasId, data, corAtivo, corBase, isR) {
+  function mkBar(canvasId,data,corAtivo,corBase,isR){
     D2(canvasId);
-    const el = document.getElementById(canvasId);
-    if (!el || !labels.length) return;
-    const ds = {
-      label:'', data, _isReceita:isR,
-      backgroundColor: labels.map((_,i)=>i===ultimo?corAtivo:corBase),
-      borderRadius:5, borderSkipped:false
-    };
-    const yOpts = isR
-      ? {...GR.y, ticks:{color:'#55576e', callback:v=>'R$'+fK(v)}}
-      : GR.y;
-    CH[canvasId] = new Chart(el, {type:'bar',
-      data:{labels, datasets:[ds]},
-      options:{plugins:{legend:{display:false}}, scales:{x:GR.x, y:yOpts}}
+    const el=document.getElementById(canvasId);
+    if(!el||!labels.length) return;
+    const ds={label:'',data,_isReceita:isR,
+      backgroundColor:labels.map((_,i)=>i===ultimo?corAtivo:corBase),
+      borderRadius:5,borderSkipped:false};
+    const yOpts=isR?{...GR.y,ticks:{color:'#55576e',callback:v=>'R$'+fK(v)}}:GR.y;
+    CH[canvasId]=new Chart(el,{type:'bar',
+      data:{labels,datasets:[ds]},
+      options:{plugins:{legend:{display:false}},scales:{x:GR.x,y:yOpts}}
     });
   }
 
-  mkBar('c-leads', leadsData,  '#4f7aff', 'rgba(79,122,255,0.35)',  false);
-  mkBar('c-opor',  oporData,   '#f5a623', 'rgba(245,166,35,0.35)',  false);
-  mkBar('c-ev',    vendasData, '#00c896', 'rgba(0,200,150,0.4)',    false);
-  mkBar('c-rec',   receitaData,'#4f7aff', 'rgba(79,122,255,0.35)',  true);
+  mkBar('c-leads', leadsData,  '#4f7aff','rgba(79,122,255,0.35)', false);
+  mkBar('c-opor',  oporData,   '#f5a623','rgba(245,166,35,0.35)', false);
+  mkBar('c-ev',    vendasData, '#00c896','rgba(0,200,150,0.4)',   false);
+  mkBar('c-rec',   receitaData,'#4f7aff','rgba(79,122,255,0.35)', true);
 
-  // Por plano — barras horizontais
   D2('c-plano');
   const cp=document.getElementById('c-plano');
   if(cp&&plano&&plano.length){
@@ -693,7 +693,6 @@ function renderCharts(meses,vends,orig,plano){
     });
   }
 
-  // Por origem — donut
   rDonut('c-orig',orig||[],'origem');
 }
 
@@ -733,7 +732,12 @@ function fmtR(n){n=+n;if(!n||isNaN(n))return'—';if(n>=1e6)return'R$ '+(n/1e6).
 function fK(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1000)return(n/1000).toFixed(0)+'k';return n;}
 function fmtM(s){if(!s)return'';const[y,m]=s.split('-');return['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][+m-1]+'/'+y.slice(2);}
 
-window.addEventListener('load',()=>{mAti('todos');carregar();});
+window.addEventListener('load',()=>{
+  // Botões iniciais (antes dos dados carregarem)
+  buildShortcuts();
+  mAti('todos');
+  carregar();
+});
 </script>
 </body>
 </html>
