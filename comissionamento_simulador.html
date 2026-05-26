@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      margin: 0;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: auto;
+    }
+
+    h1 {
+      margin-bottom: 4px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      margin-bottom: 24px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 18px;
+    }
+
+    .label {
+      color: #94a3b8;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .value {
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .green { color: #22c55e; }
+    .blue { color: #38bdf8; }
+    .yellow { color: #facc15; }
+    .red { color: #ef4444; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      background: #1e293b;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #334155;
+      text-align: left;
+    }
+
+    th {
+      color: #94a3b8;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .section-title {
+      margin-top: 32px;
+      margin-bottom: 8px;
+      font-size: 20px;
+    }
+
+    button {
+      background: #22c55e;
+      color: #052e16;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+
+    button:hover {
+      background: #16a34a;
+    }
+
+    .small {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>Simulador de Comissionamento | Anpara</h1>
+    <div class="subtitle">Projeção mensal com base nas premissas da planilha</div>
+
+    <button onclick="loadData()">Atualizar dados</button>
+
+    <div class="grid">
+      <div class="card">
+        <div class="label">Crescimento líquido projetado</div>
+        <div id="crescimentoLiquido" class="value green">-</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Comissão total</div>
+        <div id="comissaoTotal" class="value blue">-</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Custo por associado líquido</div>
+        <div id="custoLiquido" class="value yellow">-</div>
+        <div id="referencia" class="small"></div>
+      </div>
+
+      <div class="card">
+        <div class="label">Vendas válidas</div>
+        <div id="vendasValidas" class="value">-</div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Comissão por Área</h2>
+    <div class="grid">
+      <div class="card">
+        <div class="label">Vendas</div>
+        <div id="comissaoVendas" class="value blue">-</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Retenção</div>
+        <div id="comissaoRetencao" class="value yellow">-</div>
+      </div>
+
+      <div class="card">
+        <div class="label">Sinistro</div>
+        <div id="comissaoSinistro" class="value green">-</div>
+      </div>
+    </div>
+
+    <h2 class="section-title">Resultados Detalhados</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Bloco</th>
+          <th>Métrica</th>
+          <th>Valor</th>
+        </tr>
+      </thead>
+      <tbody id="resultadosTabela"></tbody>
+    </table>
+  </div>
+
+  <script>
+    function loadData() {
+      google.script.run
+        .withSuccessHandler(renderDashboard)
+        .withFailureHandler(function(error) {
+          alert("Erro ao carregar dados: " + error.message);
+        })
+        .getDashboardData();
+    }
+
+    function renderDashboard(data) {
+      const resumo = data.resumo;
+
+      setText("crescimentoLiquido", formatNumber(resumo.crescimentoLiquido));
+      setText("comissaoTotal", formatCurrency(resumo.comissaoTotal));
+      setText("custoLiquido", formatCurrencyOrDash(resumo.custoPorAssociadoLiquido));
+      setText("referencia", "Referência Ronaldo: " + formatCurrency(resumo.referenciaRonaldo));
+      setText("vendasValidas", formatNumber(resumo.vendasValidas));
+
+      setText("comissaoVendas", formatCurrency(resumo.comissaoVendas));
+      setText("comissaoRetencao", formatCurrency(resumo.comissaoRetencao));
+      setText("comissaoSinistro", formatCurrency(resumo.comissaoSinistro));
+
+      renderResultados(data.resultados);
+      colorirCusto(resumo.custoPorAssociadoLiquido, resumo.referenciaRonaldo);
+      colorirCrescimento(resumo.crescimentoLiquido);
+    }
+
+    function renderResultados(resultados) {
+      const tbody = document.getElementById("resultadosTabela");
+      tbody.innerHTML = "";
+
+      resultados.forEach(row => {
+        const tr = document.createElement("tr");
+
+        tr.innerHTML = `
+          <td>${row["Bloco"] || ""}</td>
+          <td>${row["Métrica"] || ""}</td>
+          <td>${formatValue(row["Valor"])}</td>
+        `;
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function setText(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    function formatCurrency(value) {
+      if (value === null || value === undefined || value === "" || value === "-") return "-";
+      return Number(value).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+        maximumFractionDigits: 0
+      });
+    }
+
+    function formatCurrencyOrDash(value) {
+      if (value === "-" || value === null || value === undefined || value === "") return "-";
+      return formatCurrency(value);
+    }
+
+    function formatNumber(value) {
+      if (value === null || value === undefined || value === "") return "-";
+      return Number(value).toLocaleString("pt-BR", {
+        maximumFractionDigits: 0
+      });
+    }
+
+    function formatPercent(value) {
+      return (Number(value) * 100).toFixed(0) + "%";
+    }
+
+    function formatValue(value) {
+      if (value === null || value === undefined || value === "") return "-";
+
+      if (typeof value === "string") return value;
+
+      if (Math.abs(value) > 0 && Math.abs(value) < 1) {
+        return formatPercent(value);
+      }
+
+      return Number(value).toLocaleString("pt-BR", {
+        maximumFractionDigits: 2
+      });
+    }
+
+    function colorirCusto(custo, referencia) {
+      const el = document.getElementById("custoLiquido");
+
+      el.classList.remove("green", "yellow", "red");
+
+      if (custo === "-" || custo === null || custo === undefined || custo === "") {
+        el.classList.add("yellow");
+        return;
+      }
+
+      if (Number(custo) <= Number(referencia)) {
+        el.classList.add("green");
+      } else if (Number(custo) <= Number(referencia) * 1.5) {
+        el.classList.add("yellow");
+      } else {
+        el.classList.add("red");
+      }
+    }
+
+    function colorirCrescimento(valor) {
+      const el = document.getElementById("crescimentoLiquido");
+
+      el.classList.remove("green", "red", "yellow");
+
+      if (Number(valor) > 0) {
+        el.classList.add("green");
+      } else if (Number(valor) < 0) {
+        el.classList.add("red");
+      } else {
+        el.classList.add("yellow");
+      }
+    }
+
+    window.onload = loadData;
+  </script>
+</body>
+</html>
