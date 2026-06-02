@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panorama Geral — Anpara Churn</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- LOADING -->
+  <div class="loading-overlay" id="loading">
+    <div class="spinner"></div>
+    <span class="loading-text">Carregando panorama...</span>
+  </div>
+
+  <!-- HEADER -->
+  <header class="header">
+    <a href="index.html" class="logo">
+      <div class="logo-icon">AN</div>
+      <div>
+        <span class="logo-name">ANPARA</span>
+        <span class="logo-sub">Dashboard de Churn</span>
+      </div>
+    </a>
+
+    <nav class="nav-tabs">
+      <a href="panorama.html"   class="nav-tab active">📊 Panorama Geral</a>
+      <a href="zona-churn.html" class="nav-tab">🔥 Zona de Churn</a>
+      <a href="analise.html"    class="nav-tab">📈 Análise</a>
+    </nav>
+
+    <div class="header-actions">
+      <span class="ts" id="ts">—</span>
+      <button class="btn-refresh" id="btn-refresh">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Atualizar
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <div class="error-banner" id="error-banner" style="display:none">
+      <span>⚠️</span><span class="error-msg">Erro ao carregar dados.</span>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="kpi-grid">
+      <div class="kpi-card c-purple">
+        <div class="kpi-icon">👥</div>
+        <div class="kpi-label">Base Ativa</div>
+        <div class="kpi-val acc" id="kpi-ativos">—</div>
+        <div class="kpi-sub" id="kpi-ativos-sub">associados ativos</div>
+      </div>
+
+      <div class="kpi-card c-green">
+        <div class="kpi-icon">✅</div>
+        <div class="kpi-label">Novos Contratos (hoje)</div>
+        <div class="kpi-val pos" id="kpi-novos">—</div>
+        <div class="kpi-sub">novos associados</div>
+      </div>
+
+      <div class="kpi-card c-red">
+        <div class="kpi-icon">❌</div>
+        <div class="kpi-label">Cancelamentos (7d)</div>
+        <div class="kpi-val neg" id="kpi-cancel">—</div>
+        <div class="kpi-sub">últimos 7 dias</div>
+      </div>
+
+      <div class="kpi-card c-yellow">
+        <div class="kpi-icon">⚖️</div>
+        <div class="kpi-label">Saldo Líquido (7d)</div>
+        <div class="kpi-val" id="kpi-saldo">—</div>
+        <div class="kpi-sub">novos − cancelamentos</div>
+      </div>
+    </div>
+
+    <!-- CHART + CHURN RATE -->
+    <div class="two-col">
+      <!-- Gráfico evolução -->
+      <div class="chart-card" style="margin-bottom:0">
+        <div class="chart-head">
+          <div>
+            <div class="chart-title">Evolução da Base</div>
+            <div class="chart-sub">Ativos e inativos ao longo do tempo</div>
+          </div>
+        </div>
+        <div class="chart-box">
+          <canvas id="chart-evolucao"></canvas>
+        </div>
+      </div>
+
+      <!-- Coluna direita -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <!-- Churn rate -->
+        <div class="churn-gauge" style="flex:1">
+          <div class="churn-val" id="churn-val">—</div>
+          <div class="churn-lbl">Taxa de Churn Estimada</div>
+          <div class="churn-sub">% da base ativa em risco</div>
+        </div>
+
+        <!-- Reativações -->
+        <div class="kpi-card c-teal" style="margin-bottom:0">
+          <div class="kpi-icon">🔄</div>
+          <div class="kpi-label">Reativações (7d)</div>
+          <div class="kpi-val teal" id="kpi-reat">—</div>
+          <div class="kpi-sub">associados reativados</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS RESUMO -->
+    <div class="sum-grid">
+      <div class="sum-card">
+        <div class="sum-ico purple">📊</div>
+        <div>
+          <div class="sum-num" id="stat-total">—</div>
+          <div class="sum-lbl">Base Total (ativos + inativos)</div>
+        </div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-ico red">📉</div>
+        <div>
+          <div class="sum-num" id="stat-inat">—</div>
+          <div class="sum-lbl">Total Inativos</div>
+        </div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-ico yellow">⚡</div>
+        <div>
+          <div class="sum-num" id="stat-saldo">—</div>
+          <div class="sum-lbl">Saldo Líquido 7 dias</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/panorama.js"></script>
+</body>
+</html>

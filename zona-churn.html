@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zona de Churn — Anpara</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- LOADING -->
+  <div class="loading-overlay" id="loading">
+    <div class="spinner"></div>
+    <span class="loading-text">Carregando zona de churn...</span>
+  </div>
+
+  <!-- HEADER -->
+  <header class="header">
+    <a href="index.html" class="logo">
+      <div class="logo-icon">AN</div>
+      <div>
+        <span class="logo-name">ANPARA</span>
+        <span class="logo-sub">Dashboard de Churn</span>
+      </div>
+    </a>
+
+    <nav class="nav-tabs">
+      <a href="panorama.html"   class="nav-tab">📊 Panorama Geral</a>
+      <a href="zona-churn.html" class="nav-tab active">🔥 Zona de Churn</a>
+      <a href="analise.html"    class="nav-tab">📈 Análise</a>
+    </nav>
+
+    <div class="header-actions">
+      <select class="sel-regional" id="sel-regional">
+        <option value="">Todas as Regionais</option>
+      </select>
+      <span class="ts" id="ts">—</span>
+      <button class="btn-refresh" id="btn-refresh">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Atualizar
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <div class="error-banner" id="error-banner" style="display:none">
+      <span>⚠️</span><span class="error-msg">Erro ao carregar dados.</span>
+    </div>
+
+    <!-- META DE RECUPERAÇÃO -->
+    <div class="prog-card">
+      <div class="prog-head">
+        <span class="prog-title" id="meta-txt">Carregando meta...</span>
+        <span class="prog-pct" id="meta-pct">0%</span>
+      </div>
+      <div class="prog-track">
+        <div class="prog-fill" id="meta-fill" style="width:0%"></div>
+      </div>
+      <div class="prog-sub">Meta de recuperação — associados em risco que foram regularizados</div>
+    </div>
+
+    <!-- CARDS RESUMO -->
+    <div class="sum-grid">
+      <div class="sum-card">
+        <div class="sum-ico red">⚠️</div>
+        <div>
+          <div class="sum-num" id="cnt-inad">—</div>
+          <div class="sum-lbl">Inadimplentes</div>
+        </div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-ico yellow">🚪</div>
+        <div>
+          <div class="sum-num" id="cnt-canc">—</div>
+          <div class="sum-lbl">Cancelamentos Solicitados</div>
+        </div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-ico purple">🎯</div>
+        <div>
+          <div class="sum-num" id="cnt-zona">—</div>
+          <div class="sum-lbl">Total Zona de Churn</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABELA: INADIMPLENTES -->
+    <div class="tbl-card">
+      <div class="tbl-head">
+        <div>
+          <div class="sec-title"><span class="dot red"></span> Inadimplentes</div>
+          <div class="rec-count" id="rc-inad">—</div>
+        </div>
+      </div>
+      <div class="tbl-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Associado</th>
+              <th>Telefone</th>
+              <th>Vencimento</th>
+              <th>Atraso</th>
+              <th>Contagem Regressiva</th>
+              <th>Status</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody id="tb-inad">
+            <tr><td colspan="7"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TABELA: CANCELAMENTOS SOLICITADOS -->
+    <div class="tbl-card">
+      <div class="tbl-head">
+        <div>
+          <div class="sec-title"><span class="dot yellow"></span> Cancelamentos Solicitados</div>
+          <div class="rec-count" id="rc-canc">—</div>
+        </div>
+      </div>
+      <div class="tbl-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Associado</th>
+              <th>Data</th>
+              <th>Operador</th>
+              <th>Movimento</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody id="tb-canc">
+            <tr><td colspan="5"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/zona-churn.js"></script>
+</body>
+</html>
