@@ -208,6 +208,20 @@ body {
 
 .loading-text { color: var(--muted); font-size: 13px; }
 
+/* ——— SKELETON ——— */
+.sk-line {
+  height: 13px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--border) 25%, rgba(37,45,68,0.3) 50%, var(--border) 75%);
+  background-size: 400% 100%;
+  animation: sk-shimmer 1.4s ease infinite;
+}
+.sk-line + .sk-line { margin-top: 5px; }
+@keyframes sk-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
 /* ——— ERROR ——— */
 .error-banner {
   background: rgba(255,107,107,0.08);

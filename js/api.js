@@ -251,7 +251,7 @@ function populateDropdowns(items, regionalField, coopField, curRegional, curCoop
     while (selCoop.options.length > 1) selCoop.remove(1);
     coops.forEach(c => {
       const o = document.createElement('option');
-      o.value = c; o.textContent = c;
+      o.value = c; o.textContent = `Cooperativa ${c}`;
       selCoop.appendChild(o);
     });
     if (curCoop) selCoop.value = curCoop;

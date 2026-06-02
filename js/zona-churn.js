@@ -7,15 +7,12 @@ const _stateCanc = { sort: { col: 'data_alteracao', dir: 'desc' }, page: 1, sear
 const PP = 50;
 
 async function init() {
-  showLoading(true);
   hideError();
   try {
     _data = await API.zonaChurn();
     render(_data);
   } catch (e) {
     showError('Falha ao carregar dados: ' + e.message);
-  } finally {
-    showLoading(false);
   }
 }
 
@@ -38,8 +35,7 @@ function render(d) {
   setEl('cnt-zona',  fmtNum(d.total_zona_churn));
 
   /* Popula dropdowns com dados dos inadimplentes */
-  const allItems = (d.inadimplentes || []).concat(d.cancelamentos_solicitados || []);
-  populateDropdowns(allItems, 'codigo_regional', 'codigo_cooperativa', '', '');
+  populateDropdowns(d.inadimplentes || [], 'codigo_regional', 'codigo_cooperativa', '', '');
 
   rerender();
 }
@@ -48,15 +44,16 @@ function rerender() {
   if (!_data) return;
   const fs = getFilterState();
 
-  /* Inadimplentes: filtra por regional/coop (sem filtro de período — são dados de estado atual) */
+  /* Inadimplentes: filtra por regional/coop (sem filtro de período — dados de estado atual) */
   let inadList = _data.inadimplentes || [];
   if (fs.regional) inadList = inadList.filter(a => a.codigo_regional === fs.regional);
   if (fs.coop)     inadList = inadList.filter(a => a.codigo_cooperativa === fs.coop);
 
-  /* Cancelamentos: filtra por período e regional/coop */
+  /* Cascata: repopula dropdown de coop conforme regional selecionada */
+  repopulateCoops(_data.inadimplentes || [], fs);
+
+  /* Cancelamentos: filtra só por período (não tem regional/coop nos dados) */
   let cancList = _data.cancelamentos_solicitados || [];
-  if (fs.regional) cancList = cancList.filter(a => a.codigo_regional === fs.regional);
-  if (fs.coop)     cancList = cancList.filter(a => a.codigo_cooperativa === fs.coop);
   if (fs.period) {
     const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
     cancList = filterByDate(cancList, 'data_alteracao', from, to);
@@ -64,6 +61,28 @@ function rerender() {
 
   renderInadimplentes(inadList);
   renderCancelamentos(cancList);
+}
+
+function repopulateCoops(inadAll, fs) {
+  const selCoop = document.getElementById('sel-coop');
+  if (!selCoop) return;
+  const source = fs.regional
+    ? inadAll.filter(a => a.codigo_regional === fs.regional)
+    : inadAll;
+  const coops = [...new Set(source.map(a => a.codigo_cooperativa).filter(Boolean))].sort();
+  while (selCoop.options.length > 1) selCoop.remove(1);
+  coops.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c;
+    o.textContent = `Cooperativa ${c}`;
+    selCoop.appendChild(o);
+  });
+  if (fs.coop && coops.includes(fs.coop)) {
+    selCoop.value = fs.coop;
+  } else if (fs.coop) {
+    selCoop.value = '';
+    fs.coop = '';
+  }
 }
 
 /* ——— HELPERS ——— */
