@@ -1,4 +1,4 @@
-let _data = null;
+let _data  = null;
 let _chart = null;
 
 async function init() {
@@ -15,68 +15,97 @@ async function init() {
 }
 
 function render(d) {
+  if (!d) return;
   setEl('ts', `Atualizado ${new Date(d.timestamp).toLocaleString('pt-BR')}`);
 
-  /* KPIs */
+  /* KPIs — estado atual (não filtrado por período, API retorna agregados fixos) */
   setEl('kpi-ativos', fmtNum(d.base_ativa));
-  setEl('kpi-novos', fmtNum(d.novos_contratos_hoje));
+  setEl('kpi-novos',  fmtNum(d.novos_contratos_hoje));
   setEl('kpi-cancel', fmtNum(d.cancelamentos_7d));
-  setEl('kpi-reat', fmtNum(d.reativacoes_7d));
+  setEl('kpi-reat',   fmtNum(d.reativacoes_7d));
 
-  /* Saldo líquido — cor dinâmica */
   const saldo = d.saldo_liquido_7d;
   const saldoEl = document.getElementById('kpi-saldo');
   if (saldoEl) {
     saldoEl.textContent = (saldo >= 0 ? '+' : '') + fmtNum(saldo);
-    saldoEl.className = 'kpi-val ' + (saldo >= 0 ? 'pos' : 'neg');
+    saldoEl.className   = 'kpi-val ' + (saldo >= 0 ? 'pos' : 'neg');
   }
 
-  /* Variação base ativa vs snapshot anterior */
   const snaps = d.snapshots || [];
   if (snaps.length >= 2) {
     const diff = snaps[snaps.length - 1].Ativos - snaps[snaps.length - 2].Ativos;
-    const sub = document.getElementById('kpi-ativos-sub');
+    const sub  = document.getElementById('kpi-ativos-sub');
     if (sub) {
       sub.textContent = (diff >= 0 ? '+' : '') + fmtNum(diff) + ' vs dia anterior';
-      sub.className = 'kpi-sub ' + (diff >= 0 ? 'pos' : 'neg');
+      sub.className   = 'kpi-sub ' + (diff >= 0 ? 'pos' : 'neg');
     }
   }
 
-  /* Churn rate */
-  setEl('churn-val', d.churn_rate_estimado || '—');
-
-  /* Stats resumo */
+  setEl('churn-val',  d.churn_rate_estimado || '—');
   setEl('stat-total', fmtNum(d.base_total));
-  setEl('stat-inat', fmtNum(d.base_inativa));
+  setEl('stat-inat',  fmtNum(d.base_inativa));
+
   const statSaldo = document.getElementById('stat-saldo');
   if (statSaldo) {
     statSaldo.textContent = (saldo >= 0 ? '+' : '') + fmtNum(saldo);
     statSaldo.style.color = saldo >= 0 ? 'var(--green)' : 'var(--red)';
   }
 
-  renderChart(snaps);
+  /* Popula dropdowns de regional/coop com dados de snapshots (campo Regiao se existir) */
+  populateDropdowns(snaps, 'Regiao', 'Cooperativa', '', '');
+
+  renderChartWithFilters();
 }
 
-function renderChart(snapshots) {
-  if (!snapshots || snapshots.length === 0) return;
+function renderChartWithFilters() {
+  if (!_data) return;
 
-  const labels = snapshots.map(s => {
-    const p = s.Data.split('-');
-    return p.length === 3 ? `${p[2]}/${p[1]}` : s.Data;
-  });
+  const fs      = getFilterState();
+  const period  = fs.period;
+  const gran    = getGranularity(period);
 
+  /* Filtra snapshots pelo período */
+  let snaps = _data.snapshots || [];
+  if (period !== '7' || fs.customFrom) {
+    const { from, to } = getPeriodDates(period, fs.customFrom, fs.customTo);
+    if (from || to) {
+      snaps = snaps.filter(s => {
+        if (!s.Data) return false;
+        const d = new Date(s.Data);
+        if (isNaN(d)) return false;
+        if (from && d < from) return false;
+        if (to   && d > to)   return false;
+        return true;
+      });
+    }
+  }
+
+  /* Atualiza label da granularidade */
+  const granLabels = { day: 'por dia', week: 'por semana', month: 'por mês' };
+  setEl('chart-gran-lbl', `Ativos e inativos — agrupado ${granLabels[gran] || ''}`);
+
+  const grouped = groupSnapshots(snaps, gran);
+  renderChart(grouped);
+}
+
+function renderChart(grouped) {
   const ctx = document.getElementById('chart-evolucao');
   if (!ctx) return;
   if (_chart) _chart.destroy();
 
+  if (!grouped || grouped.length === 0) {
+    ctx.closest('.chart-box').innerHTML = `<div class="empty" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center"><div class="empty-ico">📊</div><div class="empty-txt">Sem dados para o período selecionado</div></div>`;
+    return;
+  }
+
   _chart = new Chart(ctx, {
     type: 'line',
     data: {
-      labels,
+      labels: grouped.map(g => g.label),
       datasets: [
         {
           label: 'Ativos',
-          data: snapshots.map(s => s.Ativos),
+          data:  grouped.map(g => g.ativos),
           borderColor: '#6C5CE7',
           backgroundColor: 'rgba(108,92,231,0.07)',
           borderWidth: 2,
@@ -90,7 +119,7 @@ function renderChart(snapshots) {
         },
         {
           label: 'Inativos',
-          data: snapshots.map(s => s.Inativos),
+          data:  grouped.map(g => g.inativos),
           borderColor: '#FF6B6B',
           backgroundColor: 'rgba(255,107,107,0.04)',
           borderWidth: 2,
@@ -146,6 +175,9 @@ function renderChart(snapshots) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initFilters(() => {
+    if (_data) renderChartWithFilters();
+  });
   init();
   document.getElementById('btn-refresh')?.addEventListener('click', init);
 });

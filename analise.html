@@ -44,6 +44,30 @@
     </div>
   </header>
 
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="period-btns">
+      <button class="pb" data-d="today">Hoje</button>
+      <button class="pb active" data-d="7">7 dias</button>
+      <button class="pb" data-d="15">15 dias</button>
+      <button class="pb" data-d="30">30 dias</button>
+      <button class="pb" data-d="60">60 dias</button>
+      <button class="pb" data-d="90">90 dias</button>
+      <button class="pb" data-d="custom">Personalizado</button>
+    </div>
+    <div class="topbar-div"></div>
+    <div class="topbar-sels">
+      <select class="tbsel" id="sel-regional"><option value="">Todas as Regionais</option></select>
+      <select class="tbsel" id="sel-coop"><option value="">Todas as Cooperativas</option></select>
+    </div>
+    <div class="custom-range" id="custom-range" style="display:none">
+      <input type="date" class="tbdate" id="date-from">
+      <span style="color:#94A3B8">—</span>
+      <input type="date" class="tbdate" id="date-to">
+      <button class="btn-apply" id="btn-apply">Aplicar</button>
+    </div>
+  </div>
+
   <!-- MAIN -->
   <main class="main">
 
@@ -76,13 +100,13 @@
       </div>
     </div>
 
-    <!-- GRÁFICO + RANKING -->
+    <!-- GRÁFICOS: cancelamentos por dia + operadores horizontal bar -->
     <div class="two-col">
       <div class="chart-card" style="margin-bottom:0">
         <div class="chart-head">
           <div>
-            <div class="chart-title">Cancelamentos por Dia</div>
-            <div class="chart-sub">Distribuição no período consultado</div>
+            <div class="chart-title">Cancelamentos por Período</div>
+            <div class="chart-sub" id="chart-churn-sub">Clique em uma barra para filtrar a tabela</div>
           </div>
         </div>
         <div class="chart-box">
@@ -93,12 +117,12 @@
       <div class="chart-card" style="margin-bottom:0">
         <div class="chart-head">
           <div>
-            <div class="chart-title">Ranking de Operadores</div>
-            <div class="chart-sub">Quem mais registrou cancelamentos</div>
+            <div class="chart-title">Operadores — Cancelamentos</div>
+            <div class="chart-sub">Clique em uma barra para filtrar a tabela</div>
           </div>
         </div>
-        <div id="rank-ops" style="padding-top:4px">
-          <div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div>
+        <div class="chart-box" style="height:280px">
+          <canvas id="chart-ops"></canvas>
         </div>
       </div>
     </div>
@@ -108,7 +132,7 @@
       <div class="chart-head">
         <div>
           <div class="chart-title">Motivos / Observações</div>
-          <div class="chart-sub">Comentários registrados nas alterações de veículos</div>
+          <div class="chart-sub">Clique em um item para filtrar a tabela</div>
         </div>
       </div>
       <div id="obs-list">
@@ -125,32 +149,41 @@
         </div>
       </div>
 
-      <div class="filter-bar">
-        <input type="text"  id="f-nome" placeholder="Buscar por nome do associado…">
-        <select id="f-tipo">
+      <!-- Badge de filtro ativo -->
+      <div class="filter-badge" id="chart-filter-badge">
+        <span>Filtrado por: <strong class="cf-label" id="cf-label-text"></strong></span>
+        <button class="cf-clear" id="cf-clear">✕ Limpar</button>
+      </div>
+
+      <div class="tbl-toolbar">
+        <input type="text" class="tbl-search" id="search-alt" placeholder="Buscar por nome ou CPF…">
+        <select id="f-tipo" class="tbsel" style="min-width:160px">
           <option value="">Todos os tipos</option>
           <option value="cancel">Cancelamentos</option>
           <option value="reat">Reativações</option>
         </select>
+        <button class="btn-export" id="exp-alt">⬇ Exportar CSV</button>
       </div>
 
       <div class="tbl-scroll">
-        <table>
+        <table id="tbl-alt">
           <thead>
             <tr>
-              <th>Associado</th>
-              <th>Data</th>
+              <th class="sortable" data-col="nome_associado">Associado <span class="si">↕</span></th>
+              <th class="sortable" data-col="data_alteracao">Data <span class="si">↕</span></th>
               <th>Tipo</th>
               <th>Movimento</th>
-              <th>Operador</th>
+              <th class="sortable" data-col="nome_usuario_alteracao">Operador <span class="si">↕</span></th>
               <th>Campo</th>
+              <th>SGA</th>
             </tr>
           </thead>
           <tbody id="tb-alt">
-            <tr><td colspan="6"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
+            <tr><td colspan="7"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
           </tbody>
         </table>
       </div>
+      <div id="pag-alt"></div>
     </div>
 
   </main>

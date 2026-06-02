@@ -35,9 +35,6 @@
     </nav>
 
     <div class="header-actions">
-      <select class="sel-regional" id="sel-regional">
-        <option value="">Todas as Regionais</option>
-      </select>
       <span class="ts" id="ts">—</span>
       <button class="btn-refresh" id="btn-refresh">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -45,6 +42,30 @@
       </button>
     </div>
   </header>
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="period-btns">
+      <button class="pb" data-d="today">Hoje</button>
+      <button class="pb active" data-d="7">7 dias</button>
+      <button class="pb" data-d="15">15 dias</button>
+      <button class="pb" data-d="30">30 dias</button>
+      <button class="pb" data-d="60">60 dias</button>
+      <button class="pb" data-d="90">90 dias</button>
+      <button class="pb" data-d="custom">Personalizado</button>
+    </div>
+    <div class="topbar-div"></div>
+    <div class="topbar-sels">
+      <select class="tbsel" id="sel-regional"><option value="">Todas as Regionais</option></select>
+      <select class="tbsel" id="sel-coop"><option value="">Todas as Cooperativas</option></select>
+    </div>
+    <div class="custom-range" id="custom-range" style="display:none">
+      <input type="date" class="tbdate" id="date-from">
+      <span style="color:#94A3B8">—</span>
+      <input type="date" class="tbdate" id="date-to">
+      <button class="btn-apply" id="btn-apply">Aplicar</button>
+    </div>
+  </div>
 
   <!-- MAIN -->
   <main class="main">
@@ -90,57 +111,79 @@
       </div>
     </div>
 
-    <!-- TABELA: INADIMPLENTES -->
-    <div class="tbl-card">
-      <div class="tbl-head">
-        <div>
-          <div class="sec-title"><span class="dot red"></span> Inadimplentes</div>
-          <div class="rec-count" id="rc-inad">—</div>
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="inad">⚠️ Inadimplentes <span class="tab-cnt" id="tab-cnt-inad">0</span></button>
+      <button class="tab-btn" data-tab="canc">🚪 Cancelamentos <span class="tab-cnt" id="tab-cnt-canc">0</span></button>
+    </div>
+
+    <!-- TAB: INADIMPLENTES -->
+    <div class="tab-panel" id="panel-inad">
+      <div class="tbl-card">
+        <div class="tbl-head">
+          <div>
+            <div class="sec-title"><span class="dot red"></span> Inadimplentes</div>
+            <div class="rec-count" id="rc-inad">—</div>
+          </div>
         </div>
-      </div>
-      <div class="tbl-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Associado</th>
-              <th>Telefone</th>
-              <th>Vencimento</th>
-              <th>Atraso</th>
-              <th>Contagem Regressiva</th>
-              <th>Status</th>
-              <th>Ação</th>
-            </tr>
-          </thead>
-          <tbody id="tb-inad">
-            <tr><td colspan="7"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
-          </tbody>
-        </table>
+        <div class="tbl-toolbar">
+          <input type="text" class="tbl-search" id="search-inad" placeholder="Buscar por nome ou CPF…">
+          <button class="btn-export" id="exp-inad">⬇ Exportar CSV</button>
+        </div>
+        <div class="tbl-scroll">
+          <table id="tbl-inad">
+            <thead>
+              <tr>
+                <th class="sortable" data-col="nome">Associado <span class="si">↕</span></th>
+                <th>Telefone</th>
+                <th class="sortable" data-col="dia_vencimento">Vencimento <span class="si">↕</span></th>
+                <th class="sortable" data-col="dias_atraso">Atraso <span class="si">↕</span></th>
+                <th class="sortable" data-col="dias_para_churn">Contagem Regressiva <span class="si">↕</span></th>
+                <th class="sortable" data-col="status_churn">Status <span class="si">↕</span></th>
+                <th>SGA</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody id="tb-inad">
+              <tr><td colspan="8"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="pag-inad"></div>
       </div>
     </div>
 
-    <!-- TABELA: CANCELAMENTOS SOLICITADOS -->
-    <div class="tbl-card">
-      <div class="tbl-head">
-        <div>
-          <div class="sec-title"><span class="dot yellow"></span> Cancelamentos Solicitados</div>
-          <div class="rec-count" id="rc-canc">—</div>
+    <!-- TAB: CANCELAMENTOS -->
+    <div class="tab-panel hidden" id="panel-canc">
+      <div class="tbl-card">
+        <div class="tbl-head">
+          <div>
+            <div class="sec-title"><span class="dot yellow"></span> Cancelamentos Solicitados</div>
+            <div class="rec-count" id="rc-canc">—</div>
+          </div>
         </div>
-      </div>
-      <div class="tbl-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Associado</th>
-              <th>Data</th>
-              <th>Operador</th>
-              <th>Movimento</th>
-              <th>Ação</th>
-            </tr>
-          </thead>
-          <tbody id="tb-canc">
-            <tr><td colspan="5"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
-          </tbody>
-        </table>
+        <div class="tbl-toolbar">
+          <input type="text" class="tbl-search" id="search-canc" placeholder="Buscar por nome ou CPF…">
+          <button class="btn-export" id="exp-canc">⬇ Exportar CSV</button>
+        </div>
+        <div class="tbl-scroll">
+          <table id="tbl-canc">
+            <thead>
+              <tr>
+                <th class="sortable" data-col="nome">Associado <span class="si">↕</span></th>
+                <th class="sortable" data-col="data_alteracao">Data <span class="si">↕</span></th>
+                <th class="sortable" data-col="usuario_alteracao">Operador <span class="si">↕</span></th>
+                <th>Movimento</th>
+                <th>SGA</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody id="tb-canc">
+              <tr><td colspan="6"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="pag-canc"></div>
       </div>
     </div>
 

@@ -44,6 +44,30 @@
     </div>
   </header>
 
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="period-btns">
+      <button class="pb" data-d="today">Hoje</button>
+      <button class="pb active" data-d="7">7 dias</button>
+      <button class="pb" data-d="15">15 dias</button>
+      <button class="pb" data-d="30">30 dias</button>
+      <button class="pb" data-d="60">60 dias</button>
+      <button class="pb" data-d="90">90 dias</button>
+      <button class="pb" data-d="custom">Personalizado</button>
+    </div>
+    <div class="topbar-div"></div>
+    <div class="topbar-sels">
+      <select class="tbsel" id="sel-regional"><option value="">Todas as Regionais</option></select>
+      <select class="tbsel" id="sel-coop"><option value="">Todas as Cooperativas</option></select>
+    </div>
+    <div class="custom-range" id="custom-range" style="display:none">
+      <input type="date" class="tbdate" id="date-from">
+      <span style="color:#94A3B8">—</span>
+      <input type="date" class="tbdate" id="date-to">
+      <button class="btn-apply" id="btn-apply">Aplicar</button>
+    </div>
+  </div>
+
   <!-- MAIN -->
   <main class="main">
 
@@ -89,7 +113,7 @@
         <div class="chart-head">
           <div>
             <div class="chart-title">Evolução da Base</div>
-            <div class="chart-sub">Ativos e inativos ao longo do tempo</div>
+            <div class="chart-sub" id="chart-gran-lbl">Ativos e inativos ao longo do tempo</div>
           </div>
         </div>
         <div class="chart-box">
