@@ -1,12 +1,15 @@
-let _data  = null;
-let _chart = null;
+let _panorama = null;
+let _altItems  = [];
+let _chart     = null;
 
 async function init() {
   showLoading(true);
   hideError();
   try {
-    _data = await API.panorama();
-    render(_data);
+    const [pan, alt] = await Promise.all([API.panorama(), API.alteracoes()]);
+    _panorama = pan;
+    _altItems = alt.associados || [];
+    render();
   } catch (e) {
     showError('Falha ao carregar dados: ' + e.message);
   } finally {
@@ -14,24 +17,19 @@ async function init() {
   }
 }
 
-function render(d) {
-  if (!d) return;
-  setEl('ts', `Atualizado ${new Date(d.timestamp).toLocaleString('pt-BR')}`);
+function render() {
+  if (!_panorama) return;
+  const fs = getFilterState();
 
-  /* KPIs — estado atual (não filtrado por período, API retorna agregados fixos) */
-  setEl('kpi-ativos', fmtNum(d.base_ativa));
-  setEl('kpi-novos',  fmtNum(d.novos_contratos_hoje));
-  setEl('kpi-cancel', fmtNum(d.cancelamentos_7d));
-  setEl('kpi-reat',   fmtNum(d.reativacoes_7d));
+  setEl('ts', `Atualizado ${new Date(_panorama.timestamp).toLocaleString('pt-BR')}`);
 
-  const saldo = d.saldo_liquido_7d;
-  const saldoEl = document.getElementById('kpi-saldo');
-  if (saldoEl) {
-    saldoEl.textContent = (saldo >= 0 ? '+' : '') + fmtNum(saldo);
-    saldoEl.className   = 'kpi-val ' + (saldo >= 0 ? 'pos' : 'neg');
-  }
+  /* Base Ativa — do endpoint panorama (estado atual, sempre correto) */
+  setEl('kpi-ativos', fmtNum(_panorama.base_ativa));
+  setEl('kpi-churn',  _panorama.churn_rate_estimado || '—');
+  setEl('kpi-novos',  fmtNum(_panorama.novos_contratos_hoje));
 
-  const snaps = d.snapshots || [];
+  /* Variação da base via snapshots */
+  const snaps = _panorama.snapshots || [];
   if (snaps.length >= 2) {
     const diff = snaps[snaps.length - 1].Ativos - snaps[snaps.length - 2].Ativos;
     const sub  = document.getElementById('kpi-ativos-sub');
@@ -41,46 +39,79 @@ function render(d) {
     }
   }
 
-  setEl('churn-val',  d.churn_rate_estimado || '—');
-  setEl('stat-total', fmtNum(d.base_total));
-  setEl('stat-inat',  fmtNum(d.base_inativa));
+  /* Métricas filtradas por período — calculadas via alteracoes */
+  const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
+  let items = _altItems;
+  if (from || to) items = filterByDate(items, 'data_alteracao', from, to);
+  if (fs.regional)  items = items.filter(a => a.codigo_regional        === fs.regional);
+  if (fs.coop)      items = items.filter(a => a.codigo_cooperativa     === fs.coop);
+  if (fs.operadora) items = items.filter(a => (a.nome_usuario_alteracao || '') === fs.operadora);
 
-  const statSaldo = document.getElementById('stat-saldo');
-  if (statSaldo) {
-    statSaldo.textContent = (saldo >= 0 ? '+' : '') + fmtNum(saldo);
-    statSaldo.style.color = saldo >= 0 ? 'var(--green)' : 'var(--red)';
+  const cancels = items.filter(a => a.valor_posterior === '2');
+  const reats   = items.filter(a => a.valor_anterior === '2' && a.valor_posterior === '1');
+  const saldo   = reats.length - cancels.length;
+
+  /* Labels dinâmicos pelo período */
+  const lbl = getPeriodLabel(fs.period, fs.customFrom, fs.customTo);
+  const suffix = lbl ? ` — ${lbl}` : '';
+  setEl('lbl-cancel', `Cancelamentos${suffix}`);
+  setEl('lbl-reat',   `Reativações${suffix}`);
+  setEl('lbl-saldo',  `Saldo Líquido${suffix}`);
+
+  setEl('kpi-cancel', fmtNum(cancels.length));
+  setEl('kpi-reat',   fmtNum(reats.length));
+
+  const saldoEl = document.getElementById('kpi-saldo');
+  if (saldoEl) {
+    saldoEl.textContent = (saldo >= 0 ? '+' : '') + fmtNum(saldo);
+    saldoEl.className   = 'kpi-val ' + (saldo >= 0 ? 'pos' : 'neg');
   }
 
-  /* Popula dropdowns de regional/coop com dados de snapshots (campo Regiao se existir) */
-  populateDropdowns(snaps, 'Regiao', 'Cooperativa', '', '');
+  /* Dropdowns */
+  populateRegionals(_altItems, 'codigo_regional', fs.regional);
+  repopulateCoops(fs);
+  populateOperadoras(_altItems, 'nome_usuario_alteracao');
+  const selOp = document.getElementById('sel-operadora');
+  if (selOp && fs.operadora) selOp.value = fs.operadora;
 
+  /* Gráfico */
   renderChartWithFilters();
 }
 
+function repopulateCoops(fs) {
+  const selCoop = document.getElementById('sel-coop');
+  if (!selCoop) return;
+  const source = fs.regional
+    ? _altItems.filter(a => a.codigo_regional === fs.regional)
+    : _altItems;
+  const coops = [...new Set(source.map(a => a.codigo_cooperativa).filter(Boolean))].sort();
+  while (selCoop.options.length > 1) selCoop.remove(1);
+  coops.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c; o.textContent = `Cooperativa ${c}`;
+    selCoop.appendChild(o);
+  });
+  if (fs.coop && coops.includes(fs.coop)) selCoop.value = fs.coop;
+}
+
 function renderChartWithFilters() {
-  if (!_data) return;
+  if (!_panorama) return;
+  const fs   = getFilterState();
+  const gran = getGranularity(fs.period);
 
-  const fs      = getFilterState();
-  const period  = fs.period;
-  const gran    = getGranularity(period);
-
-  /* Filtra snapshots pelo período */
-  let snaps = _data.snapshots || [];
-  if (period !== '7' || fs.customFrom) {
-    const { from, to } = getPeriodDates(period, fs.customFrom, fs.customTo);
-    if (from || to) {
-      snaps = snaps.filter(s => {
-        if (!s.Data) return false;
-        const d = new Date(s.Data);
-        if (isNaN(d)) return false;
-        if (from && d < from) return false;
-        if (to   && d > to)   return false;
-        return true;
-      });
-    }
+  let snaps = _panorama.snapshots || [];
+  const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
+  if (from || to) {
+    snaps = snaps.filter(s => {
+      if (!s.Data) return false;
+      const d = new Date(s.Data);
+      if (isNaN(d)) return false;
+      if (from && d < from) return false;
+      if (to   && d > to)   return false;
+      return true;
+    });
   }
 
-  /* Atualiza label da granularidade */
   const granLabels = { day: 'por dia', week: 'por semana', month: 'por mês' };
   setEl('chart-gran-lbl', `Ativos e inativos — agrupado ${granLabels[gran] || ''}`);
 
@@ -94,7 +125,8 @@ function renderChart(grouped) {
   if (_chart) _chart.destroy();
 
   if (!grouped || grouped.length === 0) {
-    ctx.closest('.chart-box').innerHTML = `<div class="empty" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center"><div class="empty-ico">📊</div><div class="empty-txt">Sem dados para o período selecionado</div></div>`;
+    const box = ctx.closest('.chart-box');
+    if (box) box.innerHTML = `<div class="empty" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center"><div class="empty-ico">📊</div><div class="empty-txt">Sem dados históricos para o período selecionado</div></div>`;
     return;
   }
 
@@ -139,12 +171,7 @@ function renderChart(grouped) {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: {
-          labels: {
-            color: '#94A3B8',
-            font: { family: 'DM Sans', size: 12 },
-            boxWidth: 10,
-            boxHeight: 10,
-          },
+          labels: { color: '#94A3B8', font: { family: 'DM Sans', size: 12 }, boxWidth: 10, boxHeight: 10 },
         },
         tooltip: {
           backgroundColor: '#1C2038',
@@ -163,11 +190,7 @@ function renderChart(grouped) {
         },
         y: {
           grid: { color: 'rgba(37,45,68,0.5)' },
-          ticks: {
-            color: '#94A3B8',
-            font: { family: 'JetBrains Mono', size: 10 },
-            callback: v => fmtNum(v),
-          },
+          ticks: { color: '#94A3B8', font: { family: 'JetBrains Mono', size: 10 }, callback: v => fmtNum(v) },
         },
       },
     },
@@ -176,7 +199,7 @@ function renderChart(grouped) {
 
 document.addEventListener('DOMContentLoaded', () => {
   initFilters(() => {
-    if (_data) renderChartWithFilters();
+    if (_panorama) render();
   });
   init();
   document.getElementById('btn-refresh')?.addEventListener('click', init);

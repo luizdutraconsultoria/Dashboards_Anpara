@@ -41,17 +41,16 @@
   <div class="topbar">
     <div class="period-btns">
       <button class="pb" data-d="today">Hoje</button>
-      <button class="pb active" data-d="7">7 dias</button>
-      <button class="pb" data-d="15">15 dias</button>
-      <button class="pb" data-d="30">30 dias</button>
-      <button class="pb" data-d="60">60 dias</button>
-      <button class="pb" data-d="90">90 dias</button>
+      <button class="pb" data-d="week">Esta Semana</button>
+      <button class="pb active" data-d="month">Este Mês</button>
+      <button class="pb" data-d="year">Este Ano</button>
       <button class="pb" data-d="custom">Personalizado</button>
     </div>
     <div class="topbar-div"></div>
     <div class="topbar-sels">
       <select class="tbsel" id="sel-regional"><option value="">Todas as Regionais</option></select>
       <select class="tbsel" id="sel-coop"><option value="">Todas as Cooperativas</option></select>
+      <select class="tbsel" id="sel-operadora"><option value="">Todas as Operadoras</option></select>
     </div>
     <div class="custom-range" id="custom-range" style="display:none">
       <input type="date" class="tbdate" id="date-from">
@@ -77,11 +76,18 @@
       <div class="prog-track">
         <div class="prog-fill" id="meta-fill" style="width:0%"></div>
       </div>
-      <div class="prog-sub">Meta de recuperação — associados em risco que foram regularizados</div>
+      <div class="prog-sub">Meta de recuperação — associados em risco regularizados no período</div>
     </div>
 
-    <!-- CARDS RESUMO -->
-    <div class="sum-grid">
+    <!-- CARDS RESUMO — ordem narrativa de risco -->
+    <div class="sum-grid sum-grid-4">
+      <div class="sum-card">
+        <div class="sum-ico purple">🎯</div>
+        <div>
+          <div class="sum-num" id="cnt-risco">—</div>
+          <div class="sum-lbl">Associados em Risco</div>
+        </div>
+      </div>
       <div class="sum-card">
         <div class="sum-ico red">⚠️</div>
         <div>
@@ -97,10 +103,10 @@
         </div>
       </div>
       <div class="sum-card">
-        <div class="sum-ico purple">🎯</div>
+        <div class="sum-ico green">🔄</div>
         <div>
-          <div class="sum-num" id="cnt-zona">—</div>
-          <div class="sum-lbl">Total Zona de Churn</div>
+          <div class="sum-num" id="cnt-reat">—</div>
+          <div class="sum-lbl" id="lbl-reat">Reativações no período</div>
         </div>
       </div>
     </div>
@@ -172,16 +178,17 @@
                 <th class="sortable" data-col="data_alteracao">Data <span class="si">↕</span></th>
                 <th class="sortable" data-col="usuario_alteracao">Operador <span class="si">↕</span></th>
                 <th>Movimento</th>
+                <th>Motivo</th>
                 <th>SGA</th>
                 <th>Ação</th>
               </tr>
             </thead>
             <tbody id="tb-canc">
-              <tr class="sk-row"><td><div class="sk-line" style="width:65%"></div><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:60%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
-              <tr class="sk-row"><td><div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:55%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
-              <tr class="sk-row"><td><div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:35%"></div></td><td><div class="sk-line" style="width:48%"></div></td><td><div class="sk-line" style="width:58%"></div></td><td><div class="sk-line" style="width:48%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
-              <tr class="sk-row"><td><div class="sk-line" style="width:75%"></div><div class="sk-line" style="width:42%"></div></td><td><div class="sk-line" style="width:52%"></div></td><td><div class="sk-line" style="width:62%"></div></td><td><div class="sk-line" style="width:52%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
-              <tr class="sk-row"><td><div class="sk-line" style="width:62%"></div><div class="sk-line" style="width:38%"></div></td><td><div class="sk-line" style="width:46%"></div></td><td><div class="sk-line" style="width:56%"></div></td><td><div class="sk-line" style="width:46%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+              <tr class="sk-row"><td><div class="sk-line" style="width:65%"></div><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:60%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+              <tr class="sk-row"><td><div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:55%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+              <tr class="sk-row"><td><div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:35%"></div></td><td><div class="sk-line" style="width:48%"></div></td><td><div class="sk-line" style="width:58%"></div></td><td><div class="sk-line" style="width:48%"></div></td><td><div class="sk-line" style="width:42%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+              <tr class="sk-row"><td><div class="sk-line" style="width:75%"></div><div class="sk-line" style="width:42%"></div></td><td><div class="sk-line" style="width:52%"></div></td><td><div class="sk-line" style="width:62%"></div></td><td><div class="sk-line" style="width:52%"></div></td><td><div class="sk-line" style="width:38%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+              <tr class="sk-row"><td><div class="sk-line" style="width:62%"></div><div class="sk-line" style="width:38%"></div></td><td><div class="sk-line" style="width:46%"></div></td><td><div class="sk-line" style="width:56%"></div></td><td><div class="sk-line" style="width:46%"></div></td><td><div class="sk-line" style="width:44%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
             </tbody>
           </table>
         </div>

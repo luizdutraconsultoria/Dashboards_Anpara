@@ -8,7 +8,7 @@ const _state = {
   page:        1,
   search:      '',
   tipo:        '',
-  chartFilter: null,   // { type: 'period'|'operator'|'obs', value: string, label: string }
+  chartFilter: null,
 };
 
 const PP = 50;
@@ -32,20 +32,10 @@ async function init() {
 /* ——— RENDER ——— */
 
 function render(d) {
+  const fs = getFilterState();
   setEl('ts', `Período: ${d.periodo || '—'}`);
 
-  const fs = getFilterState();
-  let items = _assocs;
-
-  /* Filtro de período */
-  if (fs.period) {
-    const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
-    items = filterByDate(items, 'data_alteracao', from, to);
-  }
-
-  /* Filtro de regional/coop */
-  if (fs.regional) items = items.filter(a => a.codigo_regional === fs.regional);
-  if (fs.coop)     items = items.filter(a => a.codigo_cooperativa === fs.coop);
+  let items = filterAssocs(fs);
 
   const cancels = items.filter(a => a.valor_posterior === '2');
   const reats   = items.filter(a => a.valor_anterior === '2' && a.valor_posterior === '1');
@@ -54,13 +44,23 @@ function render(d) {
   setEl('stat-cancel', fmtNum(cancels.length));
   setEl('stat-reat',   fmtNum(reats.length));
 
-  /* Popula dropdowns */
-  populateDropdowns(_assocs, 'codigo_regional', 'codigo_cooperativa', fs.regional, fs.coop);
+  /* Labels dinâmicos */
+  const lbl = getPeriodLabel(fs.period, fs.customFrom, fs.customTo);
+  const suffix = lbl ? ` — ${lbl}` : '';
+  setEl('lbl-stat-cancel', `Cancelamentos${suffix}`);
+  setEl('lbl-stat-reat',   `Reativações${suffix}`);
+
+  /* Dropdowns com cascata */
+  _populateRegionals(fs);
+  _repopulateCoops(fs);
+  populateOperadoras(_assocs, 'nome_usuario_alteracao');
+  const selOp = document.getElementById('sel-operadora');
+  if (selOp && fs.operadora) selOp.value = fs.operadora;
 
   /* Granularidade */
-  const gran = getGranularity(fs.period || '7');
-  const sub  = document.getElementById('chart-churn-sub');
+  const gran = getGranularity(fs.period || 'month');
   const granLabels = { day: 'por dia', week: 'por semana', month: 'por mês' };
+  const sub = document.getElementById('chart-churn-sub');
   if (sub) sub.textContent = `Cancelamentos agrupados ${granLabels[gran] || ''} · Clique para filtrar`;
 
   renderChurnChart(cancels, gran);
@@ -71,11 +71,40 @@ function render(d) {
 
 function rerender() {
   if (!_data) return;
-  /* Limpa filtro de gráfico ao reprocessar filtros do topbar */
   _state.chartFilter = null;
   _state.page        = 1;
   updateFilterBadge();
   render(_data);
+}
+
+function _populateRegionals(fs) {
+  const sel = document.getElementById('sel-regional');
+  if (!sel) return;
+  const vals = [...new Set(_assocs.map(a => a.codigo_regional).filter(Boolean))].sort();
+  while (sel.options.length > 1) sel.remove(1);
+  vals.forEach(v => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = `Regional ${v}`;
+    sel.appendChild(o);
+  });
+  if (fs.regional) sel.value = fs.regional;
+}
+
+function _repopulateCoops(fs) {
+  const selCoop = document.getElementById('sel-coop');
+  if (!selCoop) return;
+  const source = fs.regional
+    ? _assocs.filter(a => a.codigo_regional === fs.regional)
+    : _assocs;
+  const coops = [...new Set(source.map(a => a.codigo_cooperativa).filter(Boolean))].sort();
+  while (selCoop.options.length > 1) selCoop.remove(1);
+  coops.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c; o.textContent = `Cooperativa ${c}`;
+    selCoop.appendChild(o);
+  });
+  if (fs.coop && coops.includes(fs.coop)) selCoop.value = fs.coop;
+  else if (fs.coop) selCoop.value = '';
 }
 
 /* ——— CHART: CANCELAMENTOS POR PERÍODO ——— */
@@ -110,16 +139,13 @@ function renderChurnChart(cancels, gran) {
       maintainAspectRatio: false,
       onClick: (evt, elements) => {
         if (!elements.length) return;
-        const idx   = elements[0].index;
-        const grp   = grouped[idx];
-        /* Collect IDs of items in this bucket */
-        const keys  = new Set(grp.items.map(i => i._id || JSON.stringify(i)));
+        const idx  = elements[0].index;
+        const grp  = grouped[idx];
+        const keys = new Set(grp.items.map(i => i._id || JSON.stringify(i)));
         _state.chartFilter = { type: 'period', value: grp.label, keys, label: `Data: ${grp.label}` };
         _state.page        = 1;
         updateFilterBadge();
-        const fs  = getFilterState();
-        let items = filterAssocs(fs);
-        renderTabela(items);
+        renderTabela(filterAssocs(getFilterState()));
       },
       plugins: {
         legend:  { display: false },
@@ -127,16 +153,13 @@ function renderChurnChart(cancels, gran) {
       },
       scales: {
         x: { grid: { display: false }, ticks: { color: '#94A3B8', font: { family: 'JetBrains Mono', size: 10 } } },
-        y: {
-          grid:  { color: 'rgba(37,45,68,0.5)' },
-          ticks: { color: '#94A3B8', font: { family: 'JetBrains Mono', size: 10 }, stepSize: 1 },
-        },
+        y: { grid: { color: 'rgba(37,45,68,0.5)' }, ticks: { color: '#94A3B8', font: { family: 'JetBrains Mono', size: 10 }, stepSize: 1 } },
       },
     },
   });
 }
 
-/* ——— CHART: OPERADORES (horizontal bar) ——— */
+/* ——— CHART: OPERADORES ——— */
 
 function renderOperadores(cancels) {
   const counts = {};
@@ -170,8 +193,8 @@ function renderOperadores(cancels) {
       }],
     },
     options: {
-      indexAxis:          'y',
-      responsive:         true,
+      indexAxis: 'y',
+      responsive: true,
       maintainAspectRatio: false,
       onClick: (evt, elements) => {
         if (!elements.length) return;
@@ -180,9 +203,7 @@ function renderOperadores(cancels) {
         _state.chartFilter = { type: 'operator', value: opNome, label: `Operador: ${opNome}` };
         _state.page        = 1;
         updateFilterBadge();
-        const fs   = getFilterState();
-        const items = filterAssocs(fs);
-        renderTabela(items);
+        renderTabela(filterAssocs(getFilterState()));
       },
       plugins: {
         legend:  { display: false },
@@ -203,6 +224,14 @@ function renderObservacoes(veiculos) {
   veiculos.forEach(v => {
     const obs = (v.observacao || '').trim();
     if (obs) counts[obs] = (counts[obs] || 0) + 1;
+  });
+
+  /* Também coleta de _assocs.observacao quando disponível */
+  _assocs.forEach(a => {
+    if (a.valor_posterior === '2') {
+      const obs = (a.observacao || '').trim();
+      if (obs) counts[obs] = (counts[obs] || 0) + 1;
+    }
   });
 
   const sorted    = Object.entries(counts).sort(([, a], [, b]) => b - a).slice(0, 12);
@@ -233,9 +262,7 @@ function renderObservacoes(veiculos) {
       }
       _state.page = 1;
       updateFilterBadge();
-      const fs    = getFilterState();
-      const items = filterAssocs(fs);
-      renderTabela(items);
+      renderTabela(filterAssocs(getFilterState()));
     });
   });
 }
@@ -260,22 +287,17 @@ function updateFilterBadge() {
 function filterAssocs(fs) {
   let items = _assocs;
 
-  /* Período */
-  if (fs.period) {
-    const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
-    items = filterByDate(items, 'data_alteracao', from, to);
-  }
+  const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
+  if (from || to) items = filterByDate(items, 'data_alteracao', from, to);
 
-  /* Regional / Coop */
-  if (fs.regional) items = items.filter(a => a.codigo_regional === fs.regional);
-  if (fs.coop)     items = items.filter(a => a.codigo_cooperativa === fs.coop);
+  if (fs.regional)  items = items.filter(a => a.codigo_regional        === fs.regional);
+  if (fs.coop)      items = items.filter(a => a.codigo_cooperativa     === fs.coop);
+  if (fs.operadora) items = items.filter(a => (a.nome_usuario_alteracao || '') === fs.operadora);
 
-  /* Tipo (select) */
   const tipo = _state.tipo;
   if (tipo === 'cancel') items = items.filter(a => a.valor_posterior === '2');
   if (tipo === 'reat')   items = items.filter(a => a.valor_anterior === '2' && a.valor_posterior === '1');
 
-  /* Chart filter */
   if (_state.chartFilter) {
     const cf = _state.chartFilter;
     if (cf.type === 'period' && cf.keys) {
@@ -283,8 +305,8 @@ function filterAssocs(fs) {
     } else if (cf.type === 'operator') {
       items = items.filter(a => (a.nome_usuario_alteracao || 'Desconhecido') === cf.value);
     } else if (cf.type === 'obs') {
-      // obs filter — associate by data_alteracao match via veiculos array
       items = items.filter(a => {
+        if ((a.observacao || '').trim() === cf.value) return true;
         const veiculos = _data.veiculos || [];
         return veiculos.some(v =>
           (v.observacao || '').trim() === cf.value &&
@@ -323,7 +345,7 @@ function renderTabela(items) {
   const SIT = { '1': 'ATIVO', '2': 'INATIVO', '3': 'PENDENTE', '4': 'NEGADO' };
 
   if (page.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-ico">🔍</div><div class="empty-txt">Nenhuma alteração encontrada</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-ico">🔍</div><div class="empty-txt">Nenhuma alteração encontrada</div></div></td></tr>`;
     renderPagination(document.getElementById('pag-alt'), 1, 1, 0, () => {});
     return;
   }
@@ -337,6 +359,8 @@ function renderTabela(items) {
     const tipoBadge = isCancel ? `<span class="badge b-red">Cancelamento</span>`
                     : isReat   ? `<span class="badge b-green">Reativação</span>`
                     : `<span class="badge b-gray">Alteração</span>`;
+
+    const motivo = (a.observacao || '').trim();
 
     return `<tr>
       <td>
@@ -352,6 +376,7 @@ function renderTabela(items) {
       </td>
       <td>${a.nome_usuario_alteracao || '—'}</td>
       <td class="td-muted td-mono" style="font-size:10px">${a.nome_campo_tabela || '—'}</td>
+      <td class="td-muted" style="font-size:11px;max-width:180px;white-space:normal">${motivo || '—'}</td>
       <td>${sgaBtn(a.codigo_associado)}</td>
     </tr>`;
   }).join('');
@@ -361,8 +386,7 @@ function renderTabela(items) {
     _state.page, pages, total,
     p => {
       _state.page = p;
-      const fs    = getFilterState();
-      renderTabela(filterAssocs(fs));
+      renderTabela(filterAssocs(getFilterState()));
     }
   );
 }
@@ -370,8 +394,8 @@ function renderTabela(items) {
 /* ——— EXPORT ——— */
 
 function exportAlt() {
-  const fs    = getFilterState();
-  let rows    = filterAssocs(fs);
+  const fs     = getFilterState();
+  let rows     = filterAssocs(fs);
   const search = _state.search.toLowerCase();
   if (search) rows = rows.filter(a =>
     (a.nome_associado || '').toLowerCase().includes(search) ||
@@ -381,16 +405,18 @@ function exportAlt() {
 
   const SIT = { '1': 'ATIVO', '2': 'INATIVO', '3': 'PENDENTE', '4': 'NEGADO' };
   exportCSV(
-    ['Nome','CPF','Data','Tipo','De','Para','Operador','Campo','Codigo Associado'],
+    ['Nome','CPF','Data','Tipo','De','Para','Operador','Campo','Motivo','Codigo Associado'],
     rows.map(a => {
       const isCancel = a.valor_posterior === '2';
       const isReat   = a.valor_anterior === '2' && a.valor_posterior === '1';
       const tipo     = isCancel ? 'Cancelamento' : isReat ? 'Reativação' : 'Alteração';
       return [
         a.nome_associado, a.cpf_associado, a.data_alteracao, tipo,
-        SIT[a.valor_anterior] || a.valor_anterior,
+        SIT[a.valor_anterior]  || a.valor_anterior,
         SIT[a.valor_posterior] || a.valor_posterior,
-        a.nome_usuario_alteracao, a.nome_campo_tabela, a.codigo_associado,
+        a.nome_usuario_alteracao, a.nome_campo_tabela,
+        (a.observacao || '').trim(),
+        a.codigo_associado,
       ];
     }),
     'alteracoes.csv'
@@ -400,56 +426,37 @@ function exportAlt() {
 /* ——— INIT ——— */
 
 document.addEventListener('DOMContentLoaded', () => {
-  /* Sort */
   const tblAlt = document.getElementById('tbl-alt');
   if (tblAlt) {
     initSortableTable(tblAlt, (col, dir) => {
       _state.sort = { col, dir };
       _state.page = 1;
-      if (_data) {
-        const fs = getFilterState();
-        renderTabela(filterAssocs(fs));
-      }
+      if (_data) renderTabela(filterAssocs(getFilterState()));
     });
   }
 
-  /* Search */
   document.getElementById('search-alt')?.addEventListener('input', e => {
     _state.search = e.target.value;
     _state.page   = 1;
-    if (_data) {
-      const fs = getFilterState();
-      renderTabela(filterAssocs(fs));
-    }
+    if (_data) renderTabela(filterAssocs(getFilterState()));
   });
 
-  /* Tipo filter */
   document.getElementById('f-tipo')?.addEventListener('change', e => {
     _state.tipo = e.target.value;
     _state.page = 1;
-    if (_data) {
-      const fs = getFilterState();
-      renderTabela(filterAssocs(fs));
-    }
+    if (_data) renderTabela(filterAssocs(getFilterState()));
   });
 
-  /* Clear chart filter */
   document.getElementById('cf-clear')?.addEventListener('click', () => {
     _state.chartFilter = null;
     _state.page        = 1;
     updateFilterBadge();
-    /* Remove obs-active */
     document.querySelectorAll('.obs-item').forEach(e => e.classList.remove('obs-active'));
-    if (_data) {
-      const fs = getFilterState();
-      renderTabela(filterAssocs(fs));
-    }
+    if (_data) renderTabela(filterAssocs(getFilterState()));
   });
 
-  /* Export */
   document.getElementById('exp-alt')?.addEventListener('click', exportAlt);
 
-  /* Topbar filters */
   initFilters(() => {
     _state.chartFilter = null;
     _state.page        = 1;
@@ -457,7 +464,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (_data) render(_data);
   });
 
-  /* Refresh */
   document.getElementById('btn-refresh')?.addEventListener('click', init);
 
   init();

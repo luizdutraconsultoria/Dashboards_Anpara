@@ -48,17 +48,16 @@
   <div class="topbar">
     <div class="period-btns">
       <button class="pb" data-d="today">Hoje</button>
-      <button class="pb active" data-d="7">7 dias</button>
-      <button class="pb" data-d="15">15 dias</button>
-      <button class="pb" data-d="30">30 dias</button>
-      <button class="pb" data-d="60">60 dias</button>
-      <button class="pb" data-d="90">90 dias</button>
+      <button class="pb" data-d="week">Esta Semana</button>
+      <button class="pb active" data-d="month">Este Mês</button>
+      <button class="pb" data-d="year">Este Ano</button>
       <button class="pb" data-d="custom">Personalizado</button>
     </div>
     <div class="topbar-div"></div>
     <div class="topbar-sels">
       <select class="tbsel" id="sel-regional"><option value="">Todas as Regionais</option></select>
       <select class="tbsel" id="sel-coop"><option value="">Todas as Cooperativas</option></select>
+      <select class="tbsel" id="sel-operadora"><option value="">Todas as Operadoras</option></select>
     </div>
     <div class="custom-range" id="custom-range" style="display:none">
       <input type="date" class="tbdate" id="date-from">
@@ -81,14 +80,14 @@
         <div class="sum-ico red">❌</div>
         <div>
           <div class="sum-num" id="stat-cancel">—</div>
-          <div class="sum-lbl">Cancelamentos no Período</div>
+          <div class="sum-lbl" id="lbl-stat-cancel">Cancelamentos no Período</div>
         </div>
       </div>
       <div class="sum-card">
         <div class="sum-ico green">🔄</div>
         <div>
           <div class="sum-num" id="stat-reat">—</div>
-          <div class="sum-lbl">Reativações no Período</div>
+          <div class="sum-lbl" id="lbl-stat-reat">Reativações no Período</div>
         </div>
       </div>
       <div class="sum-card">
@@ -100,7 +99,7 @@
       </div>
     </div>
 
-    <!-- GRÁFICOS: cancelamentos por dia + operadores horizontal bar -->
+    <!-- GRÁFICOS -->
     <div class="two-col">
       <div class="chart-card" style="margin-bottom:0">
         <div class="chart-head">
@@ -127,7 +126,7 @@
       </div>
     </div>
 
-    <!-- OBSERVAÇÕES / MOTIVOS -->
+    <!-- MOTIVOS / OBSERVAÇÕES -->
     <div class="chart-card">
       <div class="chart-head">
         <div>
@@ -149,7 +148,6 @@
         </div>
       </div>
 
-      <!-- Badge de filtro ativo -->
       <div class="filter-badge" id="chart-filter-badge">
         <span>Filtrado por: <strong class="cf-label" id="cf-label-text"></strong></span>
         <button class="cf-clear" id="cf-clear">✕ Limpar</button>
@@ -175,11 +173,12 @@
               <th>Movimento</th>
               <th class="sortable" data-col="nome_usuario_alteracao">Operador <span class="si">↕</span></th>
               <th>Campo</th>
+              <th>Motivo Informado</th>
               <th>SGA</th>
             </tr>
           </thead>
           <tbody id="tb-alt">
-            <tr><td colspan="7"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
+            <tr><td colspan="8"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
           </tbody>
         </table>
       </div>

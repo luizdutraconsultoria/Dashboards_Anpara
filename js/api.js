@@ -1,4 +1,4 @@
-const API_BASE = 'https://script.google.com/macros/s/AKfycbyx3BlhOM2eIR2swdb_Y9lacBWyTOmFBG636qKRv902sUSTqJYztMSJvRAKEwcfFA5e/exec';
+const API_BASE = 'https://anpara-proxy.luizdutraconsultoria.workers.dev';
 
 const API = {
   async _get(acao) {
@@ -87,18 +87,42 @@ function getPeriodDates(period, customFrom, customTo) {
 
   if (period === 'today') {
     from.setHours(0, 0, 0, 0);
+  } else if (period === 'week') {
+    const day = from.getDay() || 7; // Mon=1 … Sun=7
+    from.setDate(from.getDate() - (day - 1));
+    from.setHours(0, 0, 0, 0);
+  } else if (period === 'month') {
+    from = new Date(from.getFullYear(), from.getMonth(), 1, 0, 0, 0, 0);
+  } else if (period === 'year') {
+    from = new Date(from.getFullYear(), 0, 1, 0, 0, 0, 0);
   } else if (period === 'custom') {
     return {
       from: customFrom ? new Date(customFrom + 'T00:00:00') : null,
       to:   customTo   ? new Date(customTo   + 'T23:59:59') : null,
     };
   } else {
+    // Fallback numérico legado
     const days = Number(period) || 7;
     from = new Date(to);
     from.setDate(from.getDate() - days + 1);
     from.setHours(0, 0, 0, 0);
   }
   return { from, to };
+}
+
+function getPeriodLabel(period, customFrom, customTo) {
+  const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const now = new Date();
+  if (period === 'today') return 'Hoje';
+  if (period === 'week')  return 'Esta Semana';
+  if (period === 'month') return `${months[now.getMonth()]}/${String(now.getFullYear()).slice(2)}`;
+  if (period === 'year')  return String(now.getFullYear());
+  if (period === 'custom') {
+    const f = customFrom ? new Date(customFrom + 'T00:00:00').toLocaleDateString('pt-BR') : '?';
+    const t = customTo   ? new Date(customTo   + 'T00:00:00').toLocaleDateString('pt-BR') : '?';
+    return `${f} − ${t}`;
+  }
+  return '';
 }
 
 function filterByDate(items, field, from, to) {
@@ -117,8 +141,14 @@ function filterByDate(items, field, from, to) {
 /* ——— GRANULARITY ——— */
 
 function getGranularity(period) {
-  if (period === 'today' || Number(period) <= 7) return 'day';
-  if (Number(period) <= 30) return 'week';
+  if (period === 'today') return 'day';
+  if (period === 'week')  return 'day';
+  if (period === 'month') return 'week';
+  if (period === 'year')  return 'month';
+  if (period === 'custom') return 'day';
+  const days = Number(period) || 7;
+  if (days <= 7)  return 'day';
+  if (days <= 30) return 'week';
   return 'month';
 }
 
@@ -178,21 +208,18 @@ function groupSnapshots(snaps, gran) {
     g.inativos += Number(s.Inativos || 0);
     g.count    += 1;
   });
-  // Average per bucket
-  const result = [...map.entries()].sort(([a],[b]) => a.localeCompare(b)).map(([, v]) => ({
+  return [...map.entries()].sort(([a],[b]) => a.localeCompare(b)).map(([, v]) => ({
     label:    v.label,
     ativos:   Math.round(v.ativos   / v.count),
     inativos: Math.round(v.inativos / v.count),
   }));
-  return result;
 }
 
-/* ——— FILTER INITIALIZER ——— */
+/* ——— FILTER STATE & INITIALIZER ——— */
 
-let _filterState = { period: '7', customFrom: '', customTo: '', regional: '', coop: '' };
+let _filterState = { period: 'month', customFrom: '', customTo: '', regional: '', coop: '', operadora: '' };
 
 function initFilters(onChange) {
-  // Period buttons
   document.querySelectorAll('.pb').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.pb').forEach(b => b.classList.remove('active'));
@@ -204,7 +231,6 @@ function initFilters(onChange) {
     });
   });
 
-  // Custom range apply
   document.getElementById('btn-apply')?.addEventListener('click', () => {
     _filterState.customFrom = document.getElementById('date-from')?.value || '';
     _filterState.customTo   = document.getElementById('date-to')?.value   || '';
@@ -212,15 +238,21 @@ function initFilters(onChange) {
     onChange(_filterState);
   });
 
-  // Regional select
   document.getElementById('sel-regional')?.addEventListener('change', e => {
     _filterState.regional = e.target.value;
+    _filterState.coop = '';
+    const selCoop = document.getElementById('sel-coop');
+    if (selCoop) selCoop.value = '';
     onChange(_filterState);
   });
 
-  // Coop select
   document.getElementById('sel-coop')?.addEventListener('change', e => {
     _filterState.coop = e.target.value;
+    onChange(_filterState);
+  });
+
+  document.getElementById('sel-operadora')?.addEventListener('change', e => {
+    _filterState.operadora = e.target.value;
     onChange(_filterState);
   });
 
@@ -229,6 +261,19 @@ function initFilters(onChange) {
 
 function getFilterState() {
   return _filterState;
+}
+
+function populateRegionals(items, field, curVal) {
+  const sel = document.getElementById('sel-regional');
+  if (!sel) return;
+  const vals = [...new Set(items.map(i => i[field]).filter(Boolean))].sort();
+  while (sel.options.length > 1) sel.remove(1);
+  vals.forEach(v => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = `Regional ${v}`;
+    sel.appendChild(o);
+  });
+  if (curVal) sel.value = curVal;
 }
 
 function populateDropdowns(items, regionalField, coopField, curRegional, curCoop) {
@@ -256,6 +301,18 @@ function populateDropdowns(items, regionalField, coopField, curRegional, curCoop
     });
     if (curCoop) selCoop.value = curCoop;
   }
+}
+
+function populateOperadoras(items, field) {
+  const sel = document.getElementById('sel-operadora');
+  if (!sel) return;
+  const ops = [...new Set(items.map(i => i[field]).filter(Boolean))].sort();
+  while (sel.options.length > 1) sel.remove(1);
+  ops.forEach(op => {
+    const o = document.createElement('option');
+    o.value = op; o.textContent = op;
+    sel.appendChild(o);
+  });
 }
 
 /* ——— SORT / PAGINATE ——— */

@@ -19,23 +19,13 @@ async function init() {
 function render(d) {
   setEl('ts', `Atualizado ${new Date(d.timestamp).toLocaleString('pt-BR')}`);
 
-  /* Meta de recuperação */
-  const meta  = d.meta_recuperacao || {};
-  const total = meta.total_em_risco || 0;
-  const rec   = meta.recuperados    || 0;
-  const pct   = total > 0 ? Math.round((rec / total) * 100) : 0;
-  setEl('meta-txt', `${rec} de ${total} associados em risco recuperados este mês`);
-  setEl('meta-pct', pct + '%');
-  const fill = document.getElementById('meta-fill');
-  if (fill) fill.style.width = pct + '%';
+  /* Reativações via meta de recuperação (valor do período corrente da API) */
+  const meta = d.meta_recuperacao || {};
+  setEl('cnt-reat', fmtNum(meta.recuperados || 0));
 
-  /* Cards resumo */
-  setEl('cnt-inad',  fmtNum(d.total_inadimplentes));
-  setEl('cnt-canc',  fmtNum(d.total_cancelamentos_solicitados));
-  setEl('cnt-zona',  fmtNum(d.total_zona_churn));
-
-  /* Popula dropdowns com dados dos inadimplentes */
-  populateDropdowns(d.inadimplentes || [], 'codigo_regional', 'codigo_cooperativa', '', '');
+  /* Popula dropdowns */
+  populateRegionals(d.inadimplentes || [], 'codigo_regional', '');
+  populateOperadoras(d.cancelamentos_solicitados || [], 'usuario_alteracao');
 
   rerender();
 }
@@ -44,23 +34,55 @@ function rerender() {
   if (!_data) return;
   const fs = getFilterState();
 
-  /* Inadimplentes: filtra por regional/coop (sem filtro de período — dados de estado atual) */
+  /* Inadimplentes — filtros de regional/coop (sem data, são estado atual) */
   let inadList = _data.inadimplentes || [];
-  if (fs.regional) inadList = inadList.filter(a => a.codigo_regional === fs.regional);
+  if (fs.regional) inadList = inadList.filter(a => a.codigo_regional    === fs.regional);
   if (fs.coop)     inadList = inadList.filter(a => a.codigo_cooperativa === fs.coop);
 
-  /* Cascata: repopula dropdown de coop conforme regional selecionada */
+  /* Cascata: repopula coop conforme regional */
   repopulateCoops(_data.inadimplentes || [], fs);
 
-  /* Cancelamentos: filtra só por período (não tem regional/coop nos dados) */
+  /* Cancelamentos — filtros de período + operadora */
   let cancList = _data.cancelamentos_solicitados || [];
-  if (fs.period) {
-    const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
-    cancList = filterByDate(cancList, 'data_alteracao', from, to);
-  }
+  const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
+  if (from || to) cancList = filterByDate(cancList, 'data_alteracao', from, to);
+  if (fs.operadora) cancList = cancList.filter(c => (c.usuario_alteracao || '') === fs.operadora);
+
+  /* Atualiza cards resumo */
+  setEl('cnt-risco', fmtNum(inadList.length + cancList.length));
+  setEl('cnt-inad',  fmtNum(inadList.length));
+  setEl('cnt-canc',  fmtNum(cancList.length));
+
+  /* Label de reativações com período dinâmico */
+  const lbl = getPeriodLabel(fs.period, fs.customFrom, fs.customTo);
+  setEl('lbl-reat', `Reativações${lbl ? ` — ${lbl}` : ' no período'}`);
+
+  /* Barra de meta com texto dinâmico */
+  const meta  = _data.meta_recuperacao || {};
+  const total = meta.total_em_risco || 0;
+  const rec   = meta.recuperados    || 0;
+  const pct   = total > 0 ? Math.round((rec / total) * 100) : 0;
+  const metaLbl = _metaLabelIn(fs);
+  setEl('meta-txt', `${rec} de ${total} associados em risco recuperados ${metaLbl}`);
+  setEl('meta-pct', pct + '%');
+  const fill = document.getElementById('meta-fill');
+  if (fill) fill.style.width = pct + '%';
 
   renderInadimplentes(inadList);
   renderCancelamentos(cancList);
+}
+
+function _metaLabelIn(fs) {
+  const months = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  const p = fs.period;
+  if (p === 'today') return 'hoje';
+  if (p === 'week')  return 'esta semana';
+  if (p === 'month') {
+    const now = new Date();
+    return `em ${months[now.getMonth()]}/${String(now.getFullYear()).slice(2)}`;
+  }
+  if (p === 'year') return `em ${new Date().getFullYear()}`;
+  return 'no período selecionado';
 }
 
 function repopulateCoops(inadAll, fs) {
@@ -73,8 +95,7 @@ function repopulateCoops(inadAll, fs) {
   while (selCoop.options.length > 1) selCoop.remove(1);
   coops.forEach(c => {
     const o = document.createElement('option');
-    o.value = c;
-    o.textContent = `Cooperativa ${c}`;
+    o.value = c; o.textContent = `Cooperativa ${c}`;
     selCoop.appendChild(o);
   });
   if (fs.coop && coops.includes(fs.coop)) {
@@ -120,7 +141,7 @@ function renderInadimplentes(lista) {
   setEl('tab-cnt-inad', total);
   setEl('rc-inad', `${fmtNum(total)} registro${total !== 1 ? 's' : ''}`);
 
-  const page = paginateData(rows, _stateInad.page, PP);
+  const page  = paginateData(rows, _stateInad.page, PP);
   const tbody = document.getElementById('tb-inad');
   if (!tbody) return;
 
@@ -130,11 +151,11 @@ function renderInadimplentes(lista) {
     return;
   }
 
-  tbody.innerHTML = rows.length === 0 ? '' : page.map(a => {
+  tbody.innerHTML = page.map(a => {
     const primeiroNome = (a.nome || '').split(' ')[0];
     const msgInad = `Olá ${primeiroNome}, tudo bem? Identificamos que sua proteção veicular está pendente desde o dia ${a.dia_vencimento}. Podemos ajudar a regularizar? 🚗🛡️`;
-    const href   = waLink(a.telefone_celular, a.nome, msgInad);
-    const hasTel = !!cleanPhone(a.telefone_celular);
+    const href    = waLink(a.telefone_celular, a.nome, msgInad);
+    const hasTel  = !!cleanPhone(a.telefone_celular);
 
     return `<tr>
       <td>
@@ -186,12 +207,13 @@ function renderCancelamentos(lista) {
   if (!tbody) return;
 
   if (page.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-ico">✅</div><div class="empty-txt">Nenhum cancelamento encontrado no período</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty"><div class="empty-ico">✅</div><div class="empty-txt">Nenhum cancelamento encontrado no período</div></div></td></tr>`;
     renderPagination(document.getElementById('pag-canc'), 1, 1, 0, () => {});
     return;
   }
 
   tbody.innerHTML = page.map(a => {
+    const motivo = (a.observacao || '').trim();
     return `<tr>
       <td>
         <div class="td-name">${a.nome || '—'}</div>
@@ -200,6 +222,7 @@ function renderCancelamentos(lista) {
       <td class="td-mono">${fmtDate(a.data_alteracao)}</td>
       <td>${a.usuario_alteracao || '—'}</td>
       <td><span class="badge b-red">Ativo → Inativo</span></td>
+      <td class="td-muted" style="font-size:11px">${motivo || '—'}</td>
       <td>${sgaBtn(a.codigo_associado)}</td>
       <td><span class="td-muted" style="font-size:11px">Tel. não disponível</span></td>
     </tr>`;
@@ -217,7 +240,7 @@ function renderCancelamentos(lista) {
 function exportInad() {
   const fs = getFilterState();
   let rows = _data?.inadimplentes || [];
-  if (fs.regional) rows = rows.filter(a => a.codigo_regional === fs.regional);
+  if (fs.regional) rows = rows.filter(a => a.codigo_regional    === fs.regional);
   if (fs.coop)     rows = rows.filter(a => a.codigo_cooperativa === fs.coop);
   const search = _stateInad.search.toLowerCase();
   if (search) rows = rows.filter(a =>
@@ -236,12 +259,9 @@ function exportInad() {
 function exportCanc() {
   const fs = getFilterState();
   let rows = _data?.cancelamentos_solicitados || [];
-  if (fs.regional) rows = rows.filter(a => a.codigo_regional === fs.regional);
-  if (fs.coop)     rows = rows.filter(a => a.codigo_cooperativa === fs.coop);
-  if (fs.period) {
-    const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
-    rows = filterByDate(rows, 'data_alteracao', from, to);
-  }
+  const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
+  if (from || to) rows = filterByDate(rows, 'data_alteracao', from, to);
+  if (fs.operadora) rows = rows.filter(c => (c.usuario_alteracao || '') === fs.operadora);
   const search = _stateCanc.search.toLowerCase();
   if (search) rows = rows.filter(a =>
     (a.nome||'').toLowerCase().includes(search) ||
@@ -250,8 +270,8 @@ function exportCanc() {
   rows = sortArr(rows, _stateCanc.sort.col, _stateCanc.sort.dir);
 
   exportCSV(
-    ['Nome','CPF','Data','Operador','Codigo Associado'],
-    rows.map(a => [a.nome, a.cpf, a.data_alteracao, a.usuario_alteracao, a.codigo_associado]),
+    ['Nome','CPF','Data','Operador','Motivo','Codigo Associado'],
+    rows.map(a => [a.nome, a.cpf, a.data_alteracao, a.usuario_alteracao, a.observacao || '', a.codigo_associado]),
     'cancelamentos.csv'
   );
 }
@@ -289,14 +309,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /* Search — inadimplentes */
+  /* Search */
   document.getElementById('search-inad')?.addEventListener('input', e => {
     _stateInad.search = e.target.value;
     _stateInad.page   = 1;
     if (_data) rerender();
   });
 
-  /* Search — cancelamentos */
   document.getElementById('search-canc')?.addEventListener('input', e => {
     _stateCanc.search = e.target.value;
     _stateCanc.page   = 1;

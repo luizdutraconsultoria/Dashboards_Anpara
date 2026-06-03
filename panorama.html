@@ -48,17 +48,16 @@
   <div class="topbar">
     <div class="period-btns">
       <button class="pb" data-d="today">Hoje</button>
-      <button class="pb active" data-d="7">7 dias</button>
-      <button class="pb" data-d="15">15 dias</button>
-      <button class="pb" data-d="30">30 dias</button>
-      <button class="pb" data-d="60">60 dias</button>
-      <button class="pb" data-d="90">90 dias</button>
+      <button class="pb" data-d="week">Esta Semana</button>
+      <button class="pb active" data-d="month">Este Mês</button>
+      <button class="pb" data-d="year">Este Ano</button>
       <button class="pb" data-d="custom">Personalizado</button>
     </div>
     <div class="topbar-div"></div>
     <div class="topbar-sels">
       <select class="tbsel" id="sel-regional"><option value="">Todas as Regionais</option></select>
       <select class="tbsel" id="sel-coop"><option value="">Todas as Cooperativas</option></select>
+      <select class="tbsel" id="sel-operadora"><option value="">Todas as Operadoras</option></select>
     </div>
     <div class="custom-range" id="custom-range" style="display:none">
       <input type="date" class="tbdate" id="date-from">
@@ -75,13 +74,21 @@
       <span>⚠️</span><span class="error-msg">Erro ao carregar dados.</span>
     </div>
 
-    <!-- KPI CARDS -->
-    <div class="kpi-grid">
+    <!-- KPI CARDS — 6 métricas em ordem de importância -->
+    <div class="kpi-grid kpi-grid-6">
+
       <div class="kpi-card c-purple">
         <div class="kpi-icon">👥</div>
         <div class="kpi-label">Base Ativa</div>
         <div class="kpi-val acc" id="kpi-ativos">—</div>
         <div class="kpi-sub" id="kpi-ativos-sub">associados ativos</div>
+      </div>
+
+      <div class="kpi-card c-yellow">
+        <div class="kpi-icon">⚖️</div>
+        <div class="kpi-label" id="lbl-saldo">Saldo Líquido</div>
+        <div class="kpi-val" id="kpi-saldo">—</div>
+        <div class="kpi-sub">reativações − cancelamentos</div>
       </div>
 
       <div class="kpi-card c-green">
@@ -93,75 +100,37 @@
 
       <div class="kpi-card c-red">
         <div class="kpi-icon">❌</div>
-        <div class="kpi-label">Cancelamentos (7d)</div>
+        <div class="kpi-label" id="lbl-cancel">Cancelamentos</div>
         <div class="kpi-val neg" id="kpi-cancel">—</div>
-        <div class="kpi-sub">últimos 7 dias</div>
+        <div class="kpi-sub" id="sub-cancel">no período selecionado</div>
       </div>
 
-      <div class="kpi-card c-yellow">
-        <div class="kpi-icon">⚖️</div>
-        <div class="kpi-label">Saldo Líquido (7d)</div>
-        <div class="kpi-val" id="kpi-saldo">—</div>
-        <div class="kpi-sub">novos − cancelamentos</div>
+      <div class="kpi-card c-teal">
+        <div class="kpi-icon">🔄</div>
+        <div class="kpi-label" id="lbl-reat">Reativações</div>
+        <div class="kpi-val teal" id="kpi-reat">—</div>
+        <div class="kpi-sub" id="sub-reat">no período selecionado</div>
       </div>
+
+      <div class="kpi-card c-red">
+        <div class="kpi-icon">📉</div>
+        <div class="kpi-label">Taxa de Churn Estimada</div>
+        <div class="kpi-val neg" id="kpi-churn">—</div>
+        <div class="kpi-sub">% da base ativa em risco</div>
+      </div>
+
     </div>
 
-    <!-- CHART + CHURN RATE -->
-    <div class="two-col">
-      <!-- Gráfico evolução -->
-      <div class="chart-card" style="margin-bottom:0">
-        <div class="chart-head">
-          <div>
-            <div class="chart-title">Evolução da Base</div>
-            <div class="chart-sub" id="chart-gran-lbl">Ativos e inativos ao longo do tempo</div>
-          </div>
-        </div>
-        <div class="chart-box">
-          <canvas id="chart-evolucao"></canvas>
-        </div>
-      </div>
-
-      <!-- Coluna direita -->
-      <div style="display:flex;flex-direction:column;gap:14px">
-        <!-- Churn rate -->
-        <div class="churn-gauge" style="flex:1">
-          <div class="churn-val" id="churn-val">—</div>
-          <div class="churn-lbl">Taxa de Churn Estimada</div>
-          <div class="churn-sub">% da base ativa em risco</div>
-        </div>
-
-        <!-- Reativações -->
-        <div class="kpi-card c-teal" style="margin-bottom:0">
-          <div class="kpi-icon">🔄</div>
-          <div class="kpi-label">Reativações (7d)</div>
-          <div class="kpi-val teal" id="kpi-reat">—</div>
-          <div class="kpi-sub">associados reativados</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- STATS RESUMO -->
-    <div class="sum-grid">
-      <div class="sum-card">
-        <div class="sum-ico purple">📊</div>
+    <!-- GRÁFICO — evolução da base -->
+    <div class="chart-card">
+      <div class="chart-head">
         <div>
-          <div class="sum-num" id="stat-total">—</div>
-          <div class="sum-lbl">Base Total (ativos + inativos)</div>
+          <div class="chart-title">Evolução da Base</div>
+          <div class="chart-sub" id="chart-gran-lbl">Ativos e inativos ao longo do tempo</div>
         </div>
       </div>
-      <div class="sum-card">
-        <div class="sum-ico red">📉</div>
-        <div>
-          <div class="sum-num" id="stat-inat">—</div>
-          <div class="sum-lbl">Total Inativos</div>
-        </div>
-      </div>
-      <div class="sum-card">
-        <div class="sum-ico yellow">⚡</div>
-        <div>
-          <div class="sum-num" id="stat-saldo">—</div>
-          <div class="sum-lbl">Saldo Líquido 7 dias</div>
-        </div>
+      <div class="chart-box">
+        <canvas id="chart-evolucao"></canvas>
       </div>
     </div>
 

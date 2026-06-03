@@ -724,10 +724,22 @@ th.sortable:hover { color: var(--text); }
 .empty-ico { font-size: 32px; opacity: 0.35; margin-bottom: 10px; }
 .empty-txt { font-size: 13px; }
 
+/* ——— KPI GRID 6 (panorama — 3 colunas × 2 linhas) ——— */
+.kpi-grid-6 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* ——— SUM GRID 4 (zona-churn — 4 cards) ——— */
+.sum-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 /* ——— RESPONSIVE ——— */
 @media (max-width: 900px) {
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .two-col  { grid-template-columns: 1fr; }
+  .kpi-grid   { grid-template-columns: repeat(2, 1fr); }
+  .kpi-grid-6 { grid-template-columns: repeat(2, 1fr); }
+  .sum-grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .two-col    { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
