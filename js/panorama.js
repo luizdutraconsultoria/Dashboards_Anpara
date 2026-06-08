@@ -197,10 +197,13 @@ function renderChart(grouped) {
   });
 }
 
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
+
 document.addEventListener('DOMContentLoaded', () => {
   initFilters(() => {
     if (_panorama) render();
   });
   init();
   document.getElementById('btn-refresh')?.addEventListener('click', init);
+  setInterval(init, REFRESH_INTERVAL_MS);
 });

@@ -335,4 +335,5 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-refresh')?.addEventListener('click', init);
 
   init();
+  setInterval(init, 5 * 60 * 1000);
 });

@@ -84,7 +84,7 @@ function _populateRegionals(fs) {
   while (sel.options.length > 1) sel.remove(1);
   vals.forEach(v => {
     const o = document.createElement('option');
-    o.value = v; o.textContent = `Regional ${v}`;
+    o.value = v; o.textContent = regionalLabel(v);
     sel.appendChild(o);
   });
   if (fs.regional) sel.value = fs.regional;
@@ -467,4 +467,5 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-refresh')?.addEventListener('click', init);
 
   init();
+  setInterval(init, 5 * 60 * 1000);
 });

@@ -2,7 +2,7 @@ const API_BASE = 'https://anpara-proxy.luizdutraconsultoria.workers.dev';
 
 const API = {
   async _get(acao) {
-    const res = await fetch(`${API_BASE}?acao=${acao}`);
+    const res = await fetch(`${API_BASE}?acao=${acao}&_=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) throw new Error(`Erro HTTP ${res.status} ao buscar "${acao}"`);
     return res.json();
   },
@@ -215,6 +215,13 @@ function groupSnapshots(snaps, gran) {
   }));
 }
 
+/* ——— REGIONAL NAMES ——— */
+
+const REGIONAL_NAMES = { '1': 'Ipatinga', '2': 'Betim' };
+function regionalLabel(code) {
+  return REGIONAL_NAMES[String(code)] || `Regional ${code}`;
+}
+
 /* ——— FILTER STATE & INITIALIZER ——— */
 
 let _filterState = { period: 'month', customFrom: '', customTo: '', regional: '', coop: '', operadora: '' };
@@ -270,7 +277,7 @@ function populateRegionals(items, field, curVal) {
   while (sel.options.length > 1) sel.remove(1);
   vals.forEach(v => {
     const o = document.createElement('option');
-    o.value = v; o.textContent = `Regional ${v}`;
+    o.value = v; o.textContent = regionalLabel(v);
     sel.appendChild(o);
   });
   if (curVal) sel.value = curVal;
@@ -285,7 +292,7 @@ function populateDropdowns(items, regionalField, coopField, curRegional, curCoop
     while (selReg.options.length > 1) selReg.remove(1);
     regs.forEach(r => {
       const o = document.createElement('option');
-      o.value = r; o.textContent = `Regional ${r}`;
+      o.value = r; o.textContent = regionalLabel(r);
       selReg.appendChild(o);
     });
     if (curRegional) selReg.value = curRegional;
