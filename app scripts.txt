@@ -1418,7 +1418,7 @@ function getAnaliseChurn() {
     var nome          = row[1] || "";
     var dataCancelStr = row[3] ? String(row[3]).substring(0, 10) : "";
     var diasCasa      = parseInt(row[5]) || 0;
-    var mesCancelStr  = row[6] ? String(row[6]).substring(0, 7) : "";
+    var mesCancelStr  = dataCancelStr ? dataCancelStr.substring(0, 7) : "";
     var codRegional   = String(row[7] || "").trim();
     var operadora     = String(row[9] || "").trim();
 
