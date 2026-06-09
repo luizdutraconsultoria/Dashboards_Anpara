@@ -2,9 +2,15 @@ const API_BASE = 'https://anpara-proxy.luizdutraconsultoria.workers.dev';
 
 const API = {
   async _get(acao) {
-    const res = await fetch(`${API_BASE}?acao=${acao}&_=${Date.now()}`, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`Erro HTTP ${res.status} ao buscar "${acao}"`);
-    return res.json();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    try {
+      const res = await fetch(`${API_BASE}?acao=${acao}&_=${Date.now()}`, { cache: 'no-store', signal: ctrl.signal });
+      if (!res.ok) throw new Error(`Erro HTTP ${res.status} ao buscar "${acao}"`);
+      return res.json();
+    } finally {
+      clearTimeout(timer);
+    }
   },
   panorama()        { return this._get('panorama'); },
   zonaChurn()       { return this._get('zona_churn'); },
