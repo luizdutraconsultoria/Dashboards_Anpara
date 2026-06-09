@@ -171,25 +171,40 @@ function renderEntradasChart() {
   if (!ctx) return;
   if (_cEntradas) _cEntradas.destroy();
 
-  const pm = _hist?.por_mes;
-  if (!pm || pm.length === 0) {
-    ctx.closest('.chart-area').innerHTML = '<div class="empty">Sem dados de histórico mensal</div>';
+  if (!_alt || _alt.length === 0) {
+    ctx.closest('.chart-area').innerHTML = '<div class="empty">Sem dados de alterações</div>';
     return;
   }
 
-  const labels = pm.map(m => {
-    const [y, mo] = m.mes.split('-');
-    return monthShort(Number(mo)) + '/' + String(y).slice(2);
-  });
+  const fs = _fs.p1;
+  let rows = _alt;
+
+  const { from, to } = getPeriodDates(fs.period, fs.from, fs.to);
+  if (from || to)   rows = filterByDate(rows, 'data_alteracao', from, to);
+  if (fs.regional)  rows = rows.filter(a => String(a.codigo_regional) === fs.regional);
+
+  const gran = fs.period === 'all' ? 'month' : getGranularity(fs.period);
+
+  const gCancel = groupItems(rows.filter(a => String(a.valor_posterior) === '2' && String(a.valor_anterior) === '1'), 'data_alteracao', gran);
+  const gReat   = groupItems(rows.filter(a => String(a.valor_anterior)  === '2' && String(a.valor_posterior) === '1'), 'data_alteracao', gran);
+  const gNovos  = groupItems(rows.filter(a => !String(a.valor_anterior || '').trim() && String(a.valor_posterior) === '1'), 'data_alteracao', gran);
+
+  const labelMap = {};
+  [...gCancel, ...gReat, ...gNovos].forEach(g => { labelMap[g.key] = g.label; });
+  const keys   = Object.keys(labelMap).sort();
+  const labels = keys.map(k => labelMap[k]);
+
+  const toMap = g => Object.fromEntries(g.map(x => [x.key, x.items.length]));
+  const mC = toMap(gCancel), mR = toMap(gReat), mN = toMap(gNovos);
 
   _cEntradas = new Chart(ctx, {
     type: 'bar',
     data: {
       labels,
       datasets: [
-        { label: 'Novos',         data: pm.map(m => m.novos),          backgroundColor: C.green + 'AA', borderColor: C.green, borderWidth: 1, borderRadius: 3 },
-        { label: 'Reativações',   data: pm.map(m => m.reativacoes),    backgroundColor: C.purple + 'AA', borderColor: C.purple, borderWidth: 1, borderRadius: 3 },
-        { label: 'Cancelamentos', data: pm.map(m => m.cancelamentos),  backgroundColor: C.red + 'AA', borderColor: C.red, borderWidth: 1, borderRadius: 3 },
+        { label: 'Novos',         data: keys.map(k => mN[k] || 0), backgroundColor: C.green  + 'AA', borderColor: C.green,  borderWidth: 1, borderRadius: 3 },
+        { label: 'Reativações',   data: keys.map(k => mR[k] || 0), backgroundColor: C.purple + 'AA', borderColor: C.purple, borderWidth: 1, borderRadius: 3 },
+        { label: 'Cancelamentos', data: keys.map(k => mC[k] || 0), backgroundColor: C.red    + 'AA', borderColor: C.red,    borderWidth: 1, borderRadius: 3 },
       ],
     },
     options: { ...CHART_OPTS, interaction: { mode: 'index', intersect: false } },
