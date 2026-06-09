@@ -606,6 +606,12 @@ function doGet(e) {
       case "analise_cancelamentos":
         resultado = getAnaliseCancelamentos();
         break;
+      case "historico_mensal":
+        resultado = getHistoricoMensal();
+        break;
+      case "analise_churn":
+        resultado = getAnaliseChurn();
+        break;
       default:
         resultado = { erro: "Acao nao reconhecida: " + acao };
     }
@@ -708,30 +714,40 @@ function getZonaChurn() {
     resultado.associados.forEach(function(assoc) {
       var diaVenc = parseInt(assoc.dia_vencimento) || 10;
 
-      // Calcula a data de vencimento mais recente
-      var vencMesAtual   = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc);
+      var vencMesAtual    = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc);
       var vencMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, diaVenc);
-
-      // Se o vencimento deste mês ainda não chegou, usa o do mês anterior
       var dataVenc = vencMesAtual <= hoje ? vencMesAtual : vencMesAnterior;
 
       var diasAtraso    = Math.floor((hoje - dataVenc) / (1000 * 60 * 60 * 24));
       var diasParaChurn = 5 - diasAtraso;
 
+      // Calcula tempo de associacao
+      var dataAdesao = assoc.data_contrato_associado && assoc.data_contrato_associado !== "0000-00-00"
+        ? assoc.data_contrato_associado
+        : (assoc.data_cadastro_associado || "");
+      var diasAssociado = "";
+      if (dataAdesao) {
+        try {
+          var dtAd = new Date(dataAdesao);
+          if (!isNaN(dtAd)) diasAssociado = Math.floor((hoje - dtAd) / (1000 * 60 * 60 * 24));
+        } catch(e) {}
+      }
+
       if (diasAtraso > 0 && diasAtraso <= 15) {
         inadimplentes.push({
-          codigo_associado:  assoc.codigo_associado,
-          nome:              assoc.nome,
-          cpf:               assoc.cpf,
-          telefone_celular:  (assoc.ddd_celular || "") + (assoc.telefone_celular || ""),
-          email:             assoc.email || "",
-          dia_vencimento:    diaVenc,
-          dias_atraso:       diasAtraso,
-          dias_para_churn:   Math.max(0, diasParaChurn),
-          status_churn:      diasParaChurn <= 0 ? "CHURN_IMINENTE" : "EM_RISCO",
-          codigo_regional:   assoc.codigo_regional || "",
+          codigo_associado:   assoc.codigo_associado,
+          nome:               assoc.nome,
+          cpf:                assoc.cpf,
+          telefone_celular:   (assoc.ddd_celular || "") + (assoc.telefone_celular || ""),
+          email:              assoc.email || "",
+          dia_vencimento:     diaVenc,
+          dias_atraso:        diasAtraso,
+          dias_para_churn:    Math.max(0, diasParaChurn),
+          status_churn:       diasParaChurn <= 0 ? "CHURN_IMINENTE" : "EM_RISCO",
+          codigo_regional:    assoc.codigo_regional || "",
           codigo_cooperativa: assoc.codigo_cooperativa || "",
-          data_contrato:     assoc.data_contrato_associado || ""
+          data_adesao:        dataAdesao,
+          dias_associado:     diasAssociado
         });
       }
     });
@@ -751,6 +767,7 @@ function getZonaChurn() {
     "campos":       ["codigo_situacao"]
   });
 
+  var reativacoesRecentes = [];
   if (Array.isArray(alteracoesAssoc)) {
     alteracoesAssoc.forEach(function(a) {
       if (String(a.valor_posterior) === "2" && String(a.valor_anterior) === "1") {
@@ -764,19 +781,30 @@ function getZonaChurn() {
           status_novo:       SITUACOES_MAP[String(a.valor_posterior)] || a.valor_posterior
         });
       }
+      if (String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1") {
+        reativacoesRecentes.push({
+          codigo_associado:  a.codigo_associado,
+          nome:              a.nome_associado || "",
+          cpf:               a.cpf_associado  || "",
+          data_alteracao:    a.data_alteracao,
+          usuario_alteracao: a.nome_usuario_alteracao || ""
+        });
+      }
     });
   }
 
   inadimplentes.sort(function(a, b) { return a.dias_para_churn - b.dias_para_churn; });
 
   return {
-    timestamp:                      new Date().toISOString(),
-    dia_referencia:                 diaHoje,
-    total_inadimplentes:            inadimplentes.length,
+    timestamp:                       new Date().toISOString(),
+    dia_referencia:                  diaHoje,
+    total_inadimplentes:             inadimplentes.length,
     total_cancelamentos_solicitados: cancelamentosSolicitados.length,
-    total_zona_churn:               inadimplentes.length + cancelamentosSolicitados.length,
-    inadimplentes:                  inadimplentes,
-    cancelamentos_solicitados:      cancelamentosSolicitados,
+    total_reativacoes_recentes:      reativacoesRecentes.length,
+    total_zona_churn:                inadimplentes.length + cancelamentosSolicitados.length,
+    inadimplentes:                   inadimplentes,
+    cancelamentos_solicitados:       cancelamentosSolicitados,
+    reativacoes_recentes:            reativacoesRecentes,
     meta_recuperacao: {
       total_em_risco: inadimplentes.length + cancelamentosSolicitados.length,
       recuperados:    0,
@@ -1086,17 +1114,17 @@ function reconstruirHistoricoCancelamentos() {
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName("Historico Cancelamentos") || ss.insertSheet("Historico Cancelamentos");
 
-  // Limpa e recria cabeçalho (evita duplicatas de execuções anteriores)
   aba.clear();
-  aba.getRange(1, 1, 1, 7).setValues([[
+  aba.getRange(1, 1, 1, 10).setValues([[
     "codigo_associado", "nome", "cpf",
-    "data_cancelamento", "data_contrato", "dias_ate_cancelamento", "mes_cancelamento"
+    "data_cancelamento", "data_contrato", "dias_ate_cancelamento", "mes_cancelamento",
+    "codigo_regional", "codigo_cooperativa", "operadora"
   ]]);
-  aba.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
+  aba.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
   aba.setFrozenRows(1);
 
-  // Carrega TODOS os inativos para obter data de adesão
-  var contratos = {};
+  // Carrega TODOS os inativos para obter data de adesão, regional e cooperativa
+  var contratos = {};  // cod -> {data, regional, coop}
   var pagina = 0;
   var totalRegistros = 1;
   while (pagina < totalRegistros) {
@@ -1114,7 +1142,11 @@ function reconstruirHistoricoCancelamentos() {
       } else if (a.data_cadastro_associado && a.data_cadastro_associado !== "0000-00-00") {
         dc = a.data_cadastro_associado;
       }
-      if (dc) contratos[String(a.codigo_associado)] = dc;
+      contratos[String(a.codigo_associado)] = {
+        data:     dc,
+        regional: a.codigo_regional     || "",
+        coop:     a.codigo_cooperativa  || ""
+      };
     });
     Logger.log("Inativos offset " + pagina + "/" + totalRegistros + " — dict=" + Object.keys(contratos).length);
     pagina += 1000;
@@ -1143,10 +1175,11 @@ function reconstruirHistoricoCancelamentos() {
       alteracoes.forEach(function(a) {
         if (String(a.valor_posterior) !== "2" || String(a.valor_anterior) !== "1") return;
 
-        var cod          = String(a.codigo_associado);
-        var dataContrato = contratos[cod] || "";
-        var diasAte      = "";
-        var mesCancel    = "";
+        var cod      = String(a.codigo_associado);
+        var info     = contratos[cod] || {};
+        var dataContrato = info.data || "";
+        var diasAte  = "";
+        var mesCancel = "";
 
         var dtCancel = new Date(a.data_alteracao);
         if (!isNaN(dtCancel)) {
@@ -1162,12 +1195,15 @@ function reconstruirHistoricoCancelamentos() {
 
         novasLinhas.push([
           a.codigo_associado,
-          a.nome_associado   || "",
-          a.cpf_associado    || "",
+          a.nome_associado         || "",
+          a.cpf_associado          || "",
           a.data_alteracao,
           dataContrato,
           diasAte,
-          mesCancel
+          mesCancel,
+          info.regional            || "",
+          info.coop                || "",
+          a.nome_usuario_alteracao || ""
         ]);
       });
     }
@@ -1178,7 +1214,7 @@ function reconstruirHistoricoCancelamentos() {
   }
 
   if (novasLinhas.length > 0) {
-    aba.getRange(2, 1, novasLinhas.length, 7).setValues(novasLinhas);
+    aba.getRange(2, 1, novasLinhas.length, 10).setValues(novasLinhas);
   }
 
   SpreadsheetApp.getUi().alert(
@@ -1287,4 +1323,161 @@ function analisarCancelamentos60e90() {
     "Veja a aba 'Análise 60-90 dias'",
     SpreadsheetApp.getUi().ButtonSet.OK
   );
+}
+
+// ===================== HISTÓRICO MENSAL (12 meses) =====================
+function getHistoricoMensal() {
+  var hoje = new Date();
+  var porMes = [];
+
+  for (var i = 11; i >= 0; i--) {
+    var d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    var ano = d.getFullYear();
+    var mes = d.getMonth() + 1;
+    var mesStr = ano + "-" + (mes < 10 ? "0" + mes : mes);
+    var dataInicio = mesStr + "-01";
+    var ultimoDia = new Date(ano, mes, 0).getDate();
+    var dataFim = mesStr + "-" + (ultimoDia < 10 ? "0" + ultimoDia : ultimoDia);
+
+    var cancelamentos = 0;
+    var reativacoes = 0;
+    var novos = 0;
+
+    // Alterações: cancelamentos (1→2) e reativações (2→1)
+    var pagAlt = 0;
+    var totalAlt = 1;
+    while (pagAlt < totalAlt) {
+      var resAlt = chamarAPI("/listar/associadoalteracao", "post", {
+        "data_inicial": dataInicio,
+        "data_final":   dataFim,
+        "inicio_paginacao": pagAlt,
+        "quantidade_por_pagina": 1000
+      });
+      if (!resAlt || !resAlt.associados || resAlt.associados.length === 0) break;
+      totalAlt = parseInt(resAlt.total_associados) || 0;
+      resAlt.associados.forEach(function(a) {
+        var de = parseInt(a.codigo_situacao_anterior) || 0;
+        var para = parseInt(a.codigo_situacao_atual) || 0;
+        if (de === 1 && para === 2) cancelamentos++;
+        if (de === 2 && para === 1) reativacoes++;
+        if ((de === 0 || de === 3) && (para === 1 || para === 3)) novos++;
+      });
+      pagAlt += 1000;
+      if (pagAlt < totalAlt) Utilities.sleep(300);
+    }
+
+    porMes.push({
+      mes: mesStr,
+      cancelamentos: cancelamentos,
+      reativacoes: reativacoes,
+      novos: novos
+    });
+  }
+
+  // Base ativa atual
+  var resAtivos = chamarAPI("/listar/associado", "post", {
+    "codigo_situacao": 1,
+    "inicio_paginacao": 0,
+    "quantidade_por_pagina": 1
+  });
+  var baseAtivaAtual = resAtivos ? (parseInt(resAtivos.total_associados) || 0) : 0;
+
+  return {
+    por_mes: porMes,
+    base_ativa_atual: baseAtivaAtual
+  };
+}
+
+// ===================== ANÁLISE DE CHURN (planilha histórico) =====================
+function getAnaliseChurn() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName("Historico Cancelamentos");
+  if (!aba) {
+    return { erro: "Aba 'Historico Cancelamentos' não encontrada. Execute 'Reconstruir Histórico' primeiro." };
+  }
+
+  var dados = aba.getDataRange().getValues();
+  if (dados.length < 2) {
+    return { erro: "Sem dados na aba 'Historico Cancelamentos'." };
+  }
+
+  // Cabeçalho (10 colunas):
+  // codigo_associado, nome, cpf, data_cancelamento, data_contrato,
+  // dias_ate_cancelamento, mes_cancelamento, codigo_regional, codigo_cooperativa, operadora
+  var porMes = {};
+  var porRegional = {};
+  var porOperadora = {};
+  var distribuicaoTempoCasa = { "0-30": 0, "31-90": 0, "91-180": 0, "181-365": 0, "366-730": 0, "730+": 0 };
+  var detalhes = [];
+
+  var REGIONAL_NAMES = { "1": "Ipatinga", "2": "Betim" };
+
+  for (var i = 1; i < dados.length; i++) {
+    var row = dados[i];
+    var codAssociado  = row[0];
+    var nome          = row[1] || "";
+    var dataCancelStr = row[3] ? String(row[3]).substring(0, 10) : "";
+    var diasCasa      = parseInt(row[5]) || 0;
+    var mesCancelStr  = row[6] ? String(row[6]).substring(0, 7) : "";
+    var codRegional   = String(row[7] || "").trim();
+    var operadora     = String(row[9] || "").trim();
+
+    if (!mesCancelStr || mesCancelStr.length < 7) continue;
+
+    var nomeRegional = REGIONAL_NAMES[codRegional] || (codRegional ? "Regional " + codRegional : "Sem Regional");
+    var nomeOp = operadora || "Sem Operadora";
+
+    if (!porMes[mesCancelStr]) porMes[mesCancelStr] = 0;
+    porMes[mesCancelStr]++;
+
+    if (!porRegional[nomeRegional]) porRegional[nomeRegional] = 0;
+    porRegional[nomeRegional]++;
+
+    if (!porOperadora[nomeOp]) porOperadora[nomeOp] = 0;
+    porOperadora[nomeOp]++;
+
+    if (diasCasa <= 30)       distribuicaoTempoCasa["0-30"]++;
+    else if (diasCasa <= 90)  distribuicaoTempoCasa["31-90"]++;
+    else if (diasCasa <= 180) distribuicaoTempoCasa["91-180"]++;
+    else if (diasCasa <= 365) distribuicaoTempoCasa["181-365"]++;
+    else if (diasCasa <= 730) distribuicaoTempoCasa["366-730"]++;
+    else                      distribuicaoTempoCasa["730+"]++;
+
+    if (detalhes.length < 500) {
+      detalhes.push({
+        codigo_associado: codAssociado,
+        nome: nome,
+        data_cancelamento: dataCancelStr,
+        dias_casa: diasCasa,
+        regional: nomeRegional,
+        operadora: nomeOp
+      });
+    }
+  }
+
+  var mesesOrdenados = Object.keys(porMes).sort();
+  var porMesArr = mesesOrdenados.map(function(m) {
+    return { mes: m, cancelamentos: porMes[m] };
+  });
+
+  var porRegionalArr = Object.keys(porRegional).map(function(r) {
+    return { regional: r, cancelamentos: porRegional[r] };
+  }).sort(function(a, b) { return b.cancelamentos - a.cancelamentos; });
+
+  var porOperadoraArr = Object.keys(porOperadora).map(function(op) {
+    return { operadora: op, cancelamentos: porOperadora[op] };
+  }).sort(function(a, b) { return b.cancelamentos - a.cancelamentos; });
+
+  var distribuicaoArr = Object.keys(distribuicaoTempoCasa).map(function(faixa) {
+    return { faixa: faixa, quantidade: distribuicaoTempoCasa[faixa] };
+  });
+
+  return {
+    total_cancelamentos: dados.length - 1,
+    por_mes: porMesArr,
+    por_regional: porRegionalArr,
+    por_operadora: porOperadoraArr,
+    distribuicao_tempo_casa: distribuicaoArr,
+    detalhes: detalhes
+  };
 }

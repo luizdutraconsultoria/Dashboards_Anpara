@@ -6,9 +6,11 @@ const API = {
     if (!res.ok) throw new Error(`Erro HTTP ${res.status} ao buscar "${acao}"`);
     return res.json();
   },
-  panorama()  { return this._get('panorama'); },
-  zonaChurn() { return this._get('zona_churn'); },
-  alteracoes(){ return this._get('alteracoes'); },
+  panorama()        { return this._get('panorama'); },
+  zonaChurn()       { return this._get('zona_churn'); },
+  alteracoes()      { return this._get('alteracoes'); },
+  historicoMensal() { return this._get('historico_mensal'); },
+  analiseChurn()    { return this._get('analise_churn'); },
 };
 
 /* ——— UTILITIES ——— */

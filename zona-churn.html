@@ -115,6 +115,7 @@
     <div class="tabs">
       <button class="tab-btn active" data-tab="inad">⚠️ Inadimplentes <span class="tab-cnt" id="tab-cnt-inad">0</span></button>
       <button class="tab-btn" data-tab="canc">🚪 Cancelamentos <span class="tab-cnt" id="tab-cnt-canc">0</span></button>
+      <button class="tab-btn" data-tab="reat">🔄 Reativações Recentes <span class="tab-cnt" id="tab-cnt-reat">0</span></button>
     </div>
 
     <!-- TAB: INADIMPLENTES -->
@@ -138,6 +139,7 @@
                 <th>Telefone</th>
                 <th class="sortable" data-col="dia_vencimento">Vencimento <span class="si">↕</span></th>
                 <th class="sortable" data-col="dias_atraso">Atraso <span class="si">↕</span></th>
+                <th class="sortable" data-col="dias_associado">Tempo na ANPARA <span class="si">↕</span></th>
                 <th class="sortable" data-col="dias_para_churn">Contagem Regressiva <span class="si">↕</span></th>
                 <th class="sortable" data-col="status_churn">Status <span class="si">↕</span></th>
                 <th>SGA</th>
@@ -145,11 +147,11 @@
               </tr>
             </thead>
             <tbody id="tb-inad">
-              <tr class="sk-row"><td><div class="sk-line" style="width:65%"></div><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:55%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:35%"></div></td><td><div class="sk-line" style="width:60%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
-              <tr class="sk-row"><td><div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
-              <tr class="sk-row"><td><div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:35%"></div></td><td><div class="sk-line" style="width:55%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:65%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
-              <tr class="sk-row"><td><div class="sk-line" style="width:75%"></div><div class="sk-line" style="width:42%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:35%"></div></td><td><div class="sk-line" style="width:60%"></div></td><td><div class="sk-line" style="width:48%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
-              <tr class="sk-row"><td><div class="sk-line" style="width:62%"></div><div class="sk-line" style="width:38%"></div></td><td><div class="sk-line" style="width:52%"></div></td><td><div class="sk-line" style="width:43%"></div></td><td><div class="sk-line" style="width:33%"></div></td><td><div class="sk-line" style="width:58%"></div></td><td><div class="sk-line" style="width:47%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+              <tr class="sk-row"><td><div class="sk-line" style="width:65%"></div><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:55%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:35%"></div></td><td><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:60%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+              <tr class="sk-row"><td><div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:35%"></div></td><td><div class="sk-line" style="width:55%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+              <tr class="sk-row"><td><div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:35%"></div></td><td><div class="sk-line" style="width:55%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:65%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+              <tr class="sk-row"><td><div class="sk-line" style="width:75%"></div><div class="sk-line" style="width:42%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:35%"></div></td><td><div class="sk-line" style="width:42%"></div></td><td><div class="sk-line" style="width:60%"></div></td><td><div class="sk-line" style="width:48%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+              <tr class="sk-row"><td><div class="sk-line" style="width:62%"></div><div class="sk-line" style="width:38%"></div></td><td><div class="sk-line" style="width:52%"></div></td><td><div class="sk-line" style="width:43%"></div></td><td><div class="sk-line" style="width:33%"></div></td><td><div class="sk-line" style="width:38%"></div></td><td><div class="sk-line" style="width:58%"></div></td><td><div class="sk-line" style="width:47%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
             </tbody>
           </table>
         </div>
@@ -193,6 +195,40 @@
           </table>
         </div>
         <div id="pag-canc"></div>
+      </div>
+    </div>
+
+    <!-- TAB: REATIVAÇÕES RECENTES -->
+    <div class="tab-panel hidden" id="panel-reat">
+      <div class="tbl-card">
+        <div class="tbl-head">
+          <div>
+            <div class="sec-title"><span class="dot green"></span> Reativações Recentes</div>
+            <div class="rec-count" id="rc-reat">—</div>
+          </div>
+        </div>
+        <div class="tbl-toolbar">
+          <input type="text" class="tbl-search" id="search-reat" placeholder="Buscar por nome ou CPF…">
+        </div>
+        <div class="tbl-scroll">
+          <table id="tbl-reat">
+            <thead>
+              <tr>
+                <th class="sortable" data-col="nome">Associado <span class="si">↕</span></th>
+                <th class="sortable" data-col="data_reativacao">Data Reativação <span class="si">↕</span></th>
+                <th class="sortable" data-col="dias_associado">Tempo na ANPARA <span class="si">↕</span></th>
+                <th>Telefone</th>
+                <th>SGA</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody id="tb-reat">
+              <tr class="sk-row"><td><div class="sk-line" style="width:65%"></div><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:35%"></div></td><td><div class="sk-line" style="width:55%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+              <tr class="sk-row"><td><div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:45%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:40%"></div></td><td><div class="sk-line" style="width:50%"></div></td><td><div class="sk-line" style="width:30%"></div></td><td><div class="sk-line" style="width:55%"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="pag-reat"></div>
       </div>
     </div>
 

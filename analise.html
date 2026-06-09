@@ -44,7 +44,7 @@
     </div>
   </header>
 
-  <!-- TOPBAR -->
+  <!-- TOPBAR (filtra apenas a tabela) -->
   <div class="topbar">
     <div class="period-btns">
       <button class="pb" data-d="today">Hoje</button>
@@ -56,7 +56,6 @@
     <div class="topbar-div"></div>
     <div class="topbar-sels">
       <select class="tbsel" id="sel-regional"><option value="">Todas as Regionais</option></select>
-      <select class="tbsel" id="sel-coop"><option value="">Todas as Cooperativas</option></select>
       <select class="tbsel" id="sel-operadora"><option value="">Todas as Operadoras</option></select>
     </div>
     <div class="custom-range" id="custom-range" style="display:none">
@@ -79,63 +78,76 @@
       <div class="sum-card">
         <div class="sum-ico red">❌</div>
         <div>
-          <div class="sum-num" id="stat-cancel">—</div>
-          <div class="sum-lbl" id="lbl-stat-cancel">Cancelamentos no Período</div>
+          <div class="sum-num" id="stat-total">—</div>
+          <div class="sum-lbl">Total Cancelamentos (histórico)</div>
         </div>
       </div>
       <div class="sum-card">
-        <div class="sum-ico green">🔄</div>
+        <div class="sum-ico yellow">📅</div>
         <div>
-          <div class="sum-num" id="stat-reat">—</div>
-          <div class="sum-lbl" id="lbl-stat-reat">Reativações no Período</div>
+          <div class="sum-num" id="stat-mes-atual">—</div>
+          <div class="sum-lbl" id="lbl-stat-mes">Cancelamentos este mês</div>
         </div>
       </div>
       <div class="sum-card">
         <div class="sum-ico purple">📋</div>
         <div>
-          <div class="sum-num" id="stat-total">—</div>
-          <div class="sum-lbl">Total de Alterações</div>
+          <div class="sum-num" id="stat-media">—</div>
+          <div class="sum-lbl">Média mensal (12m)</div>
         </div>
       </div>
     </div>
 
-    <!-- GRÁFICOS -->
+    <!-- GRÁFICO: TENDÊNCIA MENSAL (full width) -->
+    <div class="chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Tendência de Cancelamentos</div>
+          <div class="chart-sub">Histórico completo por mês — dados da planilha</div>
+        </div>
+      </div>
+      <div class="chart-box" style="height:220px">
+        <canvas id="chart-churn"></canvas>
+      </div>
+    </div>
+
+    <!-- GRÁFICOS: REGIONAL + OPERADORA -->
     <div class="two-col">
       <div class="chart-card" style="margin-bottom:0">
         <div class="chart-head">
           <div>
-            <div class="chart-title">Cancelamentos por Período</div>
-            <div class="chart-sub" id="chart-churn-sub">Clique em uma barra para filtrar a tabela</div>
+            <div class="chart-title">Por Regional</div>
+            <div class="chart-sub">Cancelamentos por unidade — histórico</div>
           </div>
         </div>
-        <div class="chart-box">
-          <canvas id="chart-churn"></canvas>
+        <div class="chart-box" style="height:220px">
+          <canvas id="chart-regional"></canvas>
         </div>
       </div>
 
       <div class="chart-card" style="margin-bottom:0">
         <div class="chart-head">
           <div>
-            <div class="chart-title">Operadores — Cancelamentos</div>
-            <div class="chart-sub">Clique em uma barra para filtrar a tabela</div>
+            <div class="chart-title">Por Operadora</div>
+            <div class="chart-sub">Quem mais cancela — histórico</div>
           </div>
         </div>
-        <div class="chart-box" style="height:280px">
+        <div class="chart-box" style="height:220px">
           <canvas id="chart-ops"></canvas>
         </div>
       </div>
     </div>
 
-    <!-- MOTIVOS / OBSERVAÇÕES -->
+    <!-- GRÁFICO: DISTRIBUIÇÃO TEMPO DE CASA -->
     <div class="chart-card">
       <div class="chart-head">
         <div>
-          <div class="chart-title">Motivos / Observações</div>
-          <div class="chart-sub">Clique em um item para filtrar a tabela</div>
+          <div class="chart-title">Tempo de Casa no Cancelamento</div>
+          <div class="chart-sub">Distribuição por faixa de dias de associação</div>
         </div>
       </div>
-      <div id="obs-list">
-        <div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div>
+      <div class="chart-box" style="height:180px">
+        <canvas id="chart-tempo"></canvas>
       </div>
     </div>
 
@@ -143,23 +155,14 @@
     <div class="tbl-card">
       <div class="tbl-head">
         <div>
-          <div class="sec-title"><span class="dot"></span> Todas as Alterações</div>
+          <div class="sec-title"><span class="dot"></span> Cancelamentos Detalhados</div>
           <div class="rec-count" id="rc-alt">—</div>
         </div>
-      </div>
-
-      <div class="filter-badge" id="chart-filter-badge">
-        <span>Filtrado por: <strong class="cf-label" id="cf-label-text"></strong></span>
-        <button class="cf-clear" id="cf-clear">✕ Limpar</button>
+        <div style="font-size:11px;color:var(--muted)">Filtros do topbar aplicados na tabela</div>
       </div>
 
       <div class="tbl-toolbar">
-        <input type="text" class="tbl-search" id="search-alt" placeholder="Buscar por nome ou CPF…">
-        <select id="f-tipo" class="tbsel" style="min-width:160px">
-          <option value="">Todos os tipos</option>
-          <option value="cancel">Cancelamentos</option>
-          <option value="reat">Reativações</option>
-        </select>
+        <input type="text" class="tbl-search" id="search-alt" placeholder="Buscar por nome…">
         <button class="btn-export" id="exp-alt">⬇ Exportar CSV</button>
       </div>
 
@@ -167,18 +170,16 @@
         <table id="tbl-alt">
           <thead>
             <tr>
-              <th class="sortable" data-col="nome_associado">Associado <span class="si">↕</span></th>
-              <th class="sortable" data-col="data_alteracao">Data <span class="si">↕</span></th>
-              <th>Tipo</th>
-              <th>Movimento</th>
-              <th class="sortable" data-col="nome_usuario_alteracao">Operador <span class="si">↕</span></th>
-              <th>Campo</th>
-              <th>Motivo Informado</th>
+              <th class="sortable" data-col="nome">Associado <span class="si">↕</span></th>
+              <th class="sortable" data-col="data_cancelamento">Data Cancelamento <span class="si">↕</span></th>
+              <th class="sortable" data-col="dias_casa">Tempo de Casa <span class="si">↕</span></th>
+              <th class="sortable" data-col="regional">Regional <span class="si">↕</span></th>
+              <th class="sortable" data-col="operadora">Operadora <span class="si">↕</span></th>
               <th>SGA</th>
             </tr>
           </thead>
           <tbody id="tb-alt">
-            <tr><td colspan="8"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
+            <tr><td colspan="6"><div class="empty"><div class="spinner" style="width:22px;height:22px;margin:0 auto"></div></div></td></tr>
           </tbody>
         </table>
       </div>

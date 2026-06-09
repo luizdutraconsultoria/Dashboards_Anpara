@@ -1,14 +1,20 @@
-let _panorama = null;
-let _altItems  = [];
-let _chart     = null;
+let _panorama       = null;
+let _altItems       = [];
+let _historicoMensal = null;
+let _chartHistorico = null;
 
 async function init() {
   showLoading(true);
   hideError();
   try {
-    const [pan, alt] = await Promise.all([API.panorama(), API.alteracoes()]);
-    _panorama = pan;
-    _altItems = alt.associados || [];
+    const [pan, alt, hist] = await Promise.all([
+      API.panorama(),
+      API.alteracoes(),
+      API.historicoMensal(),
+    ]);
+    _panorama        = pan;
+    _altItems        = alt.associados || [];
+    _historicoMensal = hist;
     render();
   } catch (e) {
     showError('Falha ao carregar dados: ' + e.message);
@@ -23,23 +29,24 @@ function render() {
 
   setEl('ts', `Atualizado ${new Date(_panorama.timestamp).toLocaleString('pt-BR')}`);
 
-  /* Base Ativa — do endpoint panorama (estado atual, sempre correto) */
   setEl('kpi-ativos', fmtNum(_panorama.base_ativa));
   setEl('kpi-churn',  _panorama.churn_rate_estimado || '—');
   setEl('kpi-novos',  fmtNum(_panorama.novos_contratos_hoje));
 
-  /* Variação da base via snapshots */
-  const snaps = _panorama.snapshots || [];
-  if (snaps.length >= 2) {
-    const diff = snaps[snaps.length - 1].Ativos - snaps[snaps.length - 2].Ativos;
+  /* Variação da base via historicoMensal */
+  if (_historicoMensal && _historicoMensal.por_mes && _historicoMensal.por_mes.length >= 2) {
+    const pm  = _historicoMensal.por_mes;
+    const cur = pm[pm.length - 1];
+    const prv = pm[pm.length - 2];
+    const diff = (cur.novos - cur.cancelamentos) - (prv.novos - prv.cancelamentos);
     const sub  = document.getElementById('kpi-ativos-sub');
     if (sub) {
-      sub.textContent = (diff >= 0 ? '+' : '') + fmtNum(diff) + ' vs dia anterior';
+      sub.textContent = (diff >= 0 ? '+' : '') + fmtNum(diff) + ' saldo líquido vs mês anterior';
       sub.className   = 'kpi-sub ' + (diff >= 0 ? 'pos' : 'neg');
     }
   }
 
-  /* Métricas filtradas por período — calculadas via alteracoes */
+  /* Métricas filtradas por período via alteracoes */
   const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
   let items = _altItems;
   if (from || to) items = filterByDate(items, 'data_alteracao', from, to);
@@ -51,8 +58,7 @@ function render() {
   const reats   = items.filter(a => a.valor_anterior === '2' && a.valor_posterior === '1');
   const saldo   = reats.length - cancels.length;
 
-  /* Labels dinâmicos pelo período */
-  const lbl = getPeriodLabel(fs.period, fs.customFrom, fs.customTo);
+  const lbl    = getPeriodLabel(fs.period, fs.customFrom, fs.customTo);
   const suffix = lbl ? ` — ${lbl}` : '';
   setEl('lbl-cancel', `Cancelamentos${suffix}`);
   setEl('lbl-reat',   `Reativações${suffix}`);
@@ -74,8 +80,8 @@ function render() {
   const selOp = document.getElementById('sel-operadora');
   if (selOp && fs.operadora) selOp.value = fs.operadora;
 
-  /* Gráfico */
-  renderChartWithFilters();
+  /* Gráfico histórico */
+  renderChartHistorico();
 }
 
 function repopulateCoops(fs) {
@@ -94,74 +100,72 @@ function repopulateCoops(fs) {
   if (fs.coop && coops.includes(fs.coop)) selCoop.value = fs.coop;
 }
 
-function renderChartWithFilters() {
-  if (!_panorama) return;
-  const fs   = getFilterState();
-  const gran = getGranularity(fs.period);
-
-  let snaps = _panorama.snapshots || [];
-  const { from, to } = getPeriodDates(fs.period, fs.customFrom, fs.customTo);
-  if (from || to) {
-    snaps = snaps.filter(s => {
-      if (!s.Data) return false;
-      const d = new Date(s.Data);
-      if (isNaN(d)) return false;
-      if (from && d < from) return false;
-      if (to   && d > to)   return false;
-      return true;
-    });
-  }
-
-  const granLabels = { day: 'por dia', week: 'por semana', month: 'por mês' };
-  setEl('chart-gran-lbl', `Ativos e inativos — agrupado ${granLabels[gran] || ''}`);
-
-  const grouped = groupSnapshots(snaps, gran);
-  renderChart(grouped);
-}
-
-function renderChart(grouped) {
+function renderChartHistorico() {
   const ctx = document.getElementById('chart-evolucao');
   if (!ctx) return;
-  if (_chart) _chart.destroy();
+  if (_chartHistorico) _chartHistorico.destroy();
 
-  if (!grouped || grouped.length === 0) {
+  const pm = _historicoMensal?.por_mes;
+  if (!pm || pm.length === 0) {
     const box = ctx.closest('.chart-box');
-    if (box) box.innerHTML = `<div class="empty" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center"><div class="empty-ico">📊</div><div class="empty-txt">Sem dados históricos para o período selecionado</div></div>`;
+    if (box) box.innerHTML = `<div class="empty" style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center"><div class="empty-ico">📊</div><div class="empty-txt">Carregando histórico mensal…</div></div>`;
     return;
   }
 
-  _chart = new Chart(ctx, {
-    type: 'line',
+  setEl('chart-gran-lbl', `Fluxo mensal — últimos 12 meses`);
+
+  const labels   = pm.map(m => {
+    const [y, mo] = m.mes.split('-');
+    const months  = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    return `${months[Number(mo)-1]}/${String(y).slice(2)}`;
+  });
+
+  _chartHistorico = new Chart(ctx, {
+    type: 'bar',
     data: {
-      labels: grouped.map(g => g.label),
+      labels,
       datasets: [
         {
-          label: 'Ativos',
-          data:  grouped.map(g => g.ativos),
-          borderColor: '#6C5CE7',
-          backgroundColor: 'rgba(108,92,231,0.07)',
-          borderWidth: 2,
-          fill: true,
-          tension: 0.4,
-          pointBackgroundColor: '#6C5CE7',
-          pointBorderColor: '#131829',
-          pointBorderWidth: 2,
-          pointRadius: 4,
-          pointHoverRadius: 6,
+          label:           'Novos',
+          data:            pm.map(m => m.novos),
+          backgroundColor: 'rgba(0,206,201,0.65)',
+          borderColor:     '#00CEC9',
+          borderWidth:     1,
+          borderRadius:    4,
+          order: 2,
         },
         {
-          label: 'Inativos',
-          data:  grouped.map(g => g.inativos),
-          borderColor: '#FF6B6B',
-          backgroundColor: 'rgba(255,107,107,0.04)',
+          label:           'Reativações',
+          data:            pm.map(m => m.reativacoes),
+          backgroundColor: 'rgba(108,92,231,0.65)',
+          borderColor:     '#6C5CE7',
+          borderWidth:     1,
+          borderRadius:    4,
+          order: 2,
+        },
+        {
+          label:           'Cancelamentos',
+          data:            pm.map(m => m.cancelamentos),
+          backgroundColor: 'rgba(255,107,107,0.65)',
+          borderColor:     '#FF6B6B',
+          borderWidth:     1,
+          borderRadius:    4,
+          order: 2,
+        },
+        {
+          label:      'Saldo Líquido',
+          data:       pm.map(m => (m.novos + m.reativacoes) - m.cancelamentos),
+          borderColor: '#FDCB6E',
+          backgroundColor: 'transparent',
           borderWidth: 2,
-          fill: true,
+          type: 'line',
           tension: 0.4,
-          pointBackgroundColor: '#FF6B6B',
+          pointBackgroundColor: '#FDCB6E',
           pointBorderColor: '#131829',
           pointBorderWidth: 2,
           pointRadius: 4,
           pointHoverRadius: 6,
+          order: 1,
         },
       ],
     },
@@ -185,7 +189,7 @@ function renderChart(grouped) {
       },
       scales: {
         x: {
-          grid: { color: 'rgba(37,45,68,0.5)' },
+          grid: { display: false },
           ticks: { color: '#94A3B8', font: { family: 'JetBrains Mono', size: 10 } },
         },
         y: {
@@ -197,7 +201,7 @@ function renderChart(grouped) {
   });
 }
 
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
 document.addEventListener('DOMContentLoaded', () => {
   initFilters(() => {

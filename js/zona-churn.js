@@ -3,6 +3,7 @@ let _data = null;
 /* ——— STATE ——— */
 const _stateInad = { sort: { col: 'dias_atraso', dir: 'desc' }, page: 1, search: '' };
 const _stateCanc = { sort: { col: 'data_alteracao', dir: 'desc' }, page: 1, search: '' };
+const _stateReat = { sort: { col: 'data_reativacao', dir: 'desc' }, page: 1, search: '' };
 
 const PP = 50;
 
@@ -70,6 +71,7 @@ function rerender() {
 
   renderInadimplentes(inadList);
   renderCancelamentos(cancList);
+  renderReativacoes(_data.reativacoes_recentes || []);
 }
 
 function _metaLabelIn(fs) {
@@ -146,7 +148,7 @@ function renderInadimplentes(lista) {
   if (!tbody) return;
 
   if (page.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="empty-ico">✅</div><div class="empty-txt">Nenhum inadimplente encontrado</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty"><div class="empty-ico">✅</div><div class="empty-txt">Nenhum inadimplente encontrado</div></div></td></tr>`;
     renderPagination(document.getElementById('pag-inad'), 1, 1, 0, () => {});
     return;
   }
@@ -165,6 +167,7 @@ function renderInadimplentes(lista) {
       <td class="td-mono">${maskPhone(a.telefone_celular)}</td>
       <td class="td-mono" style="color:var(--accent)">Dia ${a.dia_vencimento || '—'}</td>
       <td class="td-mono" style="color:var(--red);font-weight:600">${a.dias_atraso || 0}d</td>
+      <td class="td-mono" style="color:var(--muted)">${_formatTempoCasa(a.dias_associado)}</td>
       <td>${cdBadge(a.dias_para_churn)}</td>
       <td>${statusBadge(a.status_churn)}</td>
       <td>${sgaBtn(a.codigo_associado)}</td>
@@ -235,6 +238,77 @@ function renderCancelamentos(lista) {
   );
 }
 
+/* ——— TEMPO DE CASA HELPER ——— */
+
+function _formatTempoCasa(dias) {
+  if (!dias || isNaN(dias)) return '—';
+  const d = Number(dias);
+  if (d < 30)  return `${d}d`;
+  if (d < 365) return `${Math.floor(d/30)}m`;
+  const anos  = Math.floor(d / 365);
+  const meses = Math.floor((d % 365) / 30);
+  return meses > 0 ? `${anos}a ${meses}m` : `${anos}a`;
+}
+
+/* ——— REATIVAÇÕES RECENTES ——— */
+
+function renderReativacoes(lista) {
+  const search = _stateReat.search.toLowerCase();
+  let rows = search
+    ? lista.filter(a =>
+        (a.nome || '').toLowerCase().includes(search) ||
+        (a.cpf  || '').replace(/\D/g,'').includes(search.replace(/\D/g,''))
+      )
+    : lista;
+
+  rows = sortArr(rows, _stateReat.sort.col, _stateReat.sort.dir);
+
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total / PP));
+  if (_stateReat.page > pages) _stateReat.page = pages;
+
+  setEl('tab-cnt-reat', total);
+  setEl('rc-reat', `${fmtNum(total)} registro${total !== 1 ? 's' : ''}`);
+
+  const page  = paginateData(rows, _stateReat.page, PP);
+  const tbody = document.getElementById('tb-reat');
+  if (!tbody) return;
+
+  if (page.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="empty-ico">🔄</div><div class="empty-txt">Nenhuma reativação recente encontrada</div></div></td></tr>`;
+    renderPagination(document.getElementById('pag-reat'), 1, 1, 0, () => {});
+    return;
+  }
+
+  tbody.innerHTML = page.map(a => {
+    const primeiroNome = (a.nome || '').split(' ')[0];
+    const msgReat = `Olá ${primeiroNome}, tudo bem? Ótima notícia — sua proteção veicular foi reativada com sucesso. Qualquer dúvida estamos à disposição! 🚗🛡️`;
+    const href   = waLink(a.telefone_celular, a.nome, msgReat);
+    const hasTel = !!cleanPhone(a.telefone_celular);
+
+    return `<tr>
+      <td>
+        <div class="td-name">${a.nome || '—'}</div>
+        <div class="td-sub">${maskCPF(a.cpf)}</div>
+      </td>
+      <td class="td-mono">${fmtDate(a.data_reativacao)}</td>
+      <td class="td-mono" style="color:var(--muted)">${_formatTempoCasa(a.dias_associado)}</td>
+      <td class="td-mono">${maskPhone(a.telefone_celular)}</td>
+      <td>${sgaBtn(a.codigo_associado)}</td>
+      <td>${hasTel
+        ? `<a href="${href}" target="_blank" rel="noopener" class="btn-wa">${WA_SVG} WhatsApp</a>`
+        : `<span class="td-muted">Sem tel.</span>`}
+      </td>
+    </tr>`;
+  }).join('');
+
+  renderPagination(
+    document.getElementById('pag-reat'),
+    _stateReat.page, pages, total,
+    p => { _stateReat.page = p; renderReativacoes(lista); }
+  );
+}
+
 /* ——— EXPORT CSV ——— */
 
 function exportInad() {
@@ -250,8 +324,8 @@ function exportInad() {
   rows = sortArr(rows, _stateInad.sort.col, _stateInad.sort.dir);
 
   exportCSV(
-    ['Nome','CPF','Telefone','Dia Vencimento','Dias Atraso','Dias para Churn','Status','Codigo Associado'],
-    rows.map(a => [a.nome, a.cpf, a.telefone_celular, a.dia_vencimento, a.dias_atraso, a.dias_para_churn, a.status_churn, a.codigo_associado]),
+    ['Nome','CPF','Telefone','Dia Vencimento','Dias Atraso','Tempo na ANPARA (dias)','Dias para Churn','Status','Codigo Associado'],
+    rows.map(a => [a.nome, a.cpf, a.telefone_celular, a.dia_vencimento, a.dias_atraso, a.dias_associado || '', a.dias_para_churn, a.status_churn, a.codigo_associado]),
     'inadimplentes.csv'
   );
 }
@@ -309,6 +383,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  /* Sort — reativações */
+  const tblReat = document.getElementById('tbl-reat');
+  if (tblReat) {
+    initSortableTable(tblReat, (col, dir) => {
+      _stateReat.sort = { col, dir };
+      _stateReat.page = 1;
+      if (_data) renderReativacoes(_data.reativacoes_recentes || []);
+    });
+  }
+
   /* Search */
   document.getElementById('search-inad')?.addEventListener('input', e => {
     _stateInad.search = e.target.value;
@@ -320,6 +404,12 @@ document.addEventListener('DOMContentLoaded', () => {
     _stateCanc.search = e.target.value;
     _stateCanc.page   = 1;
     if (_data) rerender();
+  });
+
+  document.getElementById('search-reat')?.addEventListener('input', e => {
+    _stateReat.search = e.target.value;
+    _stateReat.page   = 1;
+    if (_data) renderReativacoes(_data.reativacoes_recentes || []);
   });
 
   /* Export */
