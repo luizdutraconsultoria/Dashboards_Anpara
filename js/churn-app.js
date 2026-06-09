@@ -196,15 +196,20 @@ function renderEntradasChart() {
   const toMap = g => Object.fromEntries(g.map(x => [x.key, x.items.length]));
   const mC = toMap(gCancel), mR = toMap(gReat);
 
+  const datasets = [
+    { label: 'Reativações',   data: keys.map(k => mR[k] || 0), backgroundColor: C.purple + 'AA', borderColor: C.purple, borderWidth: 1, borderRadius: 3 },
+    { label: 'Cancelamentos', data: keys.map(k => mC[k] || 0), backgroundColor: C.red    + 'AA', borderColor: C.red,    borderWidth: 1, borderRadius: 3 },
+  ];
+
+  // Novos: disponível apenas em granularidade mensal (fonte: Power CRM via _hist)
+  if (gran === 'month' && !fs.regional && _hist?.por_mes?.length) {
+    const mN = Object.fromEntries(_hist.por_mes.map(m => [m.mes, m.novos || 0]));
+    datasets.unshift({ label: 'Novos', data: keys.map(k => mN[k] || 0), backgroundColor: C.green + 'AA', borderColor: C.green, borderWidth: 1, borderRadius: 3 });
+  }
+
   _cEntradas = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: 'Reativações',   data: keys.map(k => mR[k] || 0), backgroundColor: C.purple + 'AA', borderColor: C.purple, borderWidth: 1, borderRadius: 3 },
-        { label: 'Cancelamentos', data: keys.map(k => mC[k] || 0), backgroundColor: C.red    + 'AA', borderColor: C.red,    borderWidth: 1, borderRadius: 3 },
-      ],
-    },
+    data: { labels, datasets },
     options: { ...CHART_OPTS, interaction: { mode: 'index', intersect: false } },
   });
 }
