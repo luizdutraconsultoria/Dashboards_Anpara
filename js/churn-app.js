@@ -206,6 +206,10 @@ function renderEntradasChart() {
   const fs = _fs.p1;
   let rows = _alt;
 
+  const periodLbl = fs.period === 'all' ? 'Últimos 12 meses' : getPeriodLabel(fs.period, fs.from, fs.to);
+  const lblEl = document.getElementById('entradas-period-lbl');
+  if (lblEl) lblEl.textContent = 'Entradas x saídas' + (periodLbl ? ` — ${periodLbl}` : '');
+
   const { from, to } = getPeriodDates(fs.period, fs.from, fs.to);
   if (from || to)   rows = filterByDate(rows, 'data_alteracao', from, to);
   if (fs.regional)  rows = rows.filter(a => String(a.codigo_regional) === fs.regional);
