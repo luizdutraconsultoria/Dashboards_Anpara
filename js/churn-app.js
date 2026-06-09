@@ -190,7 +190,7 @@ function renderEntradasChart() {
   const gNovos  = groupItems(rows.filter(a => !String(a.valor_anterior || '').trim() && String(a.valor_posterior) === '1'), 'data_alteracao', gran);
 
   const labelMap = {};
-  [...gCancel, ...gReat, ...gNovos].forEach(g => { labelMap[g.key] = g.label; });
+  [...gCancel, ...gReat, ...gNovos].forEach(g => { labelMap[g.key] = granLbl(g.key, gran) || g.label; });
   const keys   = Object.keys(labelMap).sort();
   const labels = keys.map(k => labelMap[k]);
 
@@ -446,7 +446,7 @@ function renderCancelChart() {
 
   const gran   = fs.period === 'all' ? 'month' : getGranularity(fs.period);
   const groups = groupItems(rows, 'data_cancelamento', gran);
-  const labels = groups.map(g => g.label);
+  const labels = groups.map(g => granLbl(g.key, gran) || g.label);
   const counts = groups.map(g => g.items.length);
   const media  = counts.length > 0 ? Math.round(counts.reduce((a, b) => a + b, 0) / counts.length) : 0;
 
@@ -798,6 +798,19 @@ function fmtTempoCasa(dias) {
 
 function monthShort(n) {
   return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][n - 1] || '';
+}
+
+function granLbl(key, gran) {
+  if (gran !== 'week') return null;
+  const parts = key.split('-W');
+  if (parts.length !== 2) return null;
+  const year = parseInt(parts[0]), week = parseInt(parts[1]);
+  const jan4 = new Date(year, 0, 4);
+  const dow  = jan4.getDay() || 7;
+  const mon  = new Date(jan4.getTime() - (dow - 1) * 86400000 + (week - 1) * 7 * 86400000);
+  const dd   = String(mon.getDate()).padStart(2, '0');
+  const mm   = String(mon.getMonth() + 1).padStart(2, '0');
+  return 'Sem ' + dd + '/' + mm;
 }
 
 function regionalLabel(code) {
