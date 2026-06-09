@@ -429,7 +429,7 @@ function renderCancelChart() {
   if (fs.regional)  rows = rows.filter(r => r.regional  === fs.regional);
   if (fs.operadora) rows = rows.filter(r => r.operadora === fs.operadora);
 
-  const gran   = getGranularity(fs.period);
+  const gran   = fs.period === 'all' ? 'month' : getGranularity(fs.period);
   const groups = groupItems(rows, 'data_cancelamento', gran);
   const labels = groups.map(g => g.label);
   const counts = groups.map(g => g.items.length);
@@ -841,6 +841,7 @@ function sortArr(arr, col, dir) {
 function paginateData(arr, page, pp) { return arr.slice((page-1)*pp, page*pp); }
 
 function getPeriodDates(period, from, to) {
+  if (period === 'all') return { from: null, to: null };
   const now = new Date();
   const end = new Date(now); end.setHours(23,59,59,999);
   let start = new Date(now);
@@ -857,6 +858,7 @@ function getPeriodDates(period, from, to) {
 function getPeriodLabel(period, from, to) {
   const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const now = new Date();
+  if (period === 'all')    return '';
   if (period === 'today')  return 'Hoje';
   if (period === 'week')   return 'Esta Semana';
   if (period === 'month')  return `${months[now.getMonth()]}/${now.getFullYear()}`;
