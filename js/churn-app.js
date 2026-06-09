@@ -416,27 +416,41 @@ function renderCancelChart() {
   if (!ctx) return;
   if (_cCancel) _cCancel.destroy();
 
-  const pm = _analise?.por_mes || [];
-  if (pm.length === 0) { ctx.closest('.chart-area').innerHTML = '<div class="empty">Sem dados mensais</div>'; return; }
+  if (!_analise?.detalhes?.length) {
+    ctx.closest('.chart-area').innerHTML = '<div class="empty">Sem dados mensais</div>';
+    return;
+  }
 
-  const labels = pm.map(m => {
-    const [y, mo] = m.mes.split('-');
-    return monthShort(Number(mo)) + '/' + String(y).slice(2);
-  });
+  const fs = _fs.p3;
+  let rows = _analise.detalhes;
 
-  const media = Math.round(pm.reduce((s, m) => s + m.cancelamentos, 0) / pm.length);
+  const { from, to } = getPeriodDates(fs.period, fs.from, fs.to);
+  if (from || to)   rows = filterByDate(rows, 'data_cancelamento', from, to);
+  if (fs.regional)  rows = rows.filter(r => r.regional  === fs.regional);
+  if (fs.operadora) rows = rows.filter(r => r.operadora === fs.operadora);
+
+  const gran   = getGranularity(fs.period);
+  const groups = groupItems(rows, 'data_cancelamento', gran);
+  const labels = groups.map(g => g.label);
+  const counts = groups.map(g => g.items.length);
+  const media  = counts.length > 0 ? Math.round(counts.reduce((a, b) => a + b, 0) / counts.length) : 0;
 
   _cCancel = new Chart(ctx, {
     type: 'bar',
     data: {
       labels,
       datasets: [
-        { label: 'Cancelamentos', data: pm.map(m => m.cancelamentos), backgroundColor: C.red + 'AA', borderColor: C.red, borderWidth: 1, borderRadius: 3 },
-        { label: 'Média', data: pm.map(() => media), type: 'line', borderColor: C.amber, backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4,4], pointRadius: 0 },
+        { label: 'Cancelamentos', data: counts, backgroundColor: C.red + 'AA', borderColor: C.red, borderWidth: 1, borderRadius: 3 },
+        { label: 'Média', data: counts.map(() => media), type: 'line', borderColor: C.amber, backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4,4], pointRadius: 0 },
       ],
     },
     options: { ...CHART_OPTS, interaction: { mode: 'index', intersect: false } },
   });
+}
+
+function rerenderP3Charts() {
+  renderCancelChart();
+  renderAltTable();
 }
 
 function renderRankUnidade() {
@@ -618,23 +632,23 @@ function setupFilters() {
 
   /* Page 3 pills */
   document.querySelectorAll('[data-page="p3"]').forEach(btn => {
-    btn.addEventListener('click', () => { _activatePill('p3', btn); renderAltTable(); });
+    btn.addEventListener('click', () => { _activatePill('p3', btn); rerenderP3Charts(); });
   });
   const _applyP3 = () => {
     _fs.p3.from   = document.getElementById('p3-from')?.value || '';
     _fs.p3.to     = document.getElementById('p3-to')?.value   || '';
     _fs.p3.period = 'custom';
-    renderAltTable();
+    rerenderP3Charts();
   };
   document.getElementById('p3-from')?.addEventListener('change', _applyP3);
   document.getElementById('p3-to')?.addEventListener('change', _applyP3);
   document.getElementById('p3-regional')?.addEventListener('change', e => {
     _fs.p3.regional = e.target.value;
-    renderAltTable();
+    rerenderP3Charts();
   });
   document.getElementById('p3-operadora')?.addEventListener('change', e => {
     _fs.p3.operadora = e.target.value;
-    renderAltTable();
+    rerenderP3Charts();
   });
 }
 
