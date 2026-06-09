@@ -47,9 +47,36 @@ const GRID  = { color: C.grid };
 const CHART_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
+  layout: { padding: { top: 18 } },
   plugins: { legend: { display: false } },
   scales: { x: { grid: GRID, ticks: TICKS }, y: { grid: GRID, ticks: TICKS } },
 };
+
+/* ---- TOP-OF-BAR VALUE LABELS ---- */
+const topLabelsPlugin = {
+  id: 'topLabels',
+  afterDatasetsDraw(chart) {
+    if (chart.config.type === 'line') return;
+    const { ctx } = chart;
+    chart.data.datasets.forEach((ds, di) => {
+      if (ds.type === 'line') return;
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach((bar, i) => {
+        const val = ds.data[i];
+        if (!val) return;
+        ctx.save();
+        ctx.fillStyle = C.text;
+        ctx.font = '600 10px DM Sans, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(String(val), bar.x, bar.y - 3);
+        ctx.restore();
+      });
+    });
+  },
+};
+Chart.register(topLabelsPlugin);
 
 /* ============================================================
    NAVIGATION
