@@ -472,7 +472,7 @@ tbody tr:hover td{background:#FAFAF8}
         <div class="error-bar" id="p3-error" style="display:none"><i class="ti ti-alert-circle"></i><span id="p3-errmsg">Erro ao carregar dados.</span></div>
 
         <!-- ROW 1: Cancelamentos por período + Por unidade -->
-        <div class="charts-row">
+        <div class="charts-row" style="flex:none;height:240px">
           <div class="card">
             <div class="card-label">Cancelamentos por período</div>
             <div class="chart-area">
@@ -481,23 +481,23 @@ tbody tr:hover td{background:#FAFAF8}
           </div>
           <div class="card">
             <div class="card-label">Por unidade</div>
-            <div class="rank-list" id="rank-unidade">
+            <div class="rank-list" id="rank-unidade" style="overflow-y:auto;max-height:190px">
               <div class="empty">Carregando…</div>
             </div>
           </div>
         </div>
 
         <!-- ROW 2: Tempo de casa + Evolução -->
-        <div class="dim-row">
+        <div class="dim-row" style="height:200px">
           <div class="card">
             <div class="card-label">Tempo de casa no cancelamento</div>
-            <div class="rank-list" id="rank-tempo">
+            <div class="rank-list" id="rank-tempo" style="overflow-y:auto;max-height:150px">
               <div class="empty">Carregando…</div>
             </div>
           </div>
           <div class="card">
             <div class="card-label">Evolução — cancelamentos/mês</div>
-            <div class="chart-area" style="min-height:90px">
+            <div class="chart-area">
               <canvas id="c-evolucao"></canvas>
             </div>
           </div>
