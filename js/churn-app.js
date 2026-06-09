@@ -25,8 +25,8 @@ const PP = 50;
 /* ---- FILTER STATE ---- */
 const _fs = {
   p1: { period: 'month', from: '', to: '', regional: '' },
+  p2: { period: 'month', from: '', to: '', regional: '' },
   p3: { period: 'month', from: '', to: '', regional: '' },
-  p2: { regional: '' },
 };
 
 /* ---- CHART COLORS ---- */
@@ -69,29 +69,39 @@ function showPage(id, btn) {
 async function init() {
   document.getElementById('loading').style.display = 'flex';
   try {
-    const [pan, alt, hist, zona, analise] = await Promise.all([
+    const [panR, altR, histR, zonaR, analiseR] = await Promise.allSettled([
       API.panorama(),
       API.alteracoes(),
       API.historicoMensal(),
       API.zonaChurn(),
       API.analiseChurn(),
     ]);
-    _panorama = pan;
-    _alt      = alt.associados || [];
-    _hist     = hist;
-    _zona     = zona;
-    _analise  = analise;
+
+    if (panR.status    === 'fulfilled') _panorama = panR.value;
+    if (altR.status    === 'fulfilled') _alt      = altR.value.associados || [];
+    if (histR.status   === 'fulfilled') _hist     = histR.value;
+    if (zonaR.status   === 'fulfilled') _zona     = zonaR.value;
+    if (analiseR.status === 'fulfilled') _analise = analiseR.value;
+
+    if (_panorama) {
+      const ts = new Date(_panorama.timestamp);
+      document.getElementById('ts').textContent = `Atualizado ${ts.toLocaleString('pt-BR')}`;
+    }
 
     renderP1();
     renderP2();
     renderP3();
 
-    const ts = new Date(_panorama.timestamp);
-    document.getElementById('ts').textContent = `Atualizado ${ts.toLocaleString('pt-BR')}`;
+    const falhas = [panR, altR, histR, zonaR, analiseR].filter(r => r.status === 'rejected');
+    if (falhas.length > 0 && falhas.length < 5) {
+      showErr('p1', 'Alguns dados indisponíveis (APIs em atualização). Dados disponíveis exibidos.');
+    } else if (falhas.length === 5) {
+      showErr('p1', 'Falha ao carregar dados: ' + falhas[0].reason?.message);
+      showErr('p2', 'Falha ao carregar dados.');
+      showErr('p3', 'Falha ao carregar dados.');
+    }
   } catch (e) {
-    showErr('p1', 'Falha ao carregar dados: ' + e.message);
-    showErr('p2', 'Falha ao carregar dados: ' + e.message);
-    showErr('p3', 'Falha ao carregar dados: ' + e.message);
+    showErr('p1', 'Erro inesperado: ' + e.message);
   } finally {
     document.getElementById('loading').style.display = 'none';
   }
@@ -231,6 +241,8 @@ function rerender2() {
   if (fs.regional) inadList = inadList.filter(a => a.codigo_regional === fs.regional);
 
   let cancList = _zona.cancelamentos_solicitados || [];
+  const { from, to } = getPeriodDates(fs.period, fs.from, fs.to);
+  if (from || to) cancList = filterByDate(cancList, 'data_alteracao', from, to);
   if (fs.regional) cancList = cancList.filter(a => a.codigo_regional === fs.regional);
 
   setText('cnt-risco', fmtNum(inadList.length + cancList.length));
@@ -576,6 +588,24 @@ function setupFilters() {
   document.getElementById('p1-regional')?.addEventListener('change', e => {
     _fs.p1.regional = e.target.value;
     if (_panorama) renderP1();
+  });
+
+  /* Page 2 pills */
+  document.querySelectorAll('[data-page="p2"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-page="p2"]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _fs.p2.period = btn.dataset.d;
+      const dr = document.getElementById('p2-daterange');
+      if (dr) dr.style.display = btn.dataset.d === 'custom' ? 'flex' : 'none';
+      if (btn.dataset.d !== 'custom' && _zona) rerender2();
+    });
+  });
+  document.getElementById('p2-apply')?.addEventListener('click', () => {
+    _fs.p2.from   = document.getElementById('p2-from')?.value || '';
+    _fs.p2.to     = document.getElementById('p2-to')?.value   || '';
+    _fs.p2.period = 'custom';
+    if (_zona) rerender2();
   });
 
   /* Page 2 selects */

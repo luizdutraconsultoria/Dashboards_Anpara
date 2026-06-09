@@ -284,10 +284,20 @@ tbody tr:hover td{background:#FAFAF8}
 
       <div class="topbar">
         <span class="topbar-title">Zona de churn</span>
-        <div class="filters">
+        <div class="filters" id="p2-filters">
+          <button class="pill" data-page="p2" data-d="today">Hoje</button>
+          <button class="pill" data-page="p2" data-d="week">Esta semana</button>
+          <button class="pill active" data-page="p2" data-d="month">Este mês</button>
+          <button class="pill" data-page="p2" data-d="year">Este ano</button>
+          <div class="pill-sep"></div>
+          <div class="date-range" id="p2-daterange" style="display:none">
+            <input type="date" id="p2-from">
+            <span class="date-sep">—</span>
+            <input type="date" id="p2-to">
+            <button class="pill" id="p2-apply" style="background:#EDEDEB;border-color:#C8C6C0">Aplicar</button>
+          </div>
           <div class="pill-sep"></div>
           <select class="filter-select" id="p2-regional"><option value="">Todas as unidades</option></select>
-          <select class="filter-select" id="p2-operadora" style="display:none"><option value="">Todas as operadoras</option></select>
         </div>
         <div class="topbar-right">
           <button class="btn-refresh" id="p2-refresh"><i class="ti ti-refresh"></i> Atualizar</button>
