@@ -37,8 +37,8 @@ function rerender() {
 
   /* Inadimplentes — filtros de regional/coop (sem data, são estado atual) */
   let inadList = _data.inadimplentes || [];
-  if (fs.regional) inadList = inadList.filter(a => a.codigo_regional    === fs.regional);
-  if (fs.coop)     inadList = inadList.filter(a => a.codigo_cooperativa === fs.coop);
+  if (fs.regional) inadList = inadList.filter(a => String(a.codigo_regional)    === fs.regional);
+  if (fs.coop)     inadList = inadList.filter(a => String(a.codigo_cooperativa) === fs.coop);
 
   /* Cascata: repopula coop conforme regional */
   repopulateCoops(_data.inadimplentes || [], fs);
@@ -91,7 +91,7 @@ function repopulateCoops(inadAll, fs) {
   const selCoop = document.getElementById('sel-coop');
   if (!selCoop) return;
   const source = fs.regional
-    ? inadAll.filter(a => a.codigo_regional === fs.regional)
+    ? inadAll.filter(a => String(a.codigo_regional) === fs.regional)
     : inadAll;
   const coops = [...new Set(source.map(a => a.codigo_cooperativa).filter(Boolean))].sort();
   while (selCoop.options.length > 1) selCoop.remove(1);

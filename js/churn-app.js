@@ -26,7 +26,7 @@ const PP = 50;
 const _fs = {
   p1: { period: 'month', from: '', to: '', regional: '' },
   p2: { period: 'month', from: '', to: '', regional: '' },
-  p3: { period: 'month', from: '', to: '', regional: '' },
+  p3: { period: 'month', from: '', to: '', regional: '', operadora: '' },
 };
 
 /* ---- CHART COLORS ---- */
@@ -146,7 +146,7 @@ function renderP1() {
   const { from, to } = getPeriodDates(fs.period, fs.from, fs.to);
   let items = _alt;
   if (from || to) items = filterByDate(items, 'data_alteracao', from, to);
-  if (fs.regional) items = items.filter(a => a.codigo_regional === fs.regional);
+  if (fs.regional) items = items.filter(a => String(a.codigo_regional) === fs.regional);
   const cancels = items.filter(a => a.valor_posterior === '2');
   setText('m-cancel', fmtNum(cancels.length));
   const lbl = getPeriodLabel(fs.period, fs.from, fs.to);
@@ -238,7 +238,7 @@ function rerender2() {
   const fs = _fs.p2;
 
   let inadList = _zona.inadimplentes || [];
-  if (fs.regional) inadList = inadList.filter(a => a.codigo_regional === fs.regional);
+  if (fs.regional) inadList = inadList.filter(a => String(a.codigo_regional) === fs.regional);
 
   let cancList = _zona.cancelamentos_solicitados || [];
   const { from, to } = getPeriodDates(fs.period, fs.from, fs.to);
@@ -401,6 +401,9 @@ function renderP3() {
   const regs = [...new Set((_analise.por_regional || []).map(r => r.regional).filter(Boolean))].sort();
   populateSel('p3-regional', regs, v => v, fs.regional);
 
+  const ops = [...new Set((_analise.por_operadora || []).map(o => o.operadora).filter(Boolean))].sort();
+  populateSel('p3-operadora', ops, v => v, fs.operadora);
+
   renderCancelChart();
   renderRankUnidade();
   renderRankTempo();
@@ -529,7 +532,8 @@ function renderAltTable() {
       return true;
     });
   }
-  if (fs.regional) rows = rows.filter(r => r.regional === fs.regional);
+  if (fs.regional)  rows = rows.filter(r => r.regional  === fs.regional);
+  if (fs.operadora) rows = rows.filter(r => r.operadora === fs.operadora);
 
   const search = _stateAlt.search.toLowerCase();
   if (search) rows = rows.filter(r => (r.nome || '').toLowerCase().includes(search));
@@ -576,15 +580,18 @@ function setupFilters() {
       _fs.p1.period = btn.dataset.d;
       const dr = document.getElementById('p1-daterange');
       if (dr) dr.style.display = btn.dataset.d === 'custom' ? 'flex' : 'none';
+      if (btn.dataset.d !== 'custom') { _fs.p1.from = ''; _fs.p1.to = ''; }
       if (btn.dataset.d !== 'custom' && _panorama) renderP1();
     });
   });
-  document.getElementById('p1-apply')?.addEventListener('click', () => {
+  const _applyP1 = () => {
     _fs.p1.from   = document.getElementById('p1-from')?.value || '';
     _fs.p1.to     = document.getElementById('p1-to')?.value   || '';
     _fs.p1.period = 'custom';
     if (_panorama) renderP1();
-  });
+  };
+  document.getElementById('p1-from')?.addEventListener('change', _applyP1);
+  document.getElementById('p1-to')?.addEventListener('change', _applyP1);
   document.getElementById('p1-regional')?.addEventListener('change', e => {
     _fs.p1.regional = e.target.value;
     if (_panorama) renderP1();
@@ -598,15 +605,18 @@ function setupFilters() {
       _fs.p2.period = btn.dataset.d;
       const dr = document.getElementById('p2-daterange');
       if (dr) dr.style.display = btn.dataset.d === 'custom' ? 'flex' : 'none';
+      if (btn.dataset.d !== 'custom') { _fs.p2.from = ''; _fs.p2.to = ''; }
       if (btn.dataset.d !== 'custom' && _zona) rerender2();
     });
   });
-  document.getElementById('p2-apply')?.addEventListener('click', () => {
+  const _applyP2 = () => {
     _fs.p2.from   = document.getElementById('p2-from')?.value || '';
     _fs.p2.to     = document.getElementById('p2-to')?.value   || '';
     _fs.p2.period = 'custom';
     if (_zona) rerender2();
-  });
+  };
+  document.getElementById('p2-from')?.addEventListener('change', _applyP2);
+  document.getElementById('p2-to')?.addEventListener('change', _applyP2);
 
   /* Page 2 selects */
   document.getElementById('p2-regional')?.addEventListener('change', e => {
@@ -622,17 +632,24 @@ function setupFilters() {
       _fs.p3.period = btn.dataset.d;
       const dr = document.getElementById('p3-daterange');
       if (dr) dr.style.display = btn.dataset.d === 'custom' ? 'flex' : 'none';
+      if (btn.dataset.d !== 'custom') { _fs.p3.from = ''; _fs.p3.to = ''; }
       if (btn.dataset.d !== 'custom' && _analise) renderAltTable();
     });
   });
-  document.getElementById('p3-apply')?.addEventListener('click', () => {
+  const _applyP3 = () => {
     _fs.p3.from   = document.getElementById('p3-from')?.value || '';
     _fs.p3.to     = document.getElementById('p3-to')?.value   || '';
     _fs.p3.period = 'custom';
     if (_analise) renderAltTable();
-  });
+  };
+  document.getElementById('p3-from')?.addEventListener('change', _applyP3);
+  document.getElementById('p3-to')?.addEventListener('change', _applyP3);
   document.getElementById('p3-regional')?.addEventListener('change', e => {
     _fs.p3.regional = e.target.value;
+    if (_analise) renderAltTable();
+  });
+  document.getElementById('p3-operadora')?.addEventListener('change', e => {
+    _fs.p3.operadora = e.target.value;
     if (_analise) renderAltTable();
   });
 }

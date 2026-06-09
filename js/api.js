@@ -240,12 +240,15 @@ function initFilters(onChange) {
     });
   });
 
-  document.getElementById('btn-apply')?.addEventListener('click', () => {
+  const _applyDates = () => {
     _filterState.customFrom = document.getElementById('date-from')?.value || '';
     _filterState.customTo   = document.getElementById('date-to')?.value   || '';
     _filterState.period = 'custom';
     onChange(_filterState);
-  });
+  };
+  document.getElementById('date-from')?.addEventListener('change', _applyDates);
+  document.getElementById('date-to')?.addEventListener('change', _applyDates);
+  document.getElementById('btn-apply')?.addEventListener('click', _applyDates);
 
   document.getElementById('sel-regional')?.addEventListener('change', e => {
     _filterState.regional = e.target.value;
