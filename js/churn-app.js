@@ -187,22 +187,20 @@ function renderEntradasChart() {
 
   const gCancel = groupItems(rows.filter(a => String(a.valor_posterior) === '2' && String(a.valor_anterior) === '1'), 'data_alteracao', gran);
   const gReat   = groupItems(rows.filter(a => String(a.valor_anterior)  === '2' && String(a.valor_posterior) === '1'), 'data_alteracao', gran);
-  const gNovos  = groupItems(rows.filter(a => !String(a.valor_anterior || '').trim() && String(a.valor_posterior) === '1'), 'data_alteracao', gran);
 
   const labelMap = {};
-  [...gCancel, ...gReat, ...gNovos].forEach(g => { labelMap[g.key] = granLbl(g.key, gran) || g.label; });
+  [...gCancel, ...gReat].forEach(g => { labelMap[g.key] = granLbl(g.key, gran) || g.label; });
   const keys   = Object.keys(labelMap).sort();
   const labels = keys.map(k => labelMap[k]);
 
   const toMap = g => Object.fromEntries(g.map(x => [x.key, x.items.length]));
-  const mC = toMap(gCancel), mR = toMap(gReat), mN = toMap(gNovos);
+  const mC = toMap(gCancel), mR = toMap(gReat);
 
   _cEntradas = new Chart(ctx, {
     type: 'bar',
     data: {
       labels,
       datasets: [
-        { label: 'Novos',         data: keys.map(k => mN[k] || 0), backgroundColor: C.green  + 'AA', borderColor: C.green,  borderWidth: 1, borderRadius: 3 },
         { label: 'Reativações',   data: keys.map(k => mR[k] || 0), backgroundColor: C.purple + 'AA', borderColor: C.purple, borderWidth: 1, borderRadius: 3 },
         { label: 'Cancelamentos', data: keys.map(k => mC[k] || 0), backgroundColor: C.red    + 'AA', borderColor: C.red,    borderWidth: 1, borderRadius: 3 },
       ],
