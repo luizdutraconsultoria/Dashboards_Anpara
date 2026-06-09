@@ -1,0 +1,1290 @@
+
+
+
+// ============================================================
+// ANPARA — EXTRAÇÃO COMPLETA VIA API HINOVA SGA v2
+// ============================================================
+// 1. Cole no Apps Script
+// 2. Rode "autenticarETestar" primeiro
+// 3. Depois use o menu 📊 Anpara
+// ============================================================
+
+const BASE_URL = 'https://api.hinova.com.br/api/sga/v2';
+
+const HINOVA_API_KEY = 'd72a483496963a9ff6dd35326e633418754e0474b89e7934fffb830a67139f49e7945aaf7b5f5e54ecdaf1f9fc2abc2767326aa6b1de68c1b2964d45e7242004ffcc923693b641710c0810efec8e6aee3a92c6a85c172119e424e88514adbc1fdb82cfe3fc23058af75166eedc1119ad';
+const HINOVA_LOGIN = 'Luiz';
+const HINOVA_SENHA = '187987Anpara';
+
+// Token de sessão (gerado pela autenticação)
+let TOKEN_USUARIO = null;
+
+// ===================== MENU =====================
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("📊 Anpara")
+    .addItem("🧪 Testar conexão", "autenticarETestar")
+    .addSeparator()
+    .addItem("📊 Resumo Ativos/Inativos", "extrairResumoRapido")
+    .addItem("👥 Extrair Associados Ativos", "extrairAssociadosAtivos")
+    .addItem("🚗 Extrair Veículos Ativos", "extrairVeiculosAtivos")
+    .addItem("📋 Listar Situações e Motivos", "extrairSituacoesEMotivos")
+    .addItem("🔄 Extrair Alterações (últimos 7 dias)", "extrairAlteracoes7dias")
+    .addSeparator()
+    .addItem("📸 Salvar Snapshot de Hoje", "salvarSnapshot")
+    .addSeparator()
+    .addItem("📅 Reconstruir Histórico de Cancelamentos (3 anos)", "reconstruirHistoricoCancelamentos")
+    .addItem("📈 Analisar Cancelamentos 60 e 90 dias", "analisarCancelamentos60e90")
+    .addToUi();
+}
+
+// ===================== AUTENTICAÇÃO (2 PASSOS) =====================
+function autenticar() {
+  var response = UrlFetchApp.fetch(BASE_URL + "/usuario/autenticar", {
+    method: "post",
+    headers: {
+      "Authorization": "Bearer " + HINOVA_API_KEY,
+      "Content-Type": "application/json"
+    },
+    payload: JSON.stringify({
+      "usuario": HINOVA_LOGIN,
+      "senha": HINOVA_SENHA
+    }),
+    muteHttpExceptions: true
+  });
+
+  var code = response.getResponseCode();
+  var body = JSON.parse(response.getContentText());
+
+  if (code !== 200 || !body.token_usuario) {
+    throw new Error("Falha na autenticação: " + response.getContentText());
+  }
+
+  TOKEN_USUARIO = body.token_usuario;
+  Logger.log("✅ Autenticado com sucesso!");
+  return TOKEN_USUARIO;
+}
+
+// Chamada genérica à API (já autenticada)
+function chamarAPI(path, method, payload) {
+  if (!TOKEN_USUARIO) autenticar();
+
+  var options = {
+    method: method || "get",
+    headers: {
+      "Authorization": "Bearer " + TOKEN_USUARIO,
+      "Content-Type": "application/json"
+    },
+    muteHttpExceptions: true
+  };
+
+  if (payload && (method === "post" || method === "POST")) {
+    options.payload = JSON.stringify(payload);
+  }
+
+  var response = UrlFetchApp.fetch(BASE_URL + path, options);
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+
+  Logger.log(method.toUpperCase() + " " + path + " → " + code);
+
+  if (code === 401) {
+    // Token expirou, reautentica
+    autenticar();
+    options.headers["Authorization"] = "Bearer " + TOKEN_USUARIO;
+    response = UrlFetchApp.fetch(BASE_URL + path, options);
+    code = response.getResponseCode();
+    text = response.getContentText();
+  }
+
+  if (code !== 200) {
+    Logger.log("ERRO: " + text.substring(0, 500));
+    return null;
+  }
+
+  return JSON.parse(text);
+}
+
+// ===================== TESTE DE CONEXÃO =====================
+function autenticarETestar() {
+  var ui = SpreadsheetApp.getUi();
+
+  try {
+    autenticar();
+
+    // Teste rápido: quantidade de ativos/inativos
+    var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
+
+    if (resumo) {
+      ui.alert(
+        "✅ Conexão OK!",
+        "Autenticação funcionou!\n\n" +
+        "Associados ativos: " + (resumo.associados_ativos || "N/D") + "\n" +
+        "Associados inativos: " + (resumo.associados_inativos || "N/D") + "\n\n" +
+        "Agora você pode usar o menu 📊 Anpara para extrair dados.",
+        ui.ButtonSet.OK
+      );
+    } else {
+      ui.alert("⚠️ Autenticação OK, mas erro ao buscar resumo. Verifique as permissões do token no SGA.");
+    }
+
+  } catch (e) {
+    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
+  }
+}
+
+// ===================== RESUMO RÁPIDO =====================
+function extrairResumoRapido() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    autenticar();
+    var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
+    
+    if (!resumo) {
+      ui.alert("❌ Erro ao buscar resumo");
+      return;
+    }
+
+    // Buscar situações para entender os códigos
+    var situacoes = chamarAPI("/listar/situacao/todos", "get");
+    var motivos = chamarAPI("/listar/situacaomotivo/todos", "get");
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var aba = ss.getSheetByName("Resumo") || ss.insertSheet("Resumo");
+    aba.clear();
+
+    var dados = [
+      ["📊 RESUMO ANPARA", "", Utilities.formatDate(new Date(), "America/Sao_Paulo", "dd/MM/yyyy HH:mm")],
+      ["", "", ""],
+      ["Associados Ativos", resumo.associados_ativos || 0, ""],
+      ["Associados Inativos", resumo.associados_inativos || 0, ""],
+      ["", "", ""],
+      ["📋 SITUAÇÕES CADASTRADAS", "", ""],
+      ["Código", "Descrição", "Status"]
+    ];
+
+    if (Array.isArray(situacoes)) {
+      situacoes.forEach(function(s) {
+        dados.push([s.codigo_situacao, s.descricao_situacao, s.situacao]);
+      });
+    }
+
+    dados.push(["", "", ""]);
+    dados.push(["📋 MOTIVOS DE CANCELAMENTO/INATIVAÇÃO", "", ""]);
+    dados.push(["Código", "Descrição", "Objeto"]);
+
+    if (Array.isArray(motivos)) {
+      motivos.forEach(function(m) {
+        dados.push([m.codigo || "", m.descricao || "", m.objeto || ""]);
+      });
+    }
+
+    aba.getRange(1, 1, dados.length, 3).setValues(dados);
+    aba.getRange(1, 1, 1, 3).setFontWeight("bold").setFontSize(14);
+    aba.getRange(6, 1, 1, 3).setFontWeight("bold");
+    aba.autoResizeColumns(1, 3);
+    aba.setFrozenRows(1);
+
+    ui.alert("✅ Resumo extraído!", "Aba 'Resumo' criada com sucesso.\nVeja as situações e motivos disponíveis.", ui.ButtonSet.OK);
+
+  } catch (e) {
+    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
+    Logger.log(e.stack);
+  }
+}
+
+// ===================== EXTRAIR ASSOCIADOS =====================
+function extrairAssociadosAtivos() {
+  extrairAssociadosPorSituacao(1, "Associados Ativos");
+}
+
+function extrairAssociadosPorSituacao(codigoSituacao, nomeAba) {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    autenticar();
+
+    var todos = [];
+    var pagina = 0;
+    var totalRegistros = 1;
+    var qtdPorPagina = 1000;
+
+    while (pagina < totalRegistros) {
+      var resultado = chamarAPI("/listar/associado", "post", {
+        "codigo_situacao": codigoSituacao,
+        "inicio_paginacao": pagina,
+        "quantidade_por_pagina": qtdPorPagina
+      });
+
+      if (!resultado || !resultado.associados || resultado.associados.length === 0) {
+        Logger.log("Sem dados no offset " + pagina);
+        break;
+      }
+
+      totalRegistros = parseInt(resultado.total_associados) || 0;
+      todos = todos.concat(resultado.associados);
+      Logger.log("Offset " + pagina + "/" + totalRegistros + " — " + resultado.associados.length + " registros");
+
+      pagina += qtdPorPagina;
+      if (pagina < totalRegistros) Utilities.sleep(500);
+    }
+
+    if (todos.length === 0) {
+      ui.alert("⚠️ Nenhum associado encontrado para esta situação.");
+      return;
+    }
+
+    // Escrever na planilha
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var aba = ss.getSheetByName(nomeAba) || ss.insertSheet(nomeAba);
+    aba.clear();
+
+    var campos = Object.keys(todos[0]);
+    aba.getRange(1, 1, 1, campos.length).setValues([campos]);
+    aba.getRange(1, 1, 1, campos.length)
+      .setBackground("#1a1a2e").setFontColor("#ffffff").setFontWeight("bold");
+
+    var linhas = todos.map(function(reg) {
+      return campos.map(function(c) {
+        var v = reg[c];
+        if (v === null || v === undefined) return "";
+        if (typeof v === "object") return JSON.stringify(v);
+        return v;
+      });
+    });
+
+    aba.getRange(2, 1, linhas.length, campos.length).setValues(linhas);
+    aba.setFrozenRows(1);
+    campos.forEach(function(_, i) { aba.autoResizeColumn(i + 1); });
+
+    ui.alert(
+      "✅ Extração concluída!",
+      "Aba '" + nomeAba + "' criada.\n" +
+      "Total: " + todos.length + " associados\n" +
+      "Campos: " + campos.length,
+      ui.ButtonSet.OK
+    );
+
+  } catch (e) {
+    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
+    Logger.log(e.stack);
+  }
+}
+
+// ===================== EXTRAIR VEÍCULOS =====================
+function extrairVeiculosAtivos() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    autenticar();
+
+    var todos = [];
+    var pagina = 0;
+    var totalRegistros = 1;
+    var qtdPorPagina = 1000;
+
+    while (pagina < totalRegistros) {
+      var resultado = chamarAPI("/listar/veiculo", "post", {
+        "codigo_situacao": 1,
+        "inicio_paginacao": pagina,
+        "quantidade_por_pagina": qtdPorPagina
+      });
+
+      if (!resultado || !resultado.veiculos || resultado.veiculos.length === 0) {
+        Logger.log("Sem dados no offset " + pagina);
+        break;
+      }
+
+      totalRegistros = parseInt(resultado.total_veiculos) || 0;
+      todos = todos.concat(resultado.veiculos);
+      Logger.log("Offset " + pagina + "/" + totalRegistros + " — " + resultado.veiculos.length + " registros");
+
+      pagina += qtdPorPagina;
+      if (pagina < totalRegistros) Utilities.sleep(500);
+    }
+
+    if (todos.length === 0) {
+      ui.alert("⚠️ Nenhum veículo encontrado.");
+      return;
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var aba = ss.getSheetByName("Veículos Ativos") || ss.insertSheet("Veículos Ativos");
+    aba.clear();
+
+    var campos = Object.keys(todos[0]);
+    aba.getRange(1, 1, 1, campos.length).setValues([campos]);
+    aba.getRange(1, 1, 1, campos.length)
+      .setBackground("#1a1a2e").setFontColor("#ffffff").setFontWeight("bold");
+
+    var linhas = todos.map(function(reg) {
+      return campos.map(function(c) {
+        var v = reg[c];
+        if (v === null || v === undefined) return "";
+        if (typeof v === "object") return JSON.stringify(v);
+        return v;
+      });
+    });
+
+    aba.getRange(2, 1, linhas.length, campos.length).setValues(linhas);
+    aba.setFrozenRows(1);
+    campos.forEach(function(_, i) { aba.autoResizeColumn(i + 1); });
+
+    ui.alert("✅ Veículos extraídos!", "Total: " + todos.length + " veículos", ui.ButtonSet.OK);
+
+  } catch (e) {
+    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
+    Logger.log(e.stack);
+  }
+}
+
+// ===================== SITUAÇÕES E MOTIVOS =====================
+function extrairSituacoesEMotivos() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    autenticar();
+    
+    var situacoes = chamarAPI("/listar/situacao/todos", "get");
+    var motivos = chamarAPI("/listar/situacaomotivo/todos", "get");
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // Aba Situações
+    var abaSit = ss.getSheetByName("Situações") || ss.insertSheet("Situações");
+    abaSit.clear();
+    if (Array.isArray(situacoes) && situacoes.length > 0) {
+      var camposSit = Object.keys(situacoes[0]);
+      abaSit.getRange(1, 1, 1, camposSit.length).setValues([camposSit]);
+      var linhasSit = situacoes.map(function(s) {
+        return camposSit.map(function(c) { return s[c] || ""; });
+      });
+      abaSit.getRange(2, 1, linhasSit.length, camposSit.length).setValues(linhasSit);
+      abaSit.getRange(1, 1, 1, camposSit.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
+    }
+
+    // Aba Motivos
+    var abaMot = ss.getSheetByName("Motivos Cancelamento") || ss.insertSheet("Motivos Cancelamento");
+    abaMot.clear();
+    if (Array.isArray(motivos) && motivos.length > 0) {
+      var camposMot = Object.keys(motivos[0]);
+      abaMot.getRange(1, 1, 1, camposMot.length).setValues([camposMot]);
+      var linhasMot = motivos.map(function(m) {
+        return camposMot.map(function(c) { return m[c] || ""; });
+      });
+      abaMot.getRange(2, 1, linhasMot.length, camposMot.length).setValues(linhasMot);
+      abaMot.getRange(1, 1, 1, camposMot.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
+    }
+
+    ui.alert("✅ Extraído!", "Abas 'Situações' e 'Motivos Cancelamento' criadas.", ui.ButtonSet.OK);
+
+  } catch (e) {
+    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
+    Logger.log(e.stack);
+  }
+}
+
+// ===================== ALTERAÇÕES (CHURN TRACKING) =====================
+function extrairAlteracoes7dias() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    autenticar();
+
+    var hoje = new Date();
+    var seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
+    var dataFinal = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
+    var dataInicial = Utilities.formatDate(seteDiasAtras, "America/Sao_Paulo", "dd/MM/yyyy");
+
+    Logger.log("Buscando alterações de " + dataInicial + " a " + dataFinal);
+
+    // Alterações de associados (mudança de situação)
+    var alteracoesAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
+      "data_inicial": dataInicial,
+      "data_final": dataFinal,
+      "campos": ["codigo_situacao"]
+    });
+
+    // Alterações de veículos (mudança de situação)
+    var alteracoesVeic = chamarAPI("/listar/alteracao-veiculos", "post", {
+      "data_inicial": dataInicial,
+      "data_final": dataFinal,
+      "campos": ["codigo_situacao"]
+    });
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // Aba alterações associados
+    if (Array.isArray(alteracoesAssoc) && alteracoesAssoc.length > 0) {
+      var abaAA = ss.getSheetByName("Alterações Associados") || ss.insertSheet("Alterações Associados");
+      abaAA.clear();
+      var camposAA = Object.keys(alteracoesAssoc[0]);
+      abaAA.getRange(1, 1, 1, camposAA.length).setValues([camposAA]);
+      var linhasAA = alteracoesAssoc.map(function(r) {
+        return camposAA.map(function(c) { return r[c] || ""; });
+      });
+      abaAA.getRange(2, 1, linhasAA.length, camposAA.length).setValues(linhasAA);
+      abaAA.getRange(1, 1, 1, camposAA.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
+      abaAA.setFrozenRows(1);
+    }
+
+    // Aba alterações veículos
+    if (Array.isArray(alteracoesVeic) && alteracoesVeic.length > 0) {
+      var abaAV = ss.getSheetByName("Alterações Veículos") || ss.insertSheet("Alterações Veículos");
+      abaAV.clear();
+      var camposAV = Object.keys(alteracoesVeic[0]);
+      abaAV.getRange(1, 1, 1, camposAV.length).setValues([camposAV]);
+      var linhasAV = alteracoesVeic.map(function(r) {
+        return camposAV.map(function(c) { return r[c] || ""; });
+      });
+      abaAV.getRange(2, 1, linhasAV.length, camposAV.length).setValues(linhasAV);
+      abaAV.getRange(1, 1, 1, camposAV.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
+      abaAV.setFrozenRows(1);
+    }
+
+    var qtdAssoc = Array.isArray(alteracoesAssoc) ? alteracoesAssoc.length : 0;
+    var qtdVeic = Array.isArray(alteracoesVeic) ? alteracoesVeic.length : 0;
+
+    ui.alert(
+      "✅ Alterações extraídas!",
+      "Período: " + dataInicial + " a " + dataFinal + "\n\n" +
+      "Alterações de associados: " + qtdAssoc + "\n" +
+      "Alterações de veículos: " + qtdVeic + "\n\n" +
+      "Olhe as colunas 'valor_anterior' e 'valor_posterior' para ver quem mudou de status!",
+      ui.ButtonSet.OK
+    );
+
+  } catch (e) {
+    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
+    Logger.log(e.stack);
+  }
+}
+
+// ===================== SNAPSHOT DIÁRIO =====================
+function salvarSnapshot() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    autenticar();
+
+    var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
+    if (!resumo) {
+      ui.alert("❌ Erro ao buscar resumo");
+      return;
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var aba = ss.getSheetByName("Snapshots") || ss.insertSheet("Snapshots");
+
+    if (aba.getLastRow() === 0) {
+      aba.getRange(1, 1, 1, 3).setValues([["Data", "Ativos", "Inativos"]]);
+      aba.getRange(1, 1, 1, 3).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
+      aba.setFrozenRows(1);
+    }
+
+    var dataHoje = Utilities.formatDate(new Date(), "America/Sao_Paulo", "yyyy-MM-dd");
+    var novaLinha = [dataHoje, resumo.associados_ativos || 0, resumo.associados_inativos || 0];
+    aba.getRange(aba.getLastRow() + 1, 1, 1, 3).setValues([novaLinha]);
+
+    ui.alert(
+      "📸 Snapshot salvo!",
+      "Data: " + dataHoje + "\n" +
+      "Ativos: " + (resumo.associados_ativos || 0) + "\n" +
+      "Inativos: " + (resumo.associados_inativos || 0),
+      ui.ButtonSet.OK
+    );
+
+  } catch (e) {
+    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
+    Logger.log(e.stack);
+  }
+}
+
+// ===================== AGENDAMENTO AUTOMÁTICO =====================
+function agendarExtracaoDiaria() {
+  ScriptApp.getProjectTriggers().forEach(function(t) { ScriptApp.deleteTrigger(t); });
+
+  ScriptApp.newTrigger("salvarSnapshot")
+    .timeBased()
+    .everyDays(1)
+    .atHour(6)
+    .create();
+
+  SpreadsheetApp.getUi().alert("⏰ Snapshot diário agendado para 6h da manhã.");
+}
+
+
+function mapearSituacoes() {
+  autenticar();
+  
+  var resultado = "";
+  
+  // Testa códigos de 1 a 40
+  for (var cod = 1; cod <= 40; cod++) {
+    var r = chamarAPI("/listar/associado", "post", {
+      "codigo_situacao": cod,
+      "inicio_paginacao": 0,
+      "quantidade_por_pagina": 1
+    });
+    
+    if (r && r.total_associados && parseInt(r.total_associados) > 0) {
+      resultado += "Código " + cod + " → " + r.total_associados + " associados\n";
+      Logger.log("Código " + cod + " → " + r.total_associados + " associados");
+    }
+    
+    Utilities.sleep(300);
+  }
+  
+  Logger.log("=== MAPA DE SITUAÇÕES ===");
+  Logger.log(resultado);
+  
+  SpreadsheetApp.getUi().alert("Mapa de situações", resultado, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+function extrairAssociadosInativos() {
+  extrairAssociadosPorSituacao(2, "Associados Inativos");
+}
+
+function testarPermissoes() {
+  autenticar();
+  
+  var r1 = chamarAPI("/listar/situacao/todos", "get");
+  Logger.log("876 Situações: " + (r1 ? "✅ LIBERADA" : "❌ BLOQUEADA"));
+  
+  var r2 = chamarAPI("/listar/situacaomotivo/todos", "get");
+  Logger.log("401 Motivos: " + (r2 ? "✅ LIBERADA" : "❌ BLOQUEADA"));
+  
+  if (r1) Logger.log("Situações: " + JSON.stringify(r1).substring(0, 500));
+  if (r2) Logger.log("Motivos: " + JSON.stringify(r2).substring(0, 500));
+  
+  SpreadsheetApp.getUi().alert(
+    "Permissões",
+    "876 Situações: " + (r1 ? "✅ LIBERADA" : "❌ BLOQUEADA") + "\n" +
+    "401 Motivos: " + (r2 ? "✅ LIBERADA" : "❌ BLOQUEADA"),
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+
+// ============================================================
+// doGet — API JSON PARA O DASHBOARD
+// ============================================================
+// Após colar no final do código existente, faça o deploy:
+// Implantar → Nova implantação → Web App
+// Executar como: Eu | Quem tem acesso: Qualquer pessoa
+// ============================================================
+
+var SITUACOES_MAP = {
+  "1": "ATIVO",
+  "2": "INATIVO",
+  "3": "PENDENTE",
+  "4": "NEGADO"
+};
+
+function doGet(e) {
+  var acao = (e && e.parameter && e.parameter.acao) ? e.parameter.acao : "resumo";
+  var resultado;
+
+  try {
+    switch (acao) {
+      case "resumo":
+        resultado = getResumo();
+        break;
+      case "associados":
+        var situacao = (e.parameter.situacao) ? e.parameter.situacao : "1";
+        resultado = getAssociados(situacao);
+        break;
+      case "veiculos":
+        resultado = getVeiculos();
+        break;
+      case "alteracoes":
+        resultado = getAlteracoes();
+        break;
+      case "snapshots":
+        resultado = getSnapshots();
+        break;
+      case "zona_churn":
+        resultado = getZonaChurn();
+        break;
+      case "panorama":
+        resultado = getPanorama();
+        break;
+      case "analise_cancelamentos":
+        resultado = getAnaliseCancelamentos();
+        break;
+      default:
+        resultado = { erro: "Acao nao reconhecida: " + acao };
+    }
+  } catch (err) {
+    resultado = { erro: err.message };
+  }
+
+  return ContentService
+    .createTextOutput(JSON.stringify(resultado))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ===================== PANORAMA GERAL =====================
+function getPanorama() {
+  autenticar();
+
+  // Contagem via API
+  var resumoAPI = chamarAPI("/associado-ativo-inativo/listar", "get");
+
+  // Novos contratos hoje
+  var novosContratos = chamarAPI("/associado/novos-contratos/listar", "get");
+
+  // Snapshots para evolucao
+  var snapshots = getSnapshots();
+
+  // Alteracoes para churn recente
+  var alteracoes = getAlteracoes();
+
+  var cancelamentos7d = 0;
+  var reativacoes7d = 0;
+  if (alteracoes.associados && Array.isArray(alteracoes.associados)) {
+    alteracoes.associados.forEach(function(a) {
+      if (a.nome_campo_tabela === "codigo_situacao") {
+        if (String(a.valor_posterior) === "2") cancelamentos7d++;
+        if (String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1") reativacoes7d++;
+      }
+    });
+  }
+  if (alteracoes.veiculos && Array.isArray(alteracoes.veiculos)) {
+    alteracoes.veiculos.forEach(function(v) {
+      if (v.nome_campo_tabela === "codigo_situacao") {
+        if (String(v.valor_posterior) === "2") cancelamentos7d++;
+        if (String(v.valor_anterior) === "2" && String(v.valor_posterior) === "1") reativacoes7d++;
+      }
+    });
+  }
+
+  var ativos = resumoAPI ? parseInt(resumoAPI.associados_ativos || 0) : 0;
+  var inativos = resumoAPI ? parseInt(resumoAPI.associados_inativos || 0) : 0;
+
+  return {
+    timestamp: new Date().toISOString(),
+    base_ativa: ativos,
+    base_inativa: inativos,
+    base_total: ativos + inativos,
+    novos_contratos_hoje: novosContratos ? parseInt(novosContratos.quantidade_contratos || 0) : 0,
+    cancelamentos_7d: cancelamentos7d,
+    reativacoes_7d: reativacoes7d,
+    saldo_liquido_7d: reativacoes7d - cancelamentos7d,
+    churn_rate_estimado: ativos > 0 ? ((cancelamentos7d / 7 * 30) / ativos * 100).toFixed(2) + "%" : "N/A",
+    snapshots: snapshots,
+    situacoes_map: SITUACOES_MAP
+  };
+}
+
+// ===================== RESUMO =====================
+function getResumo() {
+  autenticar();
+  var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
+  return {
+    timestamp: new Date().toISOString(),
+    associados_ativos: resumo ? resumo.associados_ativos : 0,
+    associados_inativos: resumo ? resumo.associados_inativos : 0,
+    situacoes_map: SITUACOES_MAP
+  };
+}
+
+// ===================== ZONA DE CHURN =====================
+
+function getZonaChurn() {
+  autenticar();
+  var hoje = new Date();
+  var diaHoje = hoje.getDate();
+
+  var inadimplentes = [];
+  var cancelamentosSolicitados = [];
+  var pagina = 0;
+  var totalRegistros = 1;
+
+  while (pagina < totalRegistros) {
+    var resultado = chamarAPI("/listar/associado", "post", {
+      "codigo_situacao": 1,
+      "inicio_paginacao": pagina,
+      "quantidade_por_pagina": 1000
+    });
+
+    if (!resultado || !resultado.associados || resultado.associados.length === 0) break;
+    totalRegistros = parseInt(resultado.total_associados) || 0;
+
+    resultado.associados.forEach(function(assoc) {
+      var diaVenc = parseInt(assoc.dia_vencimento) || 10;
+
+      // Calcula a data de vencimento mais recente
+      var vencMesAtual   = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc);
+      var vencMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, diaVenc);
+
+      // Se o vencimento deste mês ainda não chegou, usa o do mês anterior
+      var dataVenc = vencMesAtual <= hoje ? vencMesAtual : vencMesAnterior;
+
+      var diasAtraso    = Math.floor((hoje - dataVenc) / (1000 * 60 * 60 * 24));
+      var diasParaChurn = 5 - diasAtraso;
+
+      if (diasAtraso > 0 && diasAtraso <= 15) {
+        inadimplentes.push({
+          codigo_associado:  assoc.codigo_associado,
+          nome:              assoc.nome,
+          cpf:               assoc.cpf,
+          telefone_celular:  (assoc.ddd_celular || "") + (assoc.telefone_celular || ""),
+          email:             assoc.email || "",
+          dia_vencimento:    diaVenc,
+          dias_atraso:       diasAtraso,
+          dias_para_churn:   Math.max(0, diasParaChurn),
+          status_churn:      diasParaChurn <= 0 ? "CHURN_IMINENTE" : "EM_RISCO",
+          codigo_regional:   assoc.codigo_regional || "",
+          codigo_cooperativa: assoc.codigo_cooperativa || "",
+          data_contrato:     assoc.data_contrato_associado || ""
+        });
+      }
+    });
+
+    pagina += 1000;
+    if (pagina < totalRegistros) Utilities.sleep(300);
+  }
+
+  // Cancelamentos solicitados (últimos 7 dias)
+  var seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
+  var dataInicial   = Utilities.formatDate(seteDiasAtras, "America/Sao_Paulo", "dd/MM/yyyy");
+  var dataFinal     = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
+
+  var alteracoesAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
+    "data_inicial": dataInicial,
+    "data_final":   dataFinal,
+    "campos":       ["codigo_situacao"]
+  });
+
+  if (Array.isArray(alteracoesAssoc)) {
+    alteracoesAssoc.forEach(function(a) {
+      if (String(a.valor_posterior) === "2" && String(a.valor_anterior) === "1") {
+        cancelamentosSolicitados.push({
+          codigo_associado:  a.codigo_associado,
+          nome:              a.nome_associado || "",
+          cpf:               a.cpf_associado  || "",
+          data_alteracao:    a.data_alteracao,
+          usuario_alteracao: a.nome_usuario_alteracao || "",
+          status_anterior:   SITUACOES_MAP[String(a.valor_anterior)]  || a.valor_anterior,
+          status_novo:       SITUACOES_MAP[String(a.valor_posterior)] || a.valor_posterior
+        });
+      }
+    });
+  }
+
+  inadimplentes.sort(function(a, b) { return a.dias_para_churn - b.dias_para_churn; });
+
+  return {
+    timestamp:                      new Date().toISOString(),
+    dia_referencia:                 diaHoje,
+    total_inadimplentes:            inadimplentes.length,
+    total_cancelamentos_solicitados: cancelamentosSolicitados.length,
+    total_zona_churn:               inadimplentes.length + cancelamentosSolicitados.length,
+    inadimplentes:                  inadimplentes,
+    cancelamentos_solicitados:      cancelamentosSolicitados,
+    meta_recuperacao: {
+      total_em_risco: inadimplentes.length + cancelamentosSolicitados.length,
+      recuperados:    0,
+      percentual:     "0%"
+    }
+  };
+}
+
+
+
+// ===================== ANÁLISE CANCELAMENTOS (para o dashboard) =====================
+function getAnaliseCancelamentos() {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName("Historico Cancelamentos");
+  if (!aba || aba.getLastRow() < 2) return { erro: "Histórico não encontrado. Execute 'Reconstruir Histórico' no menu.", dados: [] };
+
+  var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+  var iDias = header.indexOf("dias_ate_cancelamento");
+  var iMes  = header.indexOf("mes_cancelamento");
+  var iData = header.indexOf("data_cancelamento");
+  var dados = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
+
+  var porMes = {};
+  dados.forEach(function(row) {
+    var dias = row[iDias];
+    var mes  = iMes !== -1 ? String(row[iMes]) : "";
+    if (!mes && iData !== -1 && row[iData]) {
+      try {
+        var d = new Date(row[iData]);
+        if (!isNaN(d)) mes = Utilities.formatDate(d, "America/Sao_Paulo", "yyyy-MM");
+      } catch(e) {}
+    }
+    if (!mes) return;
+    if (!porMes[mes]) porMes[mes] = { mes: mes, total: 0, ate60: 0, ate90: 0 };
+    porMes[mes].total++;
+    if (dias !== "" && dias !== null) {
+      var n = parseInt(dias);
+      if (!isNaN(n) && n >= 0) {
+        if (n <= 60) porMes[mes].ate60++;
+        if (n <= 90) porMes[mes].ate90++;
+      }
+    }
+  });
+
+  var resultado = Object.values(porMes).sort(function(a, b) { return a.mes.localeCompare(b.mes); });
+  return {
+    timestamp: new Date().toISOString(),
+    total_registros: dados.length,
+    por_mes: resultado
+  };
+}
+
+// ===================== ASSOCIADOS (da aba Sheets) =====================
+function getAssociados(codigoSituacao) {
+  var nomeAba = String(codigoSituacao) === "1" ? "Associados Ativos" : "Associados Inativos";
+  return lerAba(nomeAba);
+}
+
+// ===================== VEICULOS (da aba Sheets) =====================
+function getVeiculos() {
+  return lerAba("Veiculos Ativos");
+}
+
+// ===================== ALTERACOES (ultimos 7 dias via API) =====================
+function getAlteracoes() {
+  autenticar();
+  var hoje = new Date();
+  var seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
+  var dataInicial = Utilities.formatDate(seteDiasAtras, "America/Sao_Paulo", "dd/MM/yyyy");
+  var dataFinal = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
+
+  var alteracoesAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
+    "data_inicial": dataInicial,
+    "data_final": dataFinal,
+    "campos": ["codigo_situacao"]
+  });
+
+  var alteracoesVeic = chamarAPI("/listar/alteracao-veiculos", "post", {
+    "data_inicial": dataInicial,
+    "data_final": dataFinal,
+    "campos": ["codigo_situacao"]
+  });
+
+  return {
+    timestamp: new Date().toISOString(),
+    periodo: dataInicial + " a " + dataFinal,
+    associados: Array.isArray(alteracoesAssoc) ? alteracoesAssoc : [],
+    veiculos: Array.isArray(alteracoesVeic) ? alteracoesVeic : [],
+    total_alteracoes: (Array.isArray(alteracoesAssoc) ? alteracoesAssoc.length : 0) +
+                      (Array.isArray(alteracoesVeic) ? alteracoesVeic.length : 0)
+  };
+}
+
+// ===================== SNAPSHOTS (da aba Sheets) =====================
+function getSnapshots() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName("Snapshots");
+  if (!aba || aba.getLastRow() < 2) return [];
+
+  var dados = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
+  var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+
+  return dados.map(function(linha) {
+    var obj = {};
+    header.forEach(function(col, i) { obj[col] = linha[i]; });
+    return obj;
+  });
+}
+
+// ===================== UTILITARIO: LER ABA =====================
+function lerAba(nomeAba) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName(nomeAba);
+  if (!aba || aba.getLastRow() < 2) return { erro: "Aba '" + nomeAba + "' vazia ou nao encontrada", dados: [] };
+
+  var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+  var dados = aba.getRange(2, 1, Math.min(aba.getLastRow() - 1, 5000), aba.getLastColumn()).getValues();
+
+  var registros = dados.map(function(linha) {
+    var obj = {};
+    header.forEach(function(col, i) {
+      obj[col] = linha[i];
+    });
+    return obj;
+  });
+
+  return {
+    total: registros.length,
+    aba: nomeAba,
+    dados: registros
+  };
+}
+
+// ===================== TESTE DO doGet =====================
+function testarDoGet() {
+  var resultados = {};
+
+  ["resumo", "panorama", "zona_churn", "snapshots"].forEach(function(acao) {
+    try {
+      var e = { parameter: { acao: acao } };
+      var response = doGet(e);
+      var json = JSON.parse(response.getContent());
+      resultados[acao] = json.erro ? "ERRO: " + json.erro : "OK";
+      Logger.log(acao + ": " + JSON.stringify(json).substring(0, 500));
+    } catch (err) {
+      resultados[acao] = "ERRO: " + err.message;
+      Logger.log(acao + " ERRO: " + err.message);
+    }
+  });
+
+  var msg = Object.keys(resultados).map(function(k) { return k + ": " + resultados[k]; }).join("\n");
+  SpreadsheetApp.getUi().alert("Teste doGet", msg, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+function testarInadimplencia() {
+  var hoje = new Date();
+  var diaHoje = hoje.getDate();
+  Logger.log("Hoje: dia " + diaHoje);
+  
+  var resultado = chamarAPI("/listar/associado", "post", {
+    "codigo_situacao": 1,
+    "inicio_paginacao": 0,
+    "quantidade_por_pagina": 5
+  });
+  
+  if (resultado && resultado.associados) {
+    resultado.associados.forEach(function(a) {
+      Logger.log("Nome: " + a.nome + " | dia_vencimento: " + a.dia_vencimento);
+    });
+  }
+}
+
+
+function testarEndpointsFinanceiros() {
+  autenticar();
+  
+  var endpoints = [
+    "/listar/inadimplente",
+    "/inadimplente/listar",
+    "/financeiro/listar",
+    "/listar/financeiro",
+    "/cobranca/listar",
+    "/listar/cobranca",
+    "/listar/pagamento",
+    "/pagamento/listar",
+    "/listar/mensalidade",
+    "/mensalidade/listar",
+    "/listar/boleto",
+    "/boleto/listar",
+    "/associado/inadimplente/listar",
+    "/listar/associado/inadimplente",
+    "/financeiro/inadimplente/listar"
+  ];
+  
+  var resultados = [];
+  
+  endpoints.forEach(function(path) {
+    try {
+      var r = chamarAPI(path, "get");
+      var status = r ? "✅ EXISTE" : "❌ null";
+      Logger.log(path + " → " + status);
+      resultados.push(path + " → " + status);
+    } catch(e) {
+      Logger.log(path + " → ERRO: " + e.message);
+      resultados.push(path + " → ERRO");
+    }
+    Utilities.sleep(300);
+  });
+  
+  Logger.log("=== RESULTADO FINAL ===");
+  resultados.forEach(function(r) { Logger.log(r); });
+  
+  SpreadsheetApp.getUi().alert(
+    "Endpoints Financeiros",
+    resultados.join("\n"),
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+function testarRotas876e401() {
+  autenticar();
+  
+  // Rota 876 — Situações
+  var r876a = chamarAPI("/listar/situacao/todos", "get");
+  var r876b = chamarAPI("/situacao/listar", "get");
+  var r876c = chamarAPI("/listar/situacao", "get");
+  
+  // Rota 401 — Motivos de Situação
+  var r401a = chamarAPI("/listar/situacaomotivo/todos", "get");
+  var r401b = chamarAPI("/situacaomotivo/listar", "get");
+  var r401c = chamarAPI("/listar/situacao/motivo", "get");
+  var r401d = chamarAPI("/listar/motivo/situacao", "get");
+
+  var msg = 
+    "=== ROTA 876 — Situações ===\n" +
+    "/listar/situacao/todos: "    + (r876a ? "✅ " + JSON.stringify(r876a).substring(0,100) : "❌") + "\n" +
+    "/situacao/listar: "          + (r876b ? "✅ " + JSON.stringify(r876b).substring(0,100) : "❌") + "\n" +
+    "/listar/situacao: "          + (r876c ? "✅ " + JSON.stringify(r876c).substring(0,100) : "❌") + "\n\n" +
+    "=== ROTA 401 — Motivos ===\n" +
+    "/listar/situacaomotivo/todos: " + (r401a ? "✅ " + JSON.stringify(r401a).substring(0,100) : "❌") + "\n" +
+    "/situacaomotivo/listar: "       + (r401b ? "✅ " + JSON.stringify(r401b).substring(0,100) : "❌") + "\n" +
+    "/listar/situacao/motivo: "      + (r401c ? "✅ " + JSON.stringify(r401c).substring(0,100) : "❌") + "\n" +
+    "/listar/motivo/situacao: "      + (r401d ? "✅ " + JSON.stringify(r401d).substring(0,100) : "❌");
+
+  Logger.log(msg);
+  SpreadsheetApp.getUi().alert("Teste Rotas 876/401", msg, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+function testarRotasBruto() {
+  autenticar();
+  
+  var rotas = [
+    "/listar/situacao/todos",
+    "/listar/situacaomotivo/todos"
+  ];
+  
+  rotas.forEach(function(path) {
+    var response = UrlFetchApp.fetch("https://api.hinova.com.br/api/sga/v2" + path, {
+      method: "get",
+      headers: {
+        "Authorization": "Bearer " + TOKEN_USUARIO,
+        "Content-Type": "application/json"
+      },
+      muteHttpExceptions: true
+    });
+    
+    Logger.log(path + " → HTTP " + response.getResponseCode());
+    Logger.log("Body: " + response.getContentText().substring(0, 300));
+  });
+}
+
+function testarRotasComCooperativa() {
+  autenticar();
+  
+  var cooperativas = [1, 2];
+  
+  cooperativas.forEach(function(cod) {
+    var r1 = UrlFetchApp.fetch("https://api.hinova.com.br/api/sga/v2/listar/situacao/todos", {
+      method: "post",
+      headers: {
+        "Authorization": "Bearer " + TOKEN_USUARIO,
+        "Content-Type": "application/json"
+      },
+      payload: JSON.stringify({ "codigo_cooperativa": cod }),
+      muteHttpExceptions: true
+    });
+    Logger.log("situacao POST cooperativa " + cod + " → " + r1.getResponseCode() + " | " + r1.getContentText().substring(0, 200));
+    
+    var r2 = UrlFetchApp.fetch("https://api.hinova.com.br/api/sga/v2/listar/situacao/" + cod, {
+      method: "get",
+      headers: {
+        "Authorization": "Bearer " + TOKEN_USUARIO,
+        "Content-Type": "application/json"
+      },
+      muteHttpExceptions: true
+    });
+    Logger.log("situacao GET /" + cod + " → " + r2.getResponseCode() + " | " + r2.getContentText().substring(0, 200));
+    
+    Utilities.sleep(300);
+  });
+}
+
+
+function reconstruirHistoricoCancelamentos() {
+  autenticar();
+
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName("Historico Cancelamentos") || ss.insertSheet("Historico Cancelamentos");
+
+  // Limpa e recria cabeçalho (evita duplicatas de execuções anteriores)
+  aba.clear();
+  aba.getRange(1, 1, 1, 7).setValues([[
+    "codigo_associado", "nome", "cpf",
+    "data_cancelamento", "data_contrato", "dias_ate_cancelamento", "mes_cancelamento"
+  ]]);
+  aba.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
+  aba.setFrozenRows(1);
+
+  // Carrega TODOS os inativos para obter data de adesão
+  var contratos = {};
+  var pagina = 0;
+  var totalRegistros = 1;
+  while (pagina < totalRegistros) {
+    var r = chamarAPI("/listar/associado", "post", {
+      "codigo_situacao": 2,
+      "inicio_paginacao": pagina,
+      "quantidade_por_pagina": 1000
+    });
+    if (!r || !r.associados || r.associados.length === 0) break;
+    totalRegistros = parseInt(r.total_associados) || 0;
+    r.associados.forEach(function(a) {
+      var dc = "";
+      if (a.data_contrato_associado && a.data_contrato_associado !== "0000-00-00") {
+        dc = a.data_contrato_associado;
+      } else if (a.data_cadastro_associado && a.data_cadastro_associado !== "0000-00-00") {
+        dc = a.data_cadastro_associado;
+      }
+      if (dc) contratos[String(a.codigo_associado)] = dc;
+    });
+    Logger.log("Inativos offset " + pagina + "/" + totalRegistros + " — dict=" + Object.keys(contratos).length);
+    pagina += 1000;
+    Utilities.sleep(400);
+  }
+  Logger.log("Total inativos com data_contrato: " + Object.keys(contratos).length);
+
+  // Varre semana a semana — 3 anos para trás
+  var totalSemanas = 156;
+  var hoje = new Date();
+  var novasLinhas = [];
+
+  for (var i = 0; i < totalSemanas; i++) {
+    var dataFim = new Date(hoje.getTime() - i * 7 * 24 * 60 * 60 * 1000);
+    var dataIni = new Date(hoje.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
+    var dFim = Utilities.formatDate(dataFim, "America/Sao_Paulo", "dd/MM/yyyy");
+    var dIni = Utilities.formatDate(dataIni, "America/Sao_Paulo", "dd/MM/yyyy");
+
+    var alteracoes = chamarAPI("/listar/alteracao-associados/", "post", {
+      "data_inicial": dIni,
+      "data_final":   dFim,
+      "campos":       ["codigo_situacao"]
+    });
+
+    if (Array.isArray(alteracoes)) {
+      alteracoes.forEach(function(a) {
+        if (String(a.valor_posterior) !== "2" || String(a.valor_anterior) !== "1") return;
+
+        var cod          = String(a.codigo_associado);
+        var dataContrato = contratos[cod] || "";
+        var diasAte      = "";
+        var mesCancel    = "";
+
+        var dtCancel = new Date(a.data_alteracao);
+        if (!isNaN(dtCancel)) {
+          mesCancel = Utilities.formatDate(dtCancel, "America/Sao_Paulo", "yyyy-MM");
+        }
+
+        if (dataContrato) {
+          var dtContrato = new Date(dataContrato);
+          if (!isNaN(dtContrato) && !isNaN(dtCancel)) {
+            diasAte = Math.floor((dtCancel - dtContrato) / (1000 * 60 * 60 * 24));
+          }
+        }
+
+        novasLinhas.push([
+          a.codigo_associado,
+          a.nome_associado   || "",
+          a.cpf_associado    || "",
+          a.data_alteracao,
+          dataContrato,
+          diasAte,
+          mesCancel
+        ]);
+      });
+    }
+
+    Logger.log("Semana " + (i+1) + "/" + totalSemanas + " (" + dIni + " → " + dFim + "): " +
+      (Array.isArray(alteracoes) ? alteracoes.length : 0) + " alt | acumulado=" + novasLinhas.length);
+    Utilities.sleep(500);
+  }
+
+  if (novasLinhas.length > 0) {
+    aba.getRange(2, 1, novasLinhas.length, 7).setValues(novasLinhas);
+  }
+
+  SpreadsheetApp.getUi().alert(
+    "✅ Histórico reconstruído!",
+    "Cancelamentos encontrados: " + novasLinhas.length + "\n" +
+    "Com data de contrato resolvida: " + novasLinhas.filter(function(l){ return l[4] !== ""; }).length + "\n" +
+    "Período: últimos 3 anos\n\n" +
+    "Agora rode: 📈 Analisar Cancelamentos 60 e 90 dias",
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
+
+// ===================== ANÁLISE 60 E 90 DIAS =====================
+function analisarCancelamentos60e90() {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var abaHist = ss.getSheetByName("Historico Cancelamentos");
+  if (!abaHist || abaHist.getLastRow() < 2) {
+    SpreadsheetApp.getUi().alert("❌ Execute primeiro 'Reconstruir Histórico de Cancelamentos'.");
+    return;
+  }
+
+  var header = abaHist.getRange(1, 1, 1, abaHist.getLastColumn()).getValues()[0];
+  var iDias  = header.indexOf("dias_ate_cancelamento");
+  var iMes   = header.indexOf("mes_cancelamento");
+  var iData  = header.indexOf("data_cancelamento");
+
+  if (iDias === -1) {
+    SpreadsheetApp.getUi().alert("❌ Coluna 'dias_ate_cancelamento' não encontrada. Reconstrua o histórico.");
+    return;
+  }
+
+  var dados = abaHist.getRange(2, 1, abaHist.getLastRow() - 1, abaHist.getLastColumn()).getValues();
+
+  var porMes60  = {};
+  var porMes90  = {};
+  var porMesTot = {};
+  var semData   = 0;
+
+  dados.forEach(function(row) {
+    var dias = row[iDias];
+    var mes  = iMes !== -1 ? String(row[iMes]) : "";
+
+    // Tenta derivar mês da data_cancelamento se mes_cancelamento estiver vazio
+    if (!mes && iData !== -1 && row[iData]) {
+      try {
+        var d = new Date(row[iData]);
+        if (!isNaN(d)) mes = Utilities.formatDate(d, "America/Sao_Paulo", "yyyy-MM");
+      } catch(e) {}
+    }
+
+    if (!mes || mes === "") { semData++; return; }
+
+    porMesTot[mes] = (porMesTot[mes] || 0) + 1;
+
+    if (dias === "" || dias === null) return; // sem data de contrato
+
+    var n = parseInt(dias);
+    if (isNaN(n) || n < 0) return;
+
+    if (n <= 60)  porMes60[mes]  = (porMes60[mes]  || 0) + 1;
+    if (n <= 90)  porMes90[mes]  = (porMes90[mes]  || 0) + 1;
+  });
+
+  // Monta aba de resultado
+  var abaRes = ss.getSheetByName("Análise 60-90 dias") || ss.insertSheet("Análise 60-90 dias");
+  abaRes.clear();
+
+  var meses = Object.keys(porMesTot).sort();
+
+  var cabecalho = [
+    ["📈 CANCELAMENTOS POR MÊS — Análise de Precocidade", "", "", "", ""],
+    ["Gerado em: " + new Date().toLocaleString("pt-BR"), "", "", "", ""],
+    ["", "", "", "", ""],
+    ["Mês", "Total Cancelamentos", "Até 60 dias de adesão", "Até 90 dias de adesão", "% em até 90 dias"]
+  ];
+
+  var linhas = meses.map(function(mes) {
+    var tot  = porMesTot[mes] || 0;
+    var c60  = porMes60[mes]  || 0;
+    var c90  = porMes90[mes]  || 0;
+    var pct  = tot > 0 ? ((c90 / tot) * 100).toFixed(1) + "%" : "-";
+    return [mes, tot, c60, c90, pct];
+  });
+
+  // Totais
+  var tTot = meses.reduce(function(s,m){ return s + (porMesTot[m]||0); }, 0);
+  var t60  = meses.reduce(function(s,m){ return s + (porMes60[m] ||0); }, 0);
+  var t90  = meses.reduce(function(s,m){ return s + (porMes90[m] ||0); }, 0);
+  linhas.push(["TOTAL", tTot, t60, t90, tTot > 0 ? ((t90/tTot)*100).toFixed(1) + "%" : "-"]);
+
+  var tudo = cabecalho.concat(linhas);
+  abaRes.getRange(1, 1, tudo.length, 5).setValues(tudo);
+
+  // Formatação
+  abaRes.getRange(1, 1, 1, 5).setFontWeight("bold").setFontSize(13).setBackground("#1a1a2e").setFontColor("#fff");
+  abaRes.getRange(4, 1, 1, 5).setFontWeight("bold").setBackground("#2d3561").setFontColor("#fff");
+  abaRes.getRange(4 + linhas.length, 1, 1, 5).setFontWeight("bold").setBackground("#374785").setFontColor("#fff");
+  abaRes.setFrozenRows(4);
+  for (var c = 1; c <= 5; c++) abaRes.autoResizeColumn(c);
+
+  SpreadsheetApp.getUi().alert(
+    "✅ Análise concluída!",
+    "Total cancelamentos analisados: " + tTot + "\n" +
+    "Cancelados em até 60 dias: " + t60 + " (" + (tTot > 0 ? ((t60/tTot)*100).toFixed(1) : 0) + "%)\n" +
+    "Cancelados em até 90 dias: " + t90 + " (" + (tTot > 0 ? ((t90/tTot)*100).toFixed(1) : 0) + "%)\n\n" +
+    "Veja a aba 'Análise 60-90 dias'",
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+}
