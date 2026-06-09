@@ -572,85 +572,69 @@ function renderAltTable() {
    ============================================================ */
 
 function setupFilters() {
+  function _activatePill(page, btn) {
+    document.querySelectorAll(`[data-page="${page}"]`).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const isCustom = btn.dataset.d === 'custom';
+    const dr = document.getElementById(`${page}-daterange`);
+    if (dr) dr.style.display = isCustom ? 'flex' : 'none';
+    if (!isCustom) { _fs[page].from = ''; _fs[page].to = ''; }
+    _fs[page].period = btn.dataset.d;
+  }
+
   /* Page 1 pills */
   document.querySelectorAll('[data-page="p1"]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-page="p1"]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      _fs.p1.period = btn.dataset.d;
-      const dr = document.getElementById('p1-daterange');
-      if (dr) dr.style.display = btn.dataset.d === 'custom' ? 'flex' : 'none';
-      if (btn.dataset.d !== 'custom') { _fs.p1.from = ''; _fs.p1.to = ''; }
-      if (btn.dataset.d !== 'custom' && _panorama) renderP1();
-    });
+    btn.addEventListener('click', () => { _activatePill('p1', btn); renderP1(); });
   });
   const _applyP1 = () => {
     _fs.p1.from   = document.getElementById('p1-from')?.value || '';
     _fs.p1.to     = document.getElementById('p1-to')?.value   || '';
     _fs.p1.period = 'custom';
-    if (_panorama) renderP1();
+    renderP1();
   };
   document.getElementById('p1-from')?.addEventListener('change', _applyP1);
   document.getElementById('p1-to')?.addEventListener('change', _applyP1);
   document.getElementById('p1-regional')?.addEventListener('change', e => {
     _fs.p1.regional = e.target.value;
-    if (_panorama) renderP1();
+    renderP1();
   });
 
   /* Page 2 pills */
   document.querySelectorAll('[data-page="p2"]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-page="p2"]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      _fs.p2.period = btn.dataset.d;
-      const dr = document.getElementById('p2-daterange');
-      if (dr) dr.style.display = btn.dataset.d === 'custom' ? 'flex' : 'none';
-      if (btn.dataset.d !== 'custom') { _fs.p2.from = ''; _fs.p2.to = ''; }
-      if (btn.dataset.d !== 'custom' && _zona) rerender2();
-    });
+    btn.addEventListener('click', () => { _activatePill('p2', btn); rerender2(); });
   });
   const _applyP2 = () => {
     _fs.p2.from   = document.getElementById('p2-from')?.value || '';
     _fs.p2.to     = document.getElementById('p2-to')?.value   || '';
     _fs.p2.period = 'custom';
-    if (_zona) rerender2();
+    rerender2();
   };
   document.getElementById('p2-from')?.addEventListener('change', _applyP2);
   document.getElementById('p2-to')?.addEventListener('change', _applyP2);
-
-  /* Page 2 selects */
   document.getElementById('p2-regional')?.addEventListener('change', e => {
     _fs.p2.regional = e.target.value;
-    if (_zona) rerender2();
+    rerender2();
   });
 
   /* Page 3 pills */
   document.querySelectorAll('[data-page="p3"]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('[data-page="p3"]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      _fs.p3.period = btn.dataset.d;
-      const dr = document.getElementById('p3-daterange');
-      if (dr) dr.style.display = btn.dataset.d === 'custom' ? 'flex' : 'none';
-      if (btn.dataset.d !== 'custom') { _fs.p3.from = ''; _fs.p3.to = ''; }
-      if (btn.dataset.d !== 'custom' && _analise) renderAltTable();
-    });
+    btn.addEventListener('click', () => { _activatePill('p3', btn); renderAltTable(); });
   });
   const _applyP3 = () => {
     _fs.p3.from   = document.getElementById('p3-from')?.value || '';
     _fs.p3.to     = document.getElementById('p3-to')?.value   || '';
     _fs.p3.period = 'custom';
-    if (_analise) renderAltTable();
+    renderAltTable();
   };
   document.getElementById('p3-from')?.addEventListener('change', _applyP3);
   document.getElementById('p3-to')?.addEventListener('change', _applyP3);
   document.getElementById('p3-regional')?.addEventListener('change', e => {
     _fs.p3.regional = e.target.value;
-    if (_analise) renderAltTable();
+    renderAltTable();
   });
   document.getElementById('p3-operadora')?.addEventListener('change', e => {
     _fs.p3.operadora = e.target.value;
-    if (_analise) renderAltTable();
+    renderAltTable();
   });
 }
 
@@ -662,7 +646,9 @@ function setupTabs() {
       const tab = btn.dataset.tab;
       ['inad','canc','reat'].forEach(t => {
         const p = document.getElementById('panel-' + t);
-        if (p) p.style.display = t === tab ? 'flex' : 'none';
+        if (!p) return;
+        if (t === tab) { p.style.display = 'flex'; p.style.flexDirection = 'column'; }
+        else           { p.style.display = 'none'; }
       });
     });
   });
@@ -671,11 +657,11 @@ function setupTabs() {
 function setupSearch() {
   document.getElementById('search-inad')?.addEventListener('input', e => {
     _stateInad.search = e.target.value; _stateInad.page = 1;
-    if (_zona) renderInad(_zona.inadimplentes || []);
+    rerender2();
   });
   document.getElementById('search-canc')?.addEventListener('input', e => {
     _stateCanc.search = e.target.value; _stateCanc.page = 1;
-    if (_zona) renderCanc(_zona.cancelamentos_solicitados || []);
+    rerender2();
   });
   document.getElementById('search-reat')?.addEventListener('input', e => {
     _stateReat.search = e.target.value; _stateReat.page = 1;
@@ -692,7 +678,7 @@ function setupExports() {
     if (!_zona) return;
     const fs = _fs.p2;
     let rows = _zona.inadimplentes || [];
-    if (fs.regional) rows = rows.filter(a => a.codigo_regional === fs.regional);
+    if (fs.regional) rows = rows.filter(a => String(a.codigo_regional) === fs.regional);
     exportCSV(
       ['Nome','CPF','Telefone','Dia Vencimento','Dias Atraso','Tempo na ANPARA (dias)','Dias para Churn','Status','Codigo Associado'],
       rows.map(a => [a.nome, a.cpf, a.telefone_celular, a.dia_vencimento, a.dias_atraso, a.dias_associado || '', a.dias_para_churn, a.status_churn, a.codigo_associado]),
@@ -703,7 +689,9 @@ function setupExports() {
     if (!_zona) return;
     const fs = _fs.p2;
     let rows = _zona.cancelamentos_solicitados || [];
-    if (fs.regional) rows = rows.filter(a => a.codigo_regional === fs.regional);
+    const { from, to } = getPeriodDates(fs.period, fs.from, fs.to);
+    if (from || to) rows = filterByDate(rows, 'data_alteracao', from, to);
+    if (fs.regional) rows = rows.filter(a => String(a.codigo_regional) === fs.regional);
     exportCSV(
       ['Nome','CPF','Data','Operador','Motivo','Codigo Associado'],
       rows.map(a => [a.nome, a.cpf, a.data_alteracao, a.usuario_alteracao, a.observacao || '', a.codigo_associado]),
