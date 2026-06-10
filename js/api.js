@@ -160,17 +160,15 @@ function getGranularity(period) {
   return 'month';
 }
 
-function _isoWeek(d) {
-  const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const day = tmp.getUTCDay() || 7;
-  tmp.setUTCDate(tmp.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
-  return Math.ceil(((tmp - yearStart) / 86400000 + 1) / 7);
-}
-
 function _granKey(d, gran) {
   if (gran === 'day')   return d.toISOString().slice(0, 10);
-  if (gran === 'week')  return `${d.getFullYear()}-W${String(_isoWeek(d)).padStart(2,'0')}`;
+  if (gran === 'week') {
+    const mon  = new Date(d.toISOString().slice(0, 10));
+    const dow  = mon.getDay();
+    const diff = dow === 0 ? -6 : 1 - dow;
+    mon.setDate(mon.getDate() + diff);
+    return mon.toISOString().slice(0, 10);
+  }
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
 
@@ -180,8 +178,8 @@ function _granLabel(key, gran) {
     return `${dd}/${m}`;
   }
   if (gran === 'week') {
-    const [, w] = key.split('-W');
-    return `Sem ${Number(w)}`;
+    const [, m, dd] = key.split('-');
+    return `Sem ${dd}/${m}`;
   }
   const [y, m] = key.split('-');
   const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
