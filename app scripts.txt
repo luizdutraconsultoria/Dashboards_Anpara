@@ -1,21 +1,15 @@
-
-
-
 // ============================================================
 // ANPARA — EXTRAÇÃO COMPLETA VIA API HINOVA SGA v2
 // ============================================================
-// 1. Cole no Apps Script
-// 2. Rode "autenticarETestar" primeiro
-// 3. Depois use o menu 📊 Anpara
-// ============================================================
 
 const BASE_URL = 'https://api.hinova.com.br/api/sga/v2';
+const POWER_CRM_URL   = 'https://api.powercrm.com.br';
+const POWER_CRM_TOKEN = '67lNJQsBWQWgIOioh0FIuwlec91TS7RnbLY9IzbU1xtdEbptGrWR6kR1wqbDmAJKDwgtJ3rRsW5g2YLfGPQHLrvm3Mt5u3eDuUoH3uW91hH5zzLNSvIwahUHGUXkVGYtryMKVL1n4CUXaCYXksvvvYK5IpD4ekP589HFfIdXcTlUfRJMOebyT4rFfiVDdMzV79FgwlMPr9R1T8Z2Mu5SVY6s';
 
 const HINOVA_API_KEY = 'd72a483496963a9ff6dd35326e633418754e0474b89e7934fffb830a67139f49e7945aaf7b5f5e54ecdaf1f9fc2abc2767326aa6b1de68c1b2964d45e7242004ffcc923693b641710c0810efec8e6aee3a92c6a85c172119e424e88514adbc1fdb82cfe3fc23058af75166eedc1119ad';
 const HINOVA_LOGIN = 'Luiz';
 const HINOVA_SENHA = '187987Anpara';
 
-// Token de sessão (gerado pela autenticação)
 let TOKEN_USUARIO = null;
 
 // ===================== MENU =====================
@@ -34,10 +28,14 @@ function onOpen() {
     .addSeparator()
     .addItem("📅 Reconstruir Histórico de Cancelamentos (3 anos)", "reconstruirHistoricoCancelamentos")
     .addItem("📈 Analisar Cancelamentos 60 e 90 dias", "analisarCancelamentos60e90")
+    .addSeparator()
+    .addItem("🗑️ Invalidar Cache de Alterações", "invalidarCacheAlteracoes")
+    .addItem("🗑️ Invalidar Cache de Zona de Churn", "invalidarCacheZonaChurn")
+    .addItem("🗑️ Invalidar Cache Power CRM", "invalidarCachePowerCRM")
     .addToUi();
 }
 
-// ===================== AUTENTICAÇÃO (2 PASSOS) =====================
+// ===================== AUTENTICAÇÃO =====================
 function autenticar() {
   var response = UrlFetchApp.fetch(BASE_URL + "/usuario/autenticar", {
     method: "post",
@@ -64,7 +62,6 @@ function autenticar() {
   return TOKEN_USUARIO;
 }
 
-// Chamada genérica à API (já autenticada)
 function chamarAPI(path, method, payload) {
   if (!TOKEN_USUARIO) autenticar();
 
@@ -88,7 +85,6 @@ function chamarAPI(path, method, payload) {
   Logger.log(method.toUpperCase() + " " + path + " → " + code);
 
   if (code === 401) {
-    // Token expirou, reautentica
     autenticar();
     options.headers["Authorization"] = "Bearer " + TOKEN_USUARIO;
     response = UrlFetchApp.fetch(BASE_URL + path, options);
@@ -107,13 +103,9 @@ function chamarAPI(path, method, payload) {
 // ===================== TESTE DE CONEXÃO =====================
 function autenticarETestar() {
   var ui = SpreadsheetApp.getUi();
-
   try {
     autenticar();
-
-    // Teste rápido: quantidade de ativos/inativos
     var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
-
     if (resumo) {
       ui.alert(
         "✅ Conexão OK!",
@@ -126,7 +118,6 @@ function autenticarETestar() {
     } else {
       ui.alert("⚠️ Autenticação OK, mas erro ao buscar resumo. Verifique as permissões do token no SGA.");
     }
-
   } catch (e) {
     ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
   }
@@ -138,24 +129,19 @@ function extrairResumoRapido() {
   try {
     autenticar();
     var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
-    
-    if (!resumo) {
-      ui.alert("❌ Erro ao buscar resumo");
-      return;
-    }
+    if (!resumo) { ui.alert("❌ Erro ao buscar resumo"); return; }
 
-    // Buscar situações para entender os códigos
     var situacoes = chamarAPI("/listar/situacao/todos", "get");
-    var motivos = chamarAPI("/listar/situacaomotivo/todos", "get");
+    var motivos   = chamarAPI("/listar/situacaomotivo/todos", "get");
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss  = SpreadsheetApp.getActiveSpreadsheet();
     var aba = ss.getSheetByName("Resumo") || ss.insertSheet("Resumo");
     aba.clear();
 
     var dados = [
       ["📊 RESUMO ANPARA", "", Utilities.formatDate(new Date(), "America/Sao_Paulo", "dd/MM/yyyy HH:mm")],
       ["", "", ""],
-      ["Associados Ativos", resumo.associados_ativos || 0, ""],
+      ["Associados Ativos",   resumo.associados_ativos   || 0, ""],
       ["Associados Inativos", resumo.associados_inativos || 0, ""],
       ["", "", ""],
       ["📋 SITUAÇÕES CADASTRADAS", "", ""],
@@ -184,8 +170,7 @@ function extrairResumoRapido() {
     aba.autoResizeColumns(1, 3);
     aba.setFrozenRows(1);
 
-    ui.alert("✅ Resumo extraído!", "Aba 'Resumo' criada com sucesso.\nVeja as situações e motivos disponíveis.", ui.ButtonSet.OK);
-
+    ui.alert("✅ Resumo extraído!", "Aba 'Resumo' criada com sucesso.", ui.ButtonSet.OK);
   } catch (e) {
     ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
     Logger.log(e.stack);
@@ -201,7 +186,6 @@ function extrairAssociadosPorSituacao(codigoSituacao, nomeAba) {
   var ui = SpreadsheetApp.getUi();
   try {
     autenticar();
-
     var todos = [];
     var pagina = 0;
     var totalRegistros = 1;
@@ -213,35 +197,22 @@ function extrairAssociadosPorSituacao(codigoSituacao, nomeAba) {
         "inicio_paginacao": pagina,
         "quantidade_por_pagina": qtdPorPagina
       });
-
-      if (!resultado || !resultado.associados || resultado.associados.length === 0) {
-        Logger.log("Sem dados no offset " + pagina);
-        break;
-      }
-
+      if (!resultado || !resultado.associados || resultado.associados.length === 0) break;
       totalRegistros = parseInt(resultado.total_associados) || 0;
       todos = todos.concat(resultado.associados);
       Logger.log("Offset " + pagina + "/" + totalRegistros + " — " + resultado.associados.length + " registros");
-
       pagina += qtdPorPagina;
       if (pagina < totalRegistros) Utilities.sleep(500);
     }
 
-    if (todos.length === 0) {
-      ui.alert("⚠️ Nenhum associado encontrado para esta situação.");
-      return;
-    }
+    if (todos.length === 0) { ui.alert("⚠️ Nenhum associado encontrado."); return; }
 
-    // Escrever na planilha
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var aba = ss.getSheetByName(nomeAba) || ss.insertSheet(nomeAba);
+    var ss     = SpreadsheetApp.getActiveSpreadsheet();
+    var aba    = ss.getSheetByName(nomeAba) || ss.insertSheet(nomeAba);
     aba.clear();
-
     var campos = Object.keys(todos[0]);
     aba.getRange(1, 1, 1, campos.length).setValues([campos]);
-    aba.getRange(1, 1, 1, campos.length)
-      .setBackground("#1a1a2e").setFontColor("#ffffff").setFontWeight("bold");
-
+    aba.getRange(1, 1, 1, campos.length).setBackground("#1a1a2e").setFontColor("#ffffff").setFontWeight("bold");
     var linhas = todos.map(function(reg) {
       return campos.map(function(c) {
         var v = reg[c];
@@ -250,19 +221,11 @@ function extrairAssociadosPorSituacao(codigoSituacao, nomeAba) {
         return v;
       });
     });
-
     aba.getRange(2, 1, linhas.length, campos.length).setValues(linhas);
     aba.setFrozenRows(1);
     campos.forEach(function(_, i) { aba.autoResizeColumn(i + 1); });
 
-    ui.alert(
-      "✅ Extração concluída!",
-      "Aba '" + nomeAba + "' criada.\n" +
-      "Total: " + todos.length + " associados\n" +
-      "Campos: " + campos.length,
-      ui.ButtonSet.OK
-    );
-
+    ui.alert("✅ Extração concluída!", "Total: " + todos.length + " associados", ui.ButtonSet.OK);
   } catch (e) {
     ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
     Logger.log(e.stack);
@@ -274,46 +237,31 @@ function extrairVeiculosAtivos() {
   var ui = SpreadsheetApp.getUi();
   try {
     autenticar();
-
     var todos = [];
     var pagina = 0;
     var totalRegistros = 1;
-    var qtdPorPagina = 1000;
 
     while (pagina < totalRegistros) {
       var resultado = chamarAPI("/listar/veiculo", "post", {
         "codigo_situacao": 1,
         "inicio_paginacao": pagina,
-        "quantidade_por_pagina": qtdPorPagina
+        "quantidade_por_pagina": 1000
       });
-
-      if (!resultado || !resultado.veiculos || resultado.veiculos.length === 0) {
-        Logger.log("Sem dados no offset " + pagina);
-        break;
-      }
-
+      if (!resultado || !resultado.veiculos || resultado.veiculos.length === 0) break;
       totalRegistros = parseInt(resultado.total_veiculos) || 0;
       todos = todos.concat(resultado.veiculos);
-      Logger.log("Offset " + pagina + "/" + totalRegistros + " — " + resultado.veiculos.length + " registros");
-
-      pagina += qtdPorPagina;
+      pagina += 1000;
       if (pagina < totalRegistros) Utilities.sleep(500);
     }
 
-    if (todos.length === 0) {
-      ui.alert("⚠️ Nenhum veículo encontrado.");
-      return;
-    }
+    if (todos.length === 0) { ui.alert("⚠️ Nenhum veículo encontrado."); return; }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var aba = ss.getSheetByName("Veículos Ativos") || ss.insertSheet("Veículos Ativos");
+    var ss     = SpreadsheetApp.getActiveSpreadsheet();
+    var aba    = ss.getSheetByName("Veículos Ativos") || ss.insertSheet("Veículos Ativos");
     aba.clear();
-
     var campos = Object.keys(todos[0]);
     aba.getRange(1, 1, 1, campos.length).setValues([campos]);
-    aba.getRange(1, 1, 1, campos.length)
-      .setBackground("#1a1a2e").setFontColor("#ffffff").setFontWeight("bold");
-
+    aba.getRange(1, 1, 1, campos.length).setBackground("#1a1a2e").setFontColor("#ffffff").setFontWeight("bold");
     var linhas = todos.map(function(reg) {
       return campos.map(function(c) {
         var v = reg[c];
@@ -322,13 +270,11 @@ function extrairVeiculosAtivos() {
         return v;
       });
     });
-
     aba.getRange(2, 1, linhas.length, campos.length).setValues(linhas);
     aba.setFrozenRows(1);
     campos.forEach(function(_, i) { aba.autoResizeColumn(i + 1); });
 
     ui.alert("✅ Veículos extraídos!", "Total: " + todos.length + " veículos", ui.ButtonSet.OK);
-
   } catch (e) {
     ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
     Logger.log(e.stack);
@@ -340,115 +286,89 @@ function extrairSituacoesEMotivos() {
   var ui = SpreadsheetApp.getUi();
   try {
     autenticar();
-    
     var situacoes = chamarAPI("/listar/situacao/todos", "get");
-    var motivos = chamarAPI("/listar/situacaomotivo/todos", "get");
+    var motivos   = chamarAPI("/listar/situacaomotivo/todos", "get");
+    var ss        = SpreadsheetApp.getActiveSpreadsheet();
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // Aba Situações
     var abaSit = ss.getSheetByName("Situações") || ss.insertSheet("Situações");
     abaSit.clear();
     if (Array.isArray(situacoes) && situacoes.length > 0) {
       var camposSit = Object.keys(situacoes[0]);
       abaSit.getRange(1, 1, 1, camposSit.length).setValues([camposSit]);
-      var linhasSit = situacoes.map(function(s) {
-        return camposSit.map(function(c) { return s[c] || ""; });
-      });
-      abaSit.getRange(2, 1, linhasSit.length, camposSit.length).setValues(linhasSit);
+      abaSit.getRange(2, 1, situacoes.length, camposSit.length).setValues(
+        situacoes.map(function(s) { return camposSit.map(function(c) { return s[c] || ""; }); })
+      );
       abaSit.getRange(1, 1, 1, camposSit.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
     }
 
-    // Aba Motivos
     var abaMot = ss.getSheetByName("Motivos Cancelamento") || ss.insertSheet("Motivos Cancelamento");
     abaMot.clear();
     if (Array.isArray(motivos) && motivos.length > 0) {
       var camposMot = Object.keys(motivos[0]);
       abaMot.getRange(1, 1, 1, camposMot.length).setValues([camposMot]);
-      var linhasMot = motivos.map(function(m) {
-        return camposMot.map(function(c) { return m[c] || ""; });
-      });
-      abaMot.getRange(2, 1, linhasMot.length, camposMot.length).setValues(linhasMot);
+      abaMot.getRange(2, 1, motivos.length, camposMot.length).setValues(
+        motivos.map(function(m) { return camposMot.map(function(c) { return m[c] || ""; }); })
+      );
       abaMot.getRange(1, 1, 1, camposMot.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
     }
 
     ui.alert("✅ Extraído!", "Abas 'Situações' e 'Motivos Cancelamento' criadas.", ui.ButtonSet.OK);
-
   } catch (e) {
     ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
     Logger.log(e.stack);
   }
 }
 
-// ===================== ALTERAÇÕES (CHURN TRACKING) =====================
+// ===================== EXTRAIR ALTERAÇÕES 7 DIAS (menu) =====================
 function extrairAlteracoes7dias() {
   var ui = SpreadsheetApp.getUi();
   try {
     autenticar();
-
-    var hoje = new Date();
+    var hoje          = new Date();
     var seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
-    var dataFinal = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
-    var dataInicial = Utilities.formatDate(seteDiasAtras, "America/Sao_Paulo", "dd/MM/yyyy");
+    var dataFinal     = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
+    var dataInicial   = Utilities.formatDate(seteDiasAtras, "America/Sao_Paulo", "dd/MM/yyyy");
 
-    Logger.log("Buscando alterações de " + dataInicial + " a " + dataFinal);
-
-    // Alterações de associados (mudança de situação)
     var alteracoesAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
-      "data_inicial": dataInicial,
-      "data_final": dataFinal,
-      "campos": ["codigo_situacao"]
+      "data_inicial": dataInicial, "data_final": dataFinal, "campos": ["codigo_situacao"]
     });
-
-    // Alterações de veículos (mudança de situação)
     var alteracoesVeic = chamarAPI("/listar/alteracao-veiculos", "post", {
-      "data_inicial": dataInicial,
-      "data_final": dataFinal,
-      "campos": ["codigo_situacao"]
+      "data_inicial": dataInicial, "data_final": dataFinal, "campos": ["codigo_situacao"]
     });
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // Aba alterações associados
     if (Array.isArray(alteracoesAssoc) && alteracoesAssoc.length > 0) {
-      var abaAA = ss.getSheetByName("Alterações Associados") || ss.insertSheet("Alterações Associados");
+      var abaAA   = ss.getSheetByName("Alterações Associados") || ss.insertSheet("Alterações Associados");
       abaAA.clear();
       var camposAA = Object.keys(alteracoesAssoc[0]);
       abaAA.getRange(1, 1, 1, camposAA.length).setValues([camposAA]);
-      var linhasAA = alteracoesAssoc.map(function(r) {
-        return camposAA.map(function(c) { return r[c] || ""; });
-      });
-      abaAA.getRange(2, 1, linhasAA.length, camposAA.length).setValues(linhasAA);
+      abaAA.getRange(2, 1, alteracoesAssoc.length, camposAA.length).setValues(
+        alteracoesAssoc.map(function(r) { return camposAA.map(function(c) { return r[c] || ""; }); })
+      );
       abaAA.getRange(1, 1, 1, camposAA.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
       abaAA.setFrozenRows(1);
     }
 
-    // Aba alterações veículos
     if (Array.isArray(alteracoesVeic) && alteracoesVeic.length > 0) {
-      var abaAV = ss.getSheetByName("Alterações Veículos") || ss.insertSheet("Alterações Veículos");
+      var abaAV   = ss.getSheetByName("Alterações Veículos") || ss.insertSheet("Alterações Veículos");
       abaAV.clear();
       var camposAV = Object.keys(alteracoesVeic[0]);
       abaAV.getRange(1, 1, 1, camposAV.length).setValues([camposAV]);
-      var linhasAV = alteracoesVeic.map(function(r) {
-        return camposAV.map(function(c) { return r[c] || ""; });
-      });
-      abaAV.getRange(2, 1, linhasAV.length, camposAV.length).setValues(linhasAV);
+      abaAV.getRange(2, 1, alteracoesVeic.length, camposAV.length).setValues(
+        alteracoesVeic.map(function(r) { return camposAV.map(function(c) { return r[c] || ""; }); })
+      );
       abaAV.getRange(1, 1, 1, camposAV.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
       abaAV.setFrozenRows(1);
     }
 
-    var qtdAssoc = Array.isArray(alteracoesAssoc) ? alteracoesAssoc.length : 0;
-    var qtdVeic = Array.isArray(alteracoesVeic) ? alteracoesVeic.length : 0;
-
     ui.alert(
       "✅ Alterações extraídas!",
       "Período: " + dataInicial + " a " + dataFinal + "\n\n" +
-      "Alterações de associados: " + qtdAssoc + "\n" +
-      "Alterações de veículos: " + qtdVeic + "\n\n" +
-      "Olhe as colunas 'valor_anterior' e 'valor_posterior' para ver quem mudou de status!",
+      "Alterações de associados: " + (Array.isArray(alteracoesAssoc) ? alteracoesAssoc.length : 0) + "\n" +
+      "Alterações de veículos: "   + (Array.isArray(alteracoesVeic)  ? alteracoesVeic.length  : 0),
       ui.ButtonSet.OK
     );
-
   } catch (e) {
     ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
     Logger.log(e.stack);
@@ -460,14 +380,10 @@ function salvarSnapshot() {
   var ui = SpreadsheetApp.getUi();
   try {
     autenticar();
-
     var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
-    if (!resumo) {
-      ui.alert("❌ Erro ao buscar resumo");
-      return;
-    }
+    if (!resumo) { ui.alert("❌ Erro ao buscar resumo"); return; }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss  = SpreadsheetApp.getActiveSpreadsheet();
     var aba = ss.getSheetByName("Snapshots") || ss.insertSheet("Snapshots");
 
     if (aba.getLastRow() === 0) {
@@ -477,61 +393,34 @@ function salvarSnapshot() {
     }
 
     var dataHoje = Utilities.formatDate(new Date(), "America/Sao_Paulo", "yyyy-MM-dd");
-    var novaLinha = [dataHoje, resumo.associados_ativos || 0, resumo.associados_inativos || 0];
-    aba.getRange(aba.getLastRow() + 1, 1, 1, 3).setValues([novaLinha]);
+    aba.getRange(aba.getLastRow() + 1, 1, 1, 3).setValues([[dataHoje, resumo.associados_ativos || 0, resumo.associados_inativos || 0]]);
 
-    ui.alert(
-      "📸 Snapshot salvo!",
-      "Data: " + dataHoje + "\n" +
-      "Ativos: " + (resumo.associados_ativos || 0) + "\n" +
-      "Inativos: " + (resumo.associados_inativos || 0),
-      ui.ButtonSet.OK
-    );
-
+    ui.alert("📸 Snapshot salvo!", "Data: " + dataHoje + "\nAtivos: " + (resumo.associados_ativos || 0), ui.ButtonSet.OK);
   } catch (e) {
     ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
     Logger.log(e.stack);
   }
 }
 
-// ===================== AGENDAMENTO AUTOMÁTICO =====================
 function agendarExtracaoDiaria() {
   ScriptApp.getProjectTriggers().forEach(function(t) { ScriptApp.deleteTrigger(t); });
-
-  ScriptApp.newTrigger("salvarSnapshot")
-    .timeBased()
-    .everyDays(1)
-    .atHour(6)
-    .create();
-
+  ScriptApp.newTrigger("salvarSnapshot").timeBased().everyDays(1).atHour(6).create();
   SpreadsheetApp.getUi().alert("⏰ Snapshot diário agendado para 6h da manhã.");
 }
 
-
+// ===================== FUNÇÕES DE DIAGNÓSTICO =====================
 function mapearSituacoes() {
   autenticar();
-  
   var resultado = "";
-  
-  // Testa códigos de 1 a 40
   for (var cod = 1; cod <= 40; cod++) {
     var r = chamarAPI("/listar/associado", "post", {
-      "codigo_situacao": cod,
-      "inicio_paginacao": 0,
-      "quantidade_por_pagina": 1
+      "codigo_situacao": cod, "inicio_paginacao": 0, "quantidade_por_pagina": 1
     });
-    
     if (r && r.total_associados && parseInt(r.total_associados) > 0) {
       resultado += "Código " + cod + " → " + r.total_associados + " associados\n";
-      Logger.log("Código " + cod + " → " + r.total_associados + " associados");
     }
-    
     Utilities.sleep(300);
   }
-  
-  Logger.log("=== MAPA DE SITUAÇÕES ===");
-  Logger.log(resultado);
-  
   SpreadsheetApp.getUi().alert("Mapa de situações", resultado, SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
@@ -541,31 +430,68 @@ function extrairAssociadosInativos() {
 
 function testarPermissoes() {
   autenticar();
-  
   var r1 = chamarAPI("/listar/situacao/todos", "get");
-  Logger.log("876 Situações: " + (r1 ? "✅ LIBERADA" : "❌ BLOQUEADA"));
-  
   var r2 = chamarAPI("/listar/situacaomotivo/todos", "get");
-  Logger.log("401 Motivos: " + (r2 ? "✅ LIBERADA" : "❌ BLOQUEADA"));
-  
-  if (r1) Logger.log("Situações: " + JSON.stringify(r1).substring(0, 500));
-  if (r2) Logger.log("Motivos: " + JSON.stringify(r2).substring(0, 500));
-  
+  Logger.log("876 Situações: " + (r1 ? "✅ LIBERADA" : "❌ BLOQUEADA"));
+  Logger.log("401 Motivos: "   + (r2 ? "✅ LIBERADA" : "❌ BLOQUEADA"));
   SpreadsheetApp.getUi().alert(
     "Permissões",
     "876 Situações: " + (r1 ? "✅ LIBERADA" : "❌ BLOQUEADA") + "\n" +
-    "401 Motivos: " + (r2 ? "✅ LIBERADA" : "❌ BLOQUEADA"),
+    "401 Motivos: "   + (r2 ? "✅ LIBERADA" : "❌ BLOQUEADA"),
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 }
 
+function testarEndpointsFinanceiros() {
+  autenticar();
+  var endpoints = [
+    "/listar/inadimplente", "/inadimplente/listar", "/financeiro/listar",
+    "/listar/financeiro", "/cobranca/listar", "/listar/cobranca",
+    "/listar/pagamento", "/pagamento/listar", "/listar/mensalidade",
+    "/mensalidade/listar", "/listar/boleto", "/boleto/listar",
+    "/associado/inadimplente/listar", "/listar/associado/inadimplente",
+    "/financeiro/inadimplente/listar"
+  ];
+  var resultados = [];
+  endpoints.forEach(function(path) {
+    try {
+      var r = chamarAPI(path, "get");
+      resultados.push(path + " → " + (r ? "✅ EXISTE" : "❌ null"));
+    } catch(e) {
+      resultados.push(path + " → ERRO");
+    }
+    Utilities.sleep(300);
+  });
+  SpreadsheetApp.getUi().alert("Endpoints Financeiros", resultados.join("\n"), SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+function testarRotas876e401() {
+  autenticar();
+  var r876a = chamarAPI("/listar/situacao/todos", "get");
+  var r401a = chamarAPI("/listar/situacaomotivo/todos", "get");
+  var msg =
+    "=== ROTA 876 — Situações ===\n" +
+    "/listar/situacao/todos: " + (r876a ? "✅ " + JSON.stringify(r876a).substring(0,100) : "❌") + "\n\n" +
+    "=== ROTA 401 — Motivos ===\n" +
+    "/listar/situacaomotivo/todos: " + (r401a ? "✅ " + JSON.stringify(r401a).substring(0,100) : "❌");
+  SpreadsheetApp.getUi().alert("Teste Rotas 876/401", msg, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+function testarInadimplencia() {
+  var hoje = new Date();
+  Logger.log("Hoje: dia " + hoje.getDate());
+  var resultado = chamarAPI("/listar/associado", "post", {
+    "codigo_situacao": 1, "inicio_paginacao": 0, "quantidade_por_pagina": 5
+  });
+  if (resultado && resultado.associados) {
+    resultado.associados.forEach(function(a) {
+      Logger.log("Nome: " + a.nome + " | dia_vencimento: " + a.dia_vencimento);
+    });
+  }
+}
 
 // ============================================================
 // doGet — API JSON PARA O DASHBOARD
-// ============================================================
-// Após colar no final do código existente, faça o deploy:
-// Implantar → Nova implantação → Web App
-// Executar como: Eu | Quem tem acesso: Qualquer pessoa
 // ============================================================
 
 var SITUACOES_MAP = {
@@ -581,39 +507,20 @@ function doGet(e) {
 
   try {
     switch (acao) {
-      case "resumo":
-        resultado = getResumo();
-        break;
+      case "resumo":              resultado = getResumo();              break;
       case "associados":
-        var situacao = (e.parameter.situacao) ? e.parameter.situacao : "1";
+        var situacao = e.parameter.situacao || "1";
         resultado = getAssociados(situacao);
         break;
-      case "veiculos":
-        resultado = getVeiculos();
-        break;
-      case "alteracoes":
-        resultado = getAlteracoes();
-        break;
-      case "snapshots":
-        resultado = getSnapshots();
-        break;
-      case "zona_churn":
-        resultado = getZonaChurn();
-        break;
-      case "panorama":
-        resultado = getPanorama();
-        break;
-      case "analise_cancelamentos":
-        resultado = getAnaliseCancelamentos();
-        break;
-      case "historico_mensal":
-        resultado = getHistoricoMensal();
-        break;
-      case "analise_churn":
-        resultado = getAnaliseChurn();
-        break;
-      default:
-        resultado = { erro: "Acao nao reconhecida: " + acao };
+      case "veiculos":            resultado = getVeiculos();            break;
+      case "alteracoes":          resultado = getAlteracoes();          break;
+      case "snapshots":           resultado = getSnapshots();           break;
+      case "zona_churn":          resultado = getZonaChurn();           break;
+      case "panorama":            resultado = getPanorama();            break;
+      case "analise_cancelamentos": resultado = getAnaliseCancelamentos(); break;
+      case "historico_mensal":    resultado = getHistoricoMensal();     break;
+      case "analise_churn":       resultado = getAnaliseChurn();        break;
+      default: resultado = { erro: "Acao nao reconhecida: " + acao };
     }
   } catch (err) {
     resultado = { erro: err.message };
@@ -628,52 +535,42 @@ function doGet(e) {
 function getPanorama() {
   autenticar();
 
-  // Contagem via API
-  var resumoAPI = chamarAPI("/associado-ativo-inativo/listar", "get");
-
-  // Novos contratos hoje
+  var resumoAPI      = chamarAPI("/associado-ativo-inativo/listar", "get");
   var novosContratos = chamarAPI("/associado/novos-contratos/listar", "get");
-
-  // Snapshots para evolucao
-  var snapshots = getSnapshots();
-
-  // Alteracoes para churn recente
-  var alteracoes = getAlteracoes();
+  var snapshots      = getSnapshots();
+  var alteracoes     = getAlteracoes();
 
   var cancelamentos7d = 0;
-  var reativacoes7d = 0;
-  if (alteracoes.associados && Array.isArray(alteracoes.associados)) {
+  var reativacoes7d   = 0;
+  var seteDiasAtras   = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  if (Array.isArray(alteracoes.associados)) {
     alteracoes.associados.forEach(function(a) {
       if (a.nome_campo_tabela === "codigo_situacao") {
-        if (String(a.valor_posterior) === "2") cancelamentos7d++;
-        if (String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1") reativacoes7d++;
-      }
-    });
-  }
-  if (alteracoes.veiculos && Array.isArray(alteracoes.veiculos)) {
-    alteracoes.veiculos.forEach(function(v) {
-      if (v.nome_campo_tabela === "codigo_situacao") {
-        if (String(v.valor_posterior) === "2") cancelamentos7d++;
-        if (String(v.valor_anterior) === "2" && String(v.valor_posterior) === "1") reativacoes7d++;
+        var dt = new Date(a.data_alteracao);
+        if (dt >= seteDiasAtras) {
+          if (String(a.valor_posterior) === "2") cancelamentos7d++;
+          if (String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1") reativacoes7d++;
+        }
       }
     });
   }
 
-  var ativos = resumoAPI ? parseInt(resumoAPI.associados_ativos || 0) : 0;
+  var ativos   = resumoAPI ? parseInt(resumoAPI.associados_ativos   || 0) : 0;
   var inativos = resumoAPI ? parseInt(resumoAPI.associados_inativos || 0) : 0;
 
   return {
-    timestamp: new Date().toISOString(),
-    base_ativa: ativos,
-    base_inativa: inativos,
-    base_total: ativos + inativos,
-    novos_contratos_hoje: novosContratos ? parseInt(novosContratos.quantidade_contratos || 0) : 0,
-    cancelamentos_7d: cancelamentos7d,
-    reativacoes_7d: reativacoes7d,
-    saldo_liquido_7d: reativacoes7d - cancelamentos7d,
-    churn_rate_estimado: ativos > 0 ? ((cancelamentos7d / 7 * 30) / ativos * 100).toFixed(2) + "%" : "N/A",
-    snapshots: snapshots,
-    situacoes_map: SITUACOES_MAP
+    timestamp:             new Date().toISOString(),
+    base_ativa:            ativos,
+    base_inativa:          inativos,
+    base_total:            ativos + inativos,
+    novos_contratos_hoje:  novosContratos ? parseInt(novosContratos.quantidade_contratos || 0) : 0,
+    cancelamentos_7d:      cancelamentos7d,
+    reativacoes_7d:        reativacoes7d,
+    saldo_liquido_7d:      reativacoes7d - cancelamentos7d,
+    churn_rate_estimado:   ativos > 0 ? ((cancelamentos7d / 7 * 30) / ativos * 100).toFixed(2) + "%" : "N/A",
+    snapshots:             snapshots,
+    situacoes_map:         SITUACOES_MAP
   };
 }
 
@@ -682,24 +579,42 @@ function getResumo() {
   autenticar();
   var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
   return {
-    timestamp: new Date().toISOString(),
-    associados_ativos: resumo ? resumo.associados_ativos : 0,
-    associados_inativos: resumo ? resumo.associados_inativos : 0,
-    situacoes_map: SITUACOES_MAP
+    timestamp:            new Date().toISOString(),
+    associados_ativos:    resumo ? resumo.associados_ativos   : 0,
+    associados_inativos:  resumo ? resumo.associados_inativos : 0,
+    situacoes_map:        SITUACOES_MAP
   };
 }
 
-// ===================== ZONA DE CHURN =====================
-
+// ===================== ZONA DE CHURN — COM CACHE 30min =====================
 function getZonaChurn() {
+  var cache = CacheService.getScriptCache();
+
+  // Lê do cache (suporta chunks para payloads > 100KB)
+  var nChunks = cache.get('zona_churn_chunks');
+  if (nChunks) {
+    try {
+      var json = '';
+      for (var c = 0; c < parseInt(nChunks); c++) {
+        json += cache.get('zona_churn_chunk_' + c) || '';
+      }
+      if (json) return JSON.parse(json);
+    } catch(e) {}
+  } else {
+    var cached = cache.get('zona_churn_completo');
+    if (cached) {
+      try { return JSON.parse(cached); } catch(e) {}
+    }
+  }
+
   autenticar();
-  var hoje = new Date();
+  var hoje    = new Date();
   var diaHoje = hoje.getDate();
 
-  var inadimplentes = [];
+  var inadimplentes            = [];
   var cancelamentosSolicitados = [];
-  var pagina = 0;
-  var totalRegistros = 1;
+  var pagina                   = 0;
+  var totalRegistros           = 1;
 
   while (pagina < totalRegistros) {
     var resultado = chamarAPI("/listar/associado", "post", {
@@ -707,21 +622,17 @@ function getZonaChurn() {
       "inicio_paginacao": pagina,
       "quantidade_por_pagina": 1000
     });
-
     if (!resultado || !resultado.associados || resultado.associados.length === 0) break;
     totalRegistros = parseInt(resultado.total_associados) || 0;
 
     resultado.associados.forEach(function(assoc) {
-      var diaVenc = parseInt(assoc.dia_vencimento) || 10;
-
+      var diaVenc         = parseInt(assoc.dia_vencimento) || 10;
       var vencMesAtual    = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc);
       var vencMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, diaVenc);
-      var dataVenc = vencMesAtual <= hoje ? vencMesAtual : vencMesAnterior;
+      var dataVenc        = vencMesAtual <= hoje ? vencMesAtual : vencMesAnterior;
+      var diasAtraso      = Math.floor((hoje - dataVenc) / (1000 * 60 * 60 * 24));
+      var diasParaChurn   = 5 - diasAtraso;
 
-      var diasAtraso    = Math.floor((hoje - dataVenc) / (1000 * 60 * 60 * 24));
-      var diasParaChurn = 5 - diasAtraso;
-
-      // Calcula tempo de associacao
       var dataAdesao = assoc.data_contrato_associado && assoc.data_contrato_associado !== "0000-00-00"
         ? assoc.data_contrato_associado
         : (assoc.data_cadastro_associado || "");
@@ -744,7 +655,7 @@ function getZonaChurn() {
           dias_atraso:        diasAtraso,
           dias_para_churn:    Math.max(0, diasParaChurn),
           status_churn:       diasParaChurn <= 0 ? "CHURN_IMINENTE" : "EM_RISCO",
-          codigo_regional:    assoc.codigo_regional || "",
+          codigo_regional:    assoc.codigo_regional    || "",
           codigo_cooperativa: assoc.codigo_cooperativa || "",
           data_adesao:        dataAdesao,
           dias_associado:     diasAssociado
@@ -756,10 +667,10 @@ function getZonaChurn() {
     if (pagina < totalRegistros) Utilities.sleep(300);
   }
 
-  // Cancelamentos solicitados (últimos 7 dias)
-  var seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
-  var dataInicial   = Utilities.formatDate(seteDiasAtras, "America/Sao_Paulo", "dd/MM/yyyy");
-  var dataFinal     = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
+  // Cancelamentos solicitados — últimos 30 dias
+  var trintaDiasAtras = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
+  var dataInicial     = Utilities.formatDate(trintaDiasAtras, "America/Sao_Paulo", "dd/MM/yyyy");
+  var dataFinal       = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
 
   var alteracoesAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
     "data_inicial": dataInicial,
@@ -786,7 +697,7 @@ function getZonaChurn() {
           codigo_associado:  a.codigo_associado,
           nome:              a.nome_associado || "",
           cpf:               a.cpf_associado  || "",
-          data_alteracao:    a.data_alteracao,
+          data_reativacao:   a.data_alteracao,
           usuario_alteracao: a.nome_usuario_alteracao || ""
         });
       }
@@ -795,7 +706,7 @@ function getZonaChurn() {
 
   inadimplentes.sort(function(a, b) { return a.dias_para_churn - b.dias_para_churn; });
 
-  return {
+  var resultado = {
     timestamp:                       new Date().toISOString(),
     dia_referencia:                  diaHoje,
     total_inadimplentes:             inadimplentes.length,
@@ -811,21 +722,159 @@ function getZonaChurn() {
       percentual:     "0%"
     }
   };
+
+  // Grava no cache por 30 minutos (1800s)
+  try {
+    var payload    = JSON.stringify(resultado);
+    var CHUNK_SIZE = 90000;
+    if (payload.length <= CHUNK_SIZE) {
+      cache.put('zona_churn_completo', payload, 1800);
+      cache.remove('zona_churn_chunks');
+    } else {
+      var totalChunks = Math.ceil(payload.length / CHUNK_SIZE);
+      for (var k = 0; k < totalChunks; k++) {
+        cache.put('zona_churn_chunk_' + k, payload.substring(k * CHUNK_SIZE, (k + 1) * CHUNK_SIZE), 1800);
+      }
+      cache.put('zona_churn_chunks', String(totalChunks), 1800);
+      cache.remove('zona_churn_completo');
+    }
+  } catch(e) {
+    Logger.log('Cache zona_churn write error: ' + e.message);
+  }
+
+  return resultado;
 }
 
+function invalidarCacheZonaChurn() {
+  var cache = CacheService.getScriptCache();
+  cache.remove('zona_churn_completo');
+  cache.remove('zona_churn_chunks');
+  for (var i = 0; i < 20; i++) cache.remove('zona_churn_chunk_' + i);
+  Logger.log('✅ Cache de zona_churn invalidado.');
+  try { SpreadsheetApp.getUi().alert("✅ Cache zona_churn invalidado."); } catch(e) {}
+}
 
+// ===================== ALTERAÇÕES — 365 DIAS COM CACHE =====================
+function getAlteracoes() {
+  var cache = CacheService.getScriptCache();
 
-// ===================== ANÁLISE CANCELAMENTOS (para o dashboard) =====================
+  // Lê do cache (suporta chunks para payloads > 100KB)
+  var nChunks = cache.get('alteracoes_chunks');
+  if (nChunks) {
+    try {
+      var json = '';
+      for (var c = 0; c < parseInt(nChunks); c++) {
+        json += cache.get('alteracoes_chunk_' + c) || '';
+      }
+      if (json) return JSON.parse(json);
+    } catch(e) { /* cache inválido, busca fresco */ }
+  } else {
+    var cached = cache.get('alteracoes_completo');
+    if (cached) {
+      try { return JSON.parse(cached); } catch(e) {}
+    }
+  }
+
+  autenticar();
+
+  var hoje         = new Date();
+  var JANELA_DIAS  = 365;
+  var todoAssoc    = [];
+  var todoVeic     = [];
+  var totalJanelas = Math.ceil(JANELA_DIAS / 7);
+
+  for (var i = 0; i < totalJanelas; i++) {
+    var dataFim = new Date(hoje.getTime() - i * 7 * 24 * 60 * 60 * 1000);
+    var dataIni = new Date(hoje.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
+    var dFim    = Utilities.formatDate(dataFim, "America/Sao_Paulo", "dd/MM/yyyy");
+    var dIni    = Utilities.formatDate(dataIni, "America/Sao_Paulo", "dd/MM/yyyy");
+
+    var resAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
+      "data_inicial": dIni, "data_final": dFim, "campos": ["codigo_situacao"]
+    });
+    if (Array.isArray(resAssoc)) todoAssoc = todoAssoc.concat(resAssoc);
+
+    var resVeic = chamarAPI("/listar/alteracao-veiculos", "post", {
+      "data_inicial": dIni, "data_final": dFim, "campos": ["codigo_situacao"]
+    });
+    if (Array.isArray(resVeic)) todoVeic = todoVeic.concat(resVeic);
+
+    Utilities.sleep(300);
+  }
+
+  // Remove duplicatas
+  function deduplicar(arr) {
+    var vistos = {};
+    return arr.filter(function(item) {
+      var chave = String(item.codigo_alteracao || item.data_alteracao + "_" + item.codigo_associado);
+      if (vistos[chave]) return false;
+      vistos[chave] = true;
+      return true;
+    });
+  }
+
+  todoAssoc = deduplicar(todoAssoc);
+  todoVeic  = deduplicar(todoVeic);
+
+  var dataFimStr = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
+  var dataIniStr = Utilities.formatDate(
+    new Date(hoje.getTime() - JANELA_DIAS * 24 * 60 * 60 * 1000),
+    "America/Sao_Paulo", "dd/MM/yyyy"
+  );
+
+  var resultado = {
+    timestamp:        new Date().toISOString(),
+    periodo:          dataIniStr + " a " + dataFimStr,
+    associados:       todoAssoc,
+    veiculos:         todoVeic,
+    total_alteracoes: todoAssoc.length + todoVeic.length
+  };
+
+  // Grava no cache por 1 hora
+  try {
+    var payload    = JSON.stringify(resultado);
+    var CHUNK_SIZE = 90000;
+    if (payload.length <= CHUNK_SIZE) {
+      cache.put('alteracoes_completo', payload, 3600);
+      cache.remove('alteracoes_chunks');
+    } else {
+      var totalChunks = Math.ceil(payload.length / CHUNK_SIZE);
+      for (var k = 0; k < totalChunks; k++) {
+        cache.put('alteracoes_chunk_' + k, payload.substring(k * CHUNK_SIZE, (k + 1) * CHUNK_SIZE), 3600);
+      }
+      cache.put('alteracoes_chunks', String(totalChunks), 3600);
+      cache.remove('alteracoes_completo');
+    }
+  } catch(e) {
+    Logger.log('Cache write error: ' + e.message);
+  }
+
+  return resultado;
+}
+
+// Invalida o cache manualmente (rode no editor antes de abrir o dashboard)
+function invalidarCacheAlteracoes() {
+  var cache = CacheService.getScriptCache();
+  cache.remove('alteracoes_completo');
+  cache.remove('alteracoes_chunks');
+  for (var i = 0; i < 20; i++) cache.remove('alteracoes_chunk_' + i);
+  Logger.log('✅ Cache de alterações invalidado.');
+  try {
+    SpreadsheetApp.getUi().alert("✅ Cache invalidado. Próxima chamada buscará dados frescos.");
+  } catch(e) {}
+}
+
+// ===================== ANÁLISE CANCELAMENTOS =====================
 function getAnaliseCancelamentos() {
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName("Historico Cancelamentos");
   if (!aba || aba.getLastRow() < 2) return { erro: "Histórico não encontrado. Execute 'Reconstruir Histórico' no menu.", dados: [] };
 
   var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
-  var iDias = header.indexOf("dias_ate_cancelamento");
-  var iMes  = header.indexOf("mes_cancelamento");
-  var iData = header.indexOf("data_cancelamento");
-  var dados = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
+  var iDias  = header.indexOf("dias_ate_cancelamento");
+  var iMes   = header.indexOf("mes_cancelamento");
+  var iData  = header.indexOf("data_cancelamento");
+  var dados  = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
 
   var porMes = {};
   dados.forEach(function(row) {
@@ -849,63 +898,30 @@ function getAnaliseCancelamentos() {
     }
   });
 
-  var resultado = Object.values(porMes).sort(function(a, b) { return a.mes.localeCompare(b.mes); });
   return {
-    timestamp: new Date().toISOString(),
+    timestamp:       new Date().toISOString(),
     total_registros: dados.length,
-    por_mes: resultado
+    por_mes:         Object.values(porMes).sort(function(a, b) { return a.mes.localeCompare(b.mes); })
   };
 }
 
-// ===================== ASSOCIADOS (da aba Sheets) =====================
+// ===================== ASSOCIADOS / VEÍCULOS (Sheets) =====================
 function getAssociados(codigoSituacao) {
-  var nomeAba = String(codigoSituacao) === "1" ? "Associados Ativos" : "Associados Inativos";
-  return lerAba(nomeAba);
+  return lerAba(String(codigoSituacao) === "1" ? "Associados Ativos" : "Associados Inativos");
 }
 
-// ===================== VEICULOS (da aba Sheets) =====================
 function getVeiculos() {
   return lerAba("Veiculos Ativos");
 }
 
-// ===================== ALTERACOES (ultimos 7 dias via API) =====================
-function getAlteracoes() {
-  autenticar();
-  var hoje = new Date();
-  var seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
-  var dataInicial = Utilities.formatDate(seteDiasAtras, "America/Sao_Paulo", "dd/MM/yyyy");
-  var dataFinal = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
-
-  var alteracoesAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
-    "data_inicial": dataInicial,
-    "data_final": dataFinal,
-    "campos": ["codigo_situacao"]
-  });
-
-  var alteracoesVeic = chamarAPI("/listar/alteracao-veiculos", "post", {
-    "data_inicial": dataInicial,
-    "data_final": dataFinal,
-    "campos": ["codigo_situacao"]
-  });
-
-  return {
-    timestamp: new Date().toISOString(),
-    periodo: dataInicial + " a " + dataFinal,
-    associados: Array.isArray(alteracoesAssoc) ? alteracoesAssoc : [],
-    veiculos: Array.isArray(alteracoesVeic) ? alteracoesVeic : [],
-    total_alteracoes: (Array.isArray(alteracoesAssoc) ? alteracoesAssoc.length : 0) +
-                      (Array.isArray(alteracoesVeic) ? alteracoesVeic.length : 0)
-  };
-}
-
-// ===================== SNAPSHOTS (da aba Sheets) =====================
+// ===================== SNAPSHOTS =====================
 function getSnapshots() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName("Snapshots");
   if (!aba || aba.getLastRow() < 2) return [];
 
-  var dados = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
   var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+  var dados  = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
 
   return dados.map(function(linha) {
     var obj = {};
@@ -914,206 +930,271 @@ function getSnapshots() {
   });
 }
 
-// ===================== UTILITARIO: LER ABA =====================
+// ===================== UTILITÁRIO: LER ABA =====================
 function lerAba(nomeAba) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName(nomeAba);
   if (!aba || aba.getLastRow() < 2) return { erro: "Aba '" + nomeAba + "' vazia ou nao encontrada", dados: [] };
 
-  var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
-  var dados = aba.getRange(2, 1, Math.min(aba.getLastRow() - 1, 5000), aba.getLastColumn()).getValues();
-
+  var header    = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+  var dados     = aba.getRange(2, 1, Math.min(aba.getLastRow() - 1, 5000), aba.getLastColumn()).getValues();
   var registros = dados.map(function(linha) {
     var obj = {};
-    header.forEach(function(col, i) {
-      obj[col] = linha[i];
-    });
+    header.forEach(function(col, i) { obj[col] = linha[i]; });
     return obj;
   });
 
+  return { total: registros.length, aba: nomeAba, dados: registros };
+}
+
+// ===================== NOVOS CONTRATOS VIA POWER CRM =====================
+function getNovosContratosPorMes() {
+  // Cache de 1 hora — evita 12 chamadas à API a cada request
+  var cache  = CacheService.getScriptCache();
+  var cached = cache.get('power_crm_novos');
+  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+
+  var porMes = {};
+  var hoje   = new Date();
+
+  for (var i = 11; i >= 0; i--) {
+    var d      = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    var ano    = d.getFullYear();
+    var mesNum = d.getMonth() + 1;
+    var mesStr = ano + '-' + (mesNum < 10 ? '0' + mesNum : mesNum);
+    var ultimo = new Date(ano, mesNum, 0).getDate();
+    var from   = mesStr + '-01';
+    var to     = mesStr + '-' + (ultimo < 10 ? '0' + ultimo : ultimo);
+
+    try {
+      var resp = UrlFetchApp.fetch(POWER_CRM_URL + '/api/report/db', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + POWER_CRM_TOKEN,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        payload: JSON.stringify({ from: from, to: to, stringFilterTypeDate: 3 }),
+        muteHttpExceptions: true
+      });
+
+      if (resp.getResponseCode() !== 200) {
+        Logger.log('PowerCRM ' + mesStr + ': HTTP ' + resp.getResponseCode());
+        porMes[mesStr] = 0;
+        Utilities.sleep(400);
+        continue;
+      }
+
+      var data  = JSON.parse(resp.getContentText());
+      var lista = Array.isArray(data) ? data
+        : (data.data || data.content || data.result || data.records || data.items || []);
+
+      var count = 0;
+      lista.forEach(function(row) {
+        var status    = parseInt(row.cardStatus) || 0;
+        var arquivado = row.isShelved === true || row.isShelved === 1
+                     || String(row.isShelved).toUpperCase() === 'TRUE';
+        if (status === 5 && !arquivado) count++;
+      });
+
+      porMes[mesStr] = count;
+      Logger.log('PowerCRM ' + mesStr + ': ' + count + ' vendas');
+    } catch(e) {
+      Logger.log('PowerCRM erro ' + mesStr + ': ' + e.message);
+      porMes[mesStr] = 0;
+    }
+    Utilities.sleep(400);
+  }
+
+  try { cache.put('power_crm_novos', JSON.stringify(porMes), 3600); } catch(e) {}
+  return porMes;
+}
+
+function invalidarCachePowerCRM() {
+  CacheService.getScriptCache().remove('power_crm_novos');
+  Logger.log('✅ Cache Power CRM invalidado.');
+  try { SpreadsheetApp.getUi().alert('✅ Cache Power CRM invalidado.'); } catch(e) {}
+}
+
+// ===================== HISTÓRICO MENSAL — cache próprio, 12 chamadas mensais =====================
+function getHistoricoMensal() {
+  var cache  = CacheService.getScriptCache();
+  var cached = cache.get('historico_mensal');
+  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+
+  autenticar();
+
+  var novosMap  = getNovosContratosPorMes();
+  var hoje      = new Date();
+  var resultado = [];
+
+  for (var i = 11; i >= 0; i--) {
+    var d      = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    var ano    = d.getFullYear();
+    var mesNum = d.getMonth() + 1;
+    var mesStr = ano + "-" + (mesNum < 10 ? "0" + mesNum : mesNum);
+    var ultimo = new Date(ano, mesNum, 0).getDate();
+    var dIni   = Utilities.formatDate(new Date(ano, mesNum - 1, 1),       "America/Sao_Paulo", "dd/MM/yyyy");
+    var dFim   = Utilities.formatDate(new Date(ano, mesNum - 1, ultimo),  "America/Sao_Paulo", "dd/MM/yyyy");
+
+    var cancelamentos = 0, reativacoes = 0;
+
+    try {
+      var res = chamarAPI("/listar/alteracao-associados/", "post", {
+        "data_inicial": dIni, "data_final": dFim, "campos": ["codigo_situacao"]
+      });
+      if (Array.isArray(res)) {
+        res.forEach(function(a) {
+          var de   = String(a.valor_anterior  || "").trim();
+          var para = String(a.valor_posterior || "").trim();
+          if (de === "1" && para === "2") cancelamentos++;
+          if (de === "2" && para === "1") reativacoes++;
+        });
+      }
+    } catch(e) {
+      Logger.log("Historico " + mesStr + " erro: " + e.message);
+    }
+
+    resultado.push({
+      mes:           mesStr,
+      cancelamentos: cancelamentos,
+      reativacoes:   reativacoes,
+      novos:         novosMap[mesStr] || 0
+    });
+
+    Utilities.sleep(300);
+  }
+
+  var resAtivos = chamarAPI("/listar/associado", "post", {
+    "codigo_situacao": 1, "inicio_paginacao": 0, "quantidade_por_pagina": 1
+  });
+
+  var retorno = {
+    por_mes:          resultado,
+    base_ativa_atual: resAtivos ? (parseInt(resAtivos.total_associados) || 0) : 0
+  };
+
+  try { cache.put('historico_mensal', JSON.stringify(retorno), 3600); } catch(e) {}
+  return retorno;
+}
+
+function invalidarCacheHistoricoMensal() {
+  CacheService.getScriptCache().remove('historico_mensal');
+  Logger.log('✅ Cache histórico mensal invalidado.');
+  try { SpreadsheetApp.getUi().alert('✅ Cache histórico mensal invalidado.'); } catch(e) {}
+}
+
+// ===================== ANÁLISE DE CHURN (via getAlteracoes) =====================
+function getAnaliseChurn() {
+  var alteracoes = getAlteracoes();
+  var assocList  = alteracoes.associados || [];
+
+  // Filtra apenas cancelamentos: ativo (1) → inativo (2)
+  var cancelamentos = assocList.filter(function(a) {
+    return String(a.valor_posterior) === "2" && String(a.valor_anterior) === "1";
+  });
+
+  // Mapa de regional e data_contrato via aba "Associados Inativos" (se disponível)
+  var contratosMap = {};
+  try {
+    var ss        = SpreadsheetApp.getActiveSpreadsheet();
+    var abaInativ = ss.getSheetByName("Associados Inativos");
+    if (abaInativ && abaInativ.getLastRow() >= 2) {
+      var header   = abaInativ.getRange(1, 1, 1, abaInativ.getLastColumn()).getValues()[0];
+      var iCod     = header.indexOf("codigo_associado");
+      var iReg     = header.indexOf("codigo_regional");
+      var iDtContr = header.indexOf("data_contrato_associado");
+      var iDtCad   = header.indexOf("data_cadastro_associado");
+      var linhas   = abaInativ.getRange(2, 1, abaInativ.getLastRow() - 1, abaInativ.getLastColumn()).getValues();
+      linhas.forEach(function(row) {
+        var cod = String(row[iCod] || "").trim();
+        if (!cod) return;
+        var dtContr = iDtContr !== -1 ? String(row[iDtContr] || "") : "";
+        var dtCad   = iDtCad   !== -1 ? String(row[iDtCad]   || "") : "";
+        contratosMap[cod] = {
+          regional: iReg !== -1 ? String(row[iReg] || "") : "",
+          data:     (dtContr && dtContr !== "0000-00-00") ? dtContr : dtCad
+        };
+      });
+    }
+  } catch(e) {
+    Logger.log("Aviso: não foi possível ler Associados Inativos — " + e.message);
+  }
+
+  var REGIONAL_NAMES        = { "1": "Ipatinga", "2": "Betim" };
+  var porMes                = {};
+  var porRegional           = {};
+  var porOperadora          = {};
+  var distribuicaoTempoCasa = { "0-30": 0, "31-90": 0, "91-180": 0, "181-365": 0, "366-730": 0, "730+": 0 };
+  var detalhes              = [];
+
+  cancelamentos.forEach(function(a) {
+    var dtCancelStr  = String(a.data_alteracao || "").substring(0, 10);
+    if (!dtCancelStr || dtCancelStr.length < 7) return;
+    var mesCancelStr = dtCancelStr.substring(0, 7);
+
+    var cod      = String(a.codigo_associado || "");
+    var info     = contratosMap[cod] || {};
+    var codReg   = info.regional || "";
+    var regNome  = REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional");
+    var operadora = String(a.nome_usuario_alteracao || "").trim() || "Sem Operadora";
+
+    var diasCasa = 0;
+    if (info.data && info.data !== "0000-00-00") {
+      try {
+        var dtContr  = new Date(info.data);
+        var dtCancel = new Date(a.data_alteracao);
+        if (!isNaN(dtContr) && !isNaN(dtCancel)) {
+          diasCasa = Math.max(0, Math.floor((dtCancel - dtContr) / (1000 * 60 * 60 * 24)));
+        }
+      } catch(e) {}
+    }
+
+    porMes[mesCancelStr]    = (porMes[mesCancelStr]    || 0) + 1;
+    porRegional[regNome]    = (porRegional[regNome]     || 0) + 1;
+    porOperadora[operadora] = (porOperadora[operadora]  || 0) + 1;
+
+    if      (diasCasa <= 30)  distribuicaoTempoCasa["0-30"]++;
+    else if (diasCasa <= 90)  distribuicaoTempoCasa["31-90"]++;
+    else if (diasCasa <= 180) distribuicaoTempoCasa["91-180"]++;
+    else if (diasCasa <= 365) distribuicaoTempoCasa["181-365"]++;
+    else if (diasCasa <= 730) distribuicaoTempoCasa["366-730"]++;
+    else                      distribuicaoTempoCasa["730+"]++;
+
+    detalhes.push({
+      codigo_associado:  a.codigo_associado,
+      nome:              a.nome_associado  || "",
+      data_cancelamento: dtCancelStr,
+      dias_casa:         diasCasa,
+      regional:          regNome,
+      operadora:         operadora
+    });
+  });
+
   return {
-    total: registros.length,
-    aba: nomeAba,
-    dados: registros
+    total_cancelamentos: cancelamentos.length,
+    por_mes: Object.keys(porMes).sort().map(function(m) {
+      return { mes: m, cancelamentos: porMes[m] };
+    }),
+    por_regional: Object.keys(porRegional).map(function(r) {
+      return { regional: r, cancelamentos: porRegional[r] };
+    }).sort(function(a, b) { return b.cancelamentos - a.cancelamentos; }),
+    por_operadora: Object.keys(porOperadora).map(function(op) {
+      return { operadora: op, cancelamentos: porOperadora[op] };
+    }).sort(function(a, b) { return b.cancelamentos - a.cancelamentos; }),
+    distribuicao_tempo_casa: Object.keys(distribuicaoTempoCasa).map(function(f) {
+      return { faixa: f, quantidade: distribuicaoTempoCasa[f] };
+    }),
+    detalhes: detalhes
   };
 }
 
-// ===================== TESTE DO doGet =====================
-function testarDoGet() {
-  var resultados = {};
-
-  ["resumo", "panorama", "zona_churn", "snapshots"].forEach(function(acao) {
-    try {
-      var e = { parameter: { acao: acao } };
-      var response = doGet(e);
-      var json = JSON.parse(response.getContent());
-      resultados[acao] = json.erro ? "ERRO: " + json.erro : "OK";
-      Logger.log(acao + ": " + JSON.stringify(json).substring(0, 500));
-    } catch (err) {
-      resultados[acao] = "ERRO: " + err.message;
-      Logger.log(acao + " ERRO: " + err.message);
-    }
-  });
-
-  var msg = Object.keys(resultados).map(function(k) { return k + ": " + resultados[k]; }).join("\n");
-  SpreadsheetApp.getUi().alert("Teste doGet", msg, SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-function testarInadimplencia() {
-  var hoje = new Date();
-  var diaHoje = hoje.getDate();
-  Logger.log("Hoje: dia " + diaHoje);
-  
-  var resultado = chamarAPI("/listar/associado", "post", {
-    "codigo_situacao": 1,
-    "inicio_paginacao": 0,
-    "quantidade_por_pagina": 5
-  });
-  
-  if (resultado && resultado.associados) {
-    resultado.associados.forEach(function(a) {
-      Logger.log("Nome: " + a.nome + " | dia_vencimento: " + a.dia_vencimento);
-    });
-  }
-}
-
-
-function testarEndpointsFinanceiros() {
-  autenticar();
-  
-  var endpoints = [
-    "/listar/inadimplente",
-    "/inadimplente/listar",
-    "/financeiro/listar",
-    "/listar/financeiro",
-    "/cobranca/listar",
-    "/listar/cobranca",
-    "/listar/pagamento",
-    "/pagamento/listar",
-    "/listar/mensalidade",
-    "/mensalidade/listar",
-    "/listar/boleto",
-    "/boleto/listar",
-    "/associado/inadimplente/listar",
-    "/listar/associado/inadimplente",
-    "/financeiro/inadimplente/listar"
-  ];
-  
-  var resultados = [];
-  
-  endpoints.forEach(function(path) {
-    try {
-      var r = chamarAPI(path, "get");
-      var status = r ? "✅ EXISTE" : "❌ null";
-      Logger.log(path + " → " + status);
-      resultados.push(path + " → " + status);
-    } catch(e) {
-      Logger.log(path + " → ERRO: " + e.message);
-      resultados.push(path + " → ERRO");
-    }
-    Utilities.sleep(300);
-  });
-  
-  Logger.log("=== RESULTADO FINAL ===");
-  resultados.forEach(function(r) { Logger.log(r); });
-  
-  SpreadsheetApp.getUi().alert(
-    "Endpoints Financeiros",
-    resultados.join("\n"),
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
-}
-
-function testarRotas876e401() {
-  autenticar();
-  
-  // Rota 876 — Situações
-  var r876a = chamarAPI("/listar/situacao/todos", "get");
-  var r876b = chamarAPI("/situacao/listar", "get");
-  var r876c = chamarAPI("/listar/situacao", "get");
-  
-  // Rota 401 — Motivos de Situação
-  var r401a = chamarAPI("/listar/situacaomotivo/todos", "get");
-  var r401b = chamarAPI("/situacaomotivo/listar", "get");
-  var r401c = chamarAPI("/listar/situacao/motivo", "get");
-  var r401d = chamarAPI("/listar/motivo/situacao", "get");
-
-  var msg = 
-    "=== ROTA 876 — Situações ===\n" +
-    "/listar/situacao/todos: "    + (r876a ? "✅ " + JSON.stringify(r876a).substring(0,100) : "❌") + "\n" +
-    "/situacao/listar: "          + (r876b ? "✅ " + JSON.stringify(r876b).substring(0,100) : "❌") + "\n" +
-    "/listar/situacao: "          + (r876c ? "✅ " + JSON.stringify(r876c).substring(0,100) : "❌") + "\n\n" +
-    "=== ROTA 401 — Motivos ===\n" +
-    "/listar/situacaomotivo/todos: " + (r401a ? "✅ " + JSON.stringify(r401a).substring(0,100) : "❌") + "\n" +
-    "/situacaomotivo/listar: "       + (r401b ? "✅ " + JSON.stringify(r401b).substring(0,100) : "❌") + "\n" +
-    "/listar/situacao/motivo: "      + (r401c ? "✅ " + JSON.stringify(r401c).substring(0,100) : "❌") + "\n" +
-    "/listar/motivo/situacao: "      + (r401d ? "✅ " + JSON.stringify(r401d).substring(0,100) : "❌");
-
-  Logger.log(msg);
-  SpreadsheetApp.getUi().alert("Teste Rotas 876/401", msg, SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-function testarRotasBruto() {
-  autenticar();
-  
-  var rotas = [
-    "/listar/situacao/todos",
-    "/listar/situacaomotivo/todos"
-  ];
-  
-  rotas.forEach(function(path) {
-    var response = UrlFetchApp.fetch("https://api.hinova.com.br/api/sga/v2" + path, {
-      method: "get",
-      headers: {
-        "Authorization": "Bearer " + TOKEN_USUARIO,
-        "Content-Type": "application/json"
-      },
-      muteHttpExceptions: true
-    });
-    
-    Logger.log(path + " → HTTP " + response.getResponseCode());
-    Logger.log("Body: " + response.getContentText().substring(0, 300));
-  });
-}
-
-function testarRotasComCooperativa() {
-  autenticar();
-  
-  var cooperativas = [1, 2];
-  
-  cooperativas.forEach(function(cod) {
-    var r1 = UrlFetchApp.fetch("https://api.hinova.com.br/api/sga/v2/listar/situacao/todos", {
-      method: "post",
-      headers: {
-        "Authorization": "Bearer " + TOKEN_USUARIO,
-        "Content-Type": "application/json"
-      },
-      payload: JSON.stringify({ "codigo_cooperativa": cod }),
-      muteHttpExceptions: true
-    });
-    Logger.log("situacao POST cooperativa " + cod + " → " + r1.getResponseCode() + " | " + r1.getContentText().substring(0, 200));
-    
-    var r2 = UrlFetchApp.fetch("https://api.hinova.com.br/api/sga/v2/listar/situacao/" + cod, {
-      method: "get",
-      headers: {
-        "Authorization": "Bearer " + TOKEN_USUARIO,
-        "Content-Type": "application/json"
-      },
-      muteHttpExceptions: true
-    });
-    Logger.log("situacao GET /" + cod + " → " + r2.getResponseCode() + " | " + r2.getContentText().substring(0, 200));
-    
-    Utilities.sleep(300);
-  });
-}
-
-
+// ===================== RECONSTRUIR HISTÓRICO =====================
 function reconstruirHistoricoCancelamentos() {
   autenticar();
 
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
   var aba = ss.getSheetByName("Historico Cancelamentos") || ss.insertSheet("Historico Cancelamentos");
-
   aba.clear();
   aba.getRange(1, 1, 1, 10).setValues([[
     "codigo_associado", "nome", "cpf",
@@ -1123,15 +1204,13 @@ function reconstruirHistoricoCancelamentos() {
   aba.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
   aba.setFrozenRows(1);
 
-  // Carrega TODOS os inativos para obter data de adesão, regional e cooperativa
-  var contratos = {};  // cod -> {data, regional, coop}
-  var pagina = 0;
+  var contratos      = {};
+  var pagina         = 0;
   var totalRegistros = 1;
+
   while (pagina < totalRegistros) {
     var r = chamarAPI("/listar/associado", "post", {
-      "codigo_situacao": 2,
-      "inicio_paginacao": pagina,
-      "quantidade_por_pagina": 1000
+      "codigo_situacao": 2, "inicio_paginacao": pagina, "quantidade_por_pagina": 1000
     });
     if (!r || !r.associados || r.associados.length === 0) break;
     totalRegistros = parseInt(r.total_associados) || 0;
@@ -1143,73 +1222,53 @@ function reconstruirHistoricoCancelamentos() {
         dc = a.data_cadastro_associado;
       }
       contratos[String(a.codigo_associado)] = {
-        data:     dc,
-        regional: a.codigo_regional     || "",
-        coop:     a.codigo_cooperativa  || ""
+        data: dc, regional: a.codigo_regional || "", coop: a.codigo_cooperativa || ""
       };
     });
-    Logger.log("Inativos offset " + pagina + "/" + totalRegistros + " — dict=" + Object.keys(contratos).length);
+    Logger.log("Inativos offset " + pagina + "/" + totalRegistros);
     pagina += 1000;
     Utilities.sleep(400);
   }
-  Logger.log("Total inativos com data_contrato: " + Object.keys(contratos).length);
 
-  // Varre semana a semana — 3 anos para trás
   var totalSemanas = 156;
-  var hoje = new Date();
-  var novasLinhas = [];
+  var hoje         = new Date();
+  var novasLinhas  = [];
 
   for (var i = 0; i < totalSemanas; i++) {
-    var dataFim = new Date(hoje.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-    var dataIni = new Date(hoje.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
-    var dFim = Utilities.formatDate(dataFim, "America/Sao_Paulo", "dd/MM/yyyy");
-    var dIni = Utilities.formatDate(dataIni, "America/Sao_Paulo", "dd/MM/yyyy");
+    var dataFimS = new Date(hoje.getTime() - i * 7 * 24 * 60 * 60 * 1000);
+    var dataIniS = new Date(hoje.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
+    var dFimS    = Utilities.formatDate(dataFimS, "America/Sao_Paulo", "dd/MM/yyyy");
+    var dIniS    = Utilities.formatDate(dataIniS, "America/Sao_Paulo", "dd/MM/yyyy");
 
     var alteracoes = chamarAPI("/listar/alteracao-associados/", "post", {
-      "data_inicial": dIni,
-      "data_final":   dFim,
-      "campos":       ["codigo_situacao"]
+      "data_inicial": dIniS, "data_final": dFimS, "campos": ["codigo_situacao"]
     });
 
     if (Array.isArray(alteracoes)) {
       alteracoes.forEach(function(a) {
         if (String(a.valor_posterior) !== "2" || String(a.valor_anterior) !== "1") return;
-
-        var cod      = String(a.codigo_associado);
-        var info     = contratos[cod] || {};
+        var cod          = String(a.codigo_associado);
+        var info         = contratos[cod] || {};
         var dataContrato = info.data || "";
-        var diasAte  = "";
-        var mesCancel = "";
-
-        var dtCancel = new Date(a.data_alteracao);
-        if (!isNaN(dtCancel)) {
-          mesCancel = Utilities.formatDate(dtCancel, "America/Sao_Paulo", "yyyy-MM");
-        }
-
+        var diasAte      = "";
+        var mesCancel    = "";
+        var dtCancel     = new Date(a.data_alteracao);
+        if (!isNaN(dtCancel)) mesCancel = Utilities.formatDate(dtCancel, "America/Sao_Paulo", "yyyy-MM");
         if (dataContrato) {
           var dtContrato = new Date(dataContrato);
           if (!isNaN(dtContrato) && !isNaN(dtCancel)) {
             diasAte = Math.floor((dtCancel - dtContrato) / (1000 * 60 * 60 * 24));
           }
         }
-
         novasLinhas.push([
-          a.codigo_associado,
-          a.nome_associado         || "",
-          a.cpf_associado          || "",
-          a.data_alteracao,
-          dataContrato,
-          diasAte,
-          mesCancel,
-          info.regional            || "",
-          info.coop                || "",
-          a.nome_usuario_alteracao || ""
+          a.codigo_associado, a.nome_associado || "", a.cpf_associado || "",
+          a.data_alteracao, dataContrato, diasAte, mesCancel,
+          info.regional || "", info.coop || "", a.nome_usuario_alteracao || ""
         ]);
       });
     }
 
-    Logger.log("Semana " + (i+1) + "/" + totalSemanas + " (" + dIni + " → " + dFim + "): " +
-      (Array.isArray(alteracoes) ? alteracoes.length : 0) + " alt | acumulado=" + novasLinhas.length);
+    Logger.log("Semana " + (i+1) + "/" + totalSemanas + " — acumulado=" + novasLinhas.length);
     Utilities.sleep(500);
   }
 
@@ -1219,17 +1278,14 @@ function reconstruirHistoricoCancelamentos() {
 
   SpreadsheetApp.getUi().alert(
     "✅ Histórico reconstruído!",
-    "Cancelamentos encontrados: " + novasLinhas.length + "\n" +
-    "Com data de contrato resolvida: " + novasLinhas.filter(function(l){ return l[4] !== ""; }).length + "\n" +
-    "Período: últimos 3 anos\n\n" +
-    "Agora rode: 📈 Analisar Cancelamentos 60 e 90 dias",
+    "Cancelamentos encontrados: " + novasLinhas.length,
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 }
 
 // ===================== ANÁLISE 60 E 90 DIAS =====================
 function analisarCancelamentos60e90() {
-  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var ss      = SpreadsheetApp.getActiveSpreadsheet();
   var abaHist = ss.getSheetByName("Historico Cancelamentos");
   if (!abaHist || abaHist.getLastRow() < 2) {
     SpreadsheetApp.getUi().alert("❌ Execute primeiro 'Reconstruir Histórico de Cancelamentos'.");
@@ -1242,73 +1298,55 @@ function analisarCancelamentos60e90() {
   var iData  = header.indexOf("data_cancelamento");
 
   if (iDias === -1) {
-    SpreadsheetApp.getUi().alert("❌ Coluna 'dias_ate_cancelamento' não encontrada. Reconstrua o histórico.");
+    SpreadsheetApp.getUi().alert("❌ Coluna 'dias_ate_cancelamento' não encontrada.");
     return;
   }
 
-  var dados = abaHist.getRange(2, 1, abaHist.getLastRow() - 1, abaHist.getLastColumn()).getValues();
-
+  var dados     = abaHist.getRange(2, 1, abaHist.getLastRow() - 1, abaHist.getLastColumn()).getValues();
   var porMes60  = {};
   var porMes90  = {};
   var porMesTot = {};
-  var semData   = 0;
 
   dados.forEach(function(row) {
     var dias = row[iDias];
     var mes  = iMes !== -1 ? String(row[iMes]) : "";
-
-    // Tenta derivar mês da data_cancelamento se mes_cancelamento estiver vazio
     if (!mes && iData !== -1 && row[iData]) {
       try {
         var d = new Date(row[iData]);
         if (!isNaN(d)) mes = Utilities.formatDate(d, "America/Sao_Paulo", "yyyy-MM");
       } catch(e) {}
     }
-
-    if (!mes || mes === "") { semData++; return; }
-
+    if (!mes || mes === "") return;
     porMesTot[mes] = (porMesTot[mes] || 0) + 1;
-
-    if (dias === "" || dias === null) return; // sem data de contrato
-
+    if (dias === "" || dias === null) return;
     var n = parseInt(dias);
     if (isNaN(n) || n < 0) return;
-
-    if (n <= 60)  porMes60[mes]  = (porMes60[mes]  || 0) + 1;
-    if (n <= 90)  porMes90[mes]  = (porMes90[mes]  || 0) + 1;
+    if (n <= 60) porMes60[mes] = (porMes60[mes] || 0) + 1;
+    if (n <= 90) porMes90[mes] = (porMes90[mes] || 0) + 1;
   });
 
-  // Monta aba de resultado
-  var abaRes = ss.getSheetByName("Análise 60-90 dias") || ss.insertSheet("Análise 60-90 dias");
+  var abaRes  = ss.getSheetByName("Análise 60-90 dias") || ss.insertSheet("Análise 60-90 dias");
   abaRes.clear();
-
-  var meses = Object.keys(porMesTot).sort();
-
+  var meses   = Object.keys(porMesTot).sort();
   var cabecalho = [
     ["📈 CANCELAMENTOS POR MÊS — Análise de Precocidade", "", "", "", ""],
     ["Gerado em: " + new Date().toLocaleString("pt-BR"), "", "", "", ""],
     ["", "", "", "", ""],
     ["Mês", "Total Cancelamentos", "Até 60 dias de adesão", "Até 90 dias de adesão", "% em até 90 dias"]
   ];
-
   var linhas = meses.map(function(mes) {
-    var tot  = porMesTot[mes] || 0;
-    var c60  = porMes60[mes]  || 0;
-    var c90  = porMes90[mes]  || 0;
-    var pct  = tot > 0 ? ((c90 / tot) * 100).toFixed(1) + "%" : "-";
-    return [mes, tot, c60, c90, pct];
+    var tot = porMesTot[mes] || 0;
+    var c60 = porMes60[mes]  || 0;
+    var c90 = porMes90[mes]  || 0;
+    return [mes, tot, c60, c90, tot > 0 ? ((c90/tot)*100).toFixed(1)+"%" : "-"];
   });
-
-  // Totais
-  var tTot = meses.reduce(function(s,m){ return s + (porMesTot[m]||0); }, 0);
-  var t60  = meses.reduce(function(s,m){ return s + (porMes60[m] ||0); }, 0);
-  var t90  = meses.reduce(function(s,m){ return s + (porMes90[m] ||0); }, 0);
-  linhas.push(["TOTAL", tTot, t60, t90, tTot > 0 ? ((t90/tTot)*100).toFixed(1) + "%" : "-"]);
+  var tTot = meses.reduce(function(s,m){ return s+(porMesTot[m]||0); }, 0);
+  var t60  = meses.reduce(function(s,m){ return s+(porMes60[m] ||0); }, 0);
+  var t90  = meses.reduce(function(s,m){ return s+(porMes90[m] ||0); }, 0);
+  linhas.push(["TOTAL", tTot, t60, t90, tTot > 0 ? ((t90/tTot)*100).toFixed(1)+"%" : "-"]);
 
   var tudo = cabecalho.concat(linhas);
   abaRes.getRange(1, 1, tudo.length, 5).setValues(tudo);
-
-  // Formatação
   abaRes.getRange(1, 1, 1, 5).setFontWeight("bold").setFontSize(13).setBackground("#1a1a2e").setFontColor("#fff");
   abaRes.getRange(4, 1, 1, 5).setFontWeight("bold").setBackground("#2d3561").setFontColor("#fff");
   abaRes.getRange(4 + linhas.length, 1, 1, 5).setFontWeight("bold").setBackground("#374785").setFontColor("#fff");
@@ -1317,167 +1355,25 @@ function analisarCancelamentos60e90() {
 
   SpreadsheetApp.getUi().alert(
     "✅ Análise concluída!",
-    "Total cancelamentos analisados: " + tTot + "\n" +
-    "Cancelados em até 60 dias: " + t60 + " (" + (tTot > 0 ? ((t60/tTot)*100).toFixed(1) : 0) + "%)\n" +
-    "Cancelados em até 90 dias: " + t90 + " (" + (tTot > 0 ? ((t90/tTot)*100).toFixed(1) : 0) + "%)\n\n" +
-    "Veja a aba 'Análise 60-90 dias'",
+    "Total: " + tTot + "\nAté 60 dias: " + t60 + "\nAté 90 dias: " + t90,
     SpreadsheetApp.getUi().ButtonSet.OK
   );
 }
 
-// ===================== HISTÓRICO MENSAL (12 meses) =====================
-function getHistoricoMensal() {
-  var hoje = new Date();
-  var porMes = [];
-
-  for (var i = 11; i >= 0; i--) {
-    var d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-    var ano = d.getFullYear();
-    var mes = d.getMonth() + 1;
-    var mesStr = ano + "-" + (mes < 10 ? "0" + mes : mes);
-    var dataInicio = mesStr + "-01";
-    var ultimoDia = new Date(ano, mes, 0).getDate();
-    var dataFim = mesStr + "-" + (ultimoDia < 10 ? "0" + ultimoDia : ultimoDia);
-
-    var cancelamentos = 0;
-    var reativacoes = 0;
-    var novos = 0;
-
-    // Alterações: cancelamentos (1→2) e reativações (2→1)
-    var pagAlt = 0;
-    var totalAlt = 1;
-    while (pagAlt < totalAlt) {
-      var resAlt = chamarAPI("/listar/associadoalteracao", "post", {
-        "data_inicial": dataInicio,
-        "data_final":   dataFim,
-        "inicio_paginacao": pagAlt,
-        "quantidade_por_pagina": 1000
-      });
-      if (!resAlt || !resAlt.associados || resAlt.associados.length === 0) break;
-      totalAlt = parseInt(resAlt.total_associados) || 0;
-      resAlt.associados.forEach(function(a) {
-        var de = parseInt(a.codigo_situacao_anterior) || 0;
-        var para = parseInt(a.codigo_situacao_atual) || 0;
-        if (de === 1 && para === 2) cancelamentos++;
-        if (de === 2 && para === 1) reativacoes++;
-        if ((de === 0 || de === 3) && (para === 1 || para === 3)) novos++;
-      });
-      pagAlt += 1000;
-      if (pagAlt < totalAlt) Utilities.sleep(300);
+// ===================== TESTE doGet =====================
+function testarDoGet() {
+  var resultados = {};
+  ["resumo", "panorama", "zona_churn", "snapshots"].forEach(function(acao) {
+    try {
+      var e        = { parameter: { acao: acao } };
+      var response = doGet(e);
+      var json     = JSON.parse(response.getContent());
+      resultados[acao] = json.erro ? "ERRO: " + json.erro : "OK";
+      Logger.log(acao + ": " + JSON.stringify(json).substring(0, 500));
+    } catch (err) {
+      resultados[acao] = "ERRO: " + err.message;
     }
-
-    porMes.push({
-      mes: mesStr,
-      cancelamentos: cancelamentos,
-      reativacoes: reativacoes,
-      novos: novos
-    });
-  }
-
-  // Base ativa atual
-  var resAtivos = chamarAPI("/listar/associado", "post", {
-    "codigo_situacao": 1,
-    "inicio_paginacao": 0,
-    "quantidade_por_pagina": 1
   });
-  var baseAtivaAtual = resAtivos ? (parseInt(resAtivos.total_associados) || 0) : 0;
-
-  return {
-    por_mes: porMes,
-    base_ativa_atual: baseAtivaAtual
-  };
-}
-
-// ===================== ANÁLISE DE CHURN (planilha histórico) =====================
-function getAnaliseChurn() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var aba = ss.getSheetByName("Historico Cancelamentos");
-  if (!aba) {
-    return { erro: "Aba 'Historico Cancelamentos' não encontrada. Execute 'Reconstruir Histórico' primeiro." };
-  }
-
-  var dados = aba.getDataRange().getValues();
-  if (dados.length < 2) {
-    return { erro: "Sem dados na aba 'Historico Cancelamentos'." };
-  }
-
-  // Cabeçalho (10 colunas):
-  // codigo_associado, nome, cpf, data_cancelamento, data_contrato,
-  // dias_ate_cancelamento, mes_cancelamento, codigo_regional, codigo_cooperativa, operadora
-  var porMes = {};
-  var porRegional = {};
-  var porOperadora = {};
-  var distribuicaoTempoCasa = { "0-30": 0, "31-90": 0, "91-180": 0, "181-365": 0, "366-730": 0, "730+": 0 };
-  var detalhes = [];
-
-  var REGIONAL_NAMES = { "1": "Ipatinga", "2": "Betim" };
-
-  for (var i = 1; i < dados.length; i++) {
-    var row = dados[i];
-    var codAssociado  = row[0];
-    var nome          = row[1] || "";
-    var dataCancelStr = row[3] ? String(row[3]).substring(0, 10) : "";
-    var diasCasa      = parseInt(row[5]) || 0;
-    var mesCancelStr  = dataCancelStr ? dataCancelStr.substring(0, 7) : "";
-    var codRegional   = String(row[7] || "").trim();
-    var operadora     = String(row[9] || "").trim();
-
-    if (!mesCancelStr || mesCancelStr.length < 7) continue;
-
-    var nomeRegional = REGIONAL_NAMES[codRegional] || (codRegional ? "Regional " + codRegional : "Sem Regional");
-    var nomeOp = operadora || "Sem Operadora";
-
-    if (!porMes[mesCancelStr]) porMes[mesCancelStr] = 0;
-    porMes[mesCancelStr]++;
-
-    if (!porRegional[nomeRegional]) porRegional[nomeRegional] = 0;
-    porRegional[nomeRegional]++;
-
-    if (!porOperadora[nomeOp]) porOperadora[nomeOp] = 0;
-    porOperadora[nomeOp]++;
-
-    if (diasCasa <= 30)       distribuicaoTempoCasa["0-30"]++;
-    else if (diasCasa <= 90)  distribuicaoTempoCasa["31-90"]++;
-    else if (diasCasa <= 180) distribuicaoTempoCasa["91-180"]++;
-    else if (diasCasa <= 365) distribuicaoTempoCasa["181-365"]++;
-    else if (diasCasa <= 730) distribuicaoTempoCasa["366-730"]++;
-    else                      distribuicaoTempoCasa["730+"]++;
-
-    if (detalhes.length < 500) {
-      detalhes.push({
-        codigo_associado: codAssociado,
-        nome: nome,
-        data_cancelamento: dataCancelStr,
-        dias_casa: diasCasa,
-        regional: nomeRegional,
-        operadora: nomeOp
-      });
-    }
-  }
-
-  var mesesOrdenados = Object.keys(porMes).sort();
-  var porMesArr = mesesOrdenados.map(function(m) {
-    return { mes: m, cancelamentos: porMes[m] };
-  });
-
-  var porRegionalArr = Object.keys(porRegional).map(function(r) {
-    return { regional: r, cancelamentos: porRegional[r] };
-  }).sort(function(a, b) { return b.cancelamentos - a.cancelamentos; });
-
-  var porOperadoraArr = Object.keys(porOperadora).map(function(op) {
-    return { operadora: op, cancelamentos: porOperadora[op] };
-  }).sort(function(a, b) { return b.cancelamentos - a.cancelamentos; });
-
-  var distribuicaoArr = Object.keys(distribuicaoTempoCasa).map(function(faixa) {
-    return { faixa: faixa, quantidade: distribuicaoTempoCasa[faixa] };
-  });
-
-  return {
-    total_cancelamentos: dados.length - 1,
-    por_mes: porMesArr,
-    por_regional: porRegionalArr,
-    por_operadora: porOperadoraArr,
-    distribuicao_tempo_casa: distribuicaoArr,
-    detalhes: detalhes
-  };
+  var msg = Object.keys(resultados).map(function(k) { return k + ": " + resultados[k]; }).join("\n");
+  SpreadsheetApp.getUi().alert("Teste doGet", msg, SpreadsheetApp.getUi().ButtonSet.OK);
 }
