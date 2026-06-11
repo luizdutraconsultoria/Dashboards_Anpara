@@ -487,6 +487,32 @@ function setEvoMetric(m){
 Chart.defaults.color='#55576e';
 Chart.defaults.font={family:"'Plus Jakarta Sans',sans-serif",size:11,weight:'500'};
 
+/* ---- LABELS DE VALOR NO TOPO DAS BARRAS (não afeta gráficos de linha) ---- */
+const topLabelsPlugin={
+  id:'topLabels',
+  afterDatasetsDraw(chart){
+    if(chart.config.type==='line') return;
+    const ctx=chart.ctx;
+    chart.data.datasets.forEach((ds,di)=>{
+      const meta=chart.getDatasetMeta(di);
+      if(meta.hidden) return;
+      meta.data.forEach((bar,i)=>{
+        const val=ds.data[i];
+        if(!val) return;
+        const label=ds._fmt?ds._fmt(val):String(val);
+        ctx.save();
+        ctx.fillStyle=ds._labelColor||'#ecedf5';
+        ctx.font='700 10px Plus Jakarta Sans, sans-serif';
+        ctx.textAlign='center';
+        ctx.textBaseline='bottom';
+        ctx.fillText(label,bar.x,bar.y-3);
+        ctx.restore();
+      });
+    });
+  }
+};
+Chart.register(topLabelsPlugin);
+
 function renderEvolucao(cA,cB){
   const el=document.getElementById('c-evo');
   if(!el) return;
@@ -583,12 +609,13 @@ function renderMensal(){
     data:{
       labels:meses.map(m=>m.label),
       datasets:[
-        {label:'Total do mês',data:meses.map(m=>m.total),backgroundColor:'rgba(255,255,255,.08)',borderRadius:4,barPercentage:.7,categoryPercentage:.8,grouped:false},
-        {label:'Acumulado MTD',data:meses.map(m=>m.mtd),backgroundColor:cor,borderRadius:4,barPercentage:.38,categoryPercentage:.8,grouped:false},
+        {label:'Total do mês',data:meses.map(m=>m.total),backgroundColor:'rgba(255,255,255,.08)',borderRadius:4,barPercentage:.7,categoryPercentage:.8,grouped:false,_fmt:fmtV,_labelColor:'#8a8da8'},
+        {label:'Acumulado MTD',data:meses.map(m=>m.mtd),backgroundColor:cor,borderRadius:4,barPercentage:.38,categoryPercentage:.8,grouped:false,_fmt:fmtV,_labelColor:cor},
       ]
     },
     options:{
       responsive:true,maintainAspectRatio:false,
+      layout:{padding:{top:20}},
       interaction:{mode:'index',intersect:false},
       plugins:{
         legend:{display:false},
