@@ -1,1379 +1,739 @@
 // ============================================================
-// ANPARA — EXTRAÇÃO COMPLETA VIA API HINOVA SGA v2
+//  POWER CRM → GOOGLE SHEETS  |  ETL Script v7
+//  - cardStatus 5 = Vendido
+//  - isShelved = true → arquivado/perdido (independe do status)
+//  - Dashboard lê aba "relatorio" completa para filtros dinâmicos
 // ============================================================
 
-const BASE_URL = 'https://api.hinova.com.br/api/sga/v2';
-const POWER_CRM_URL   = 'https://api.powercrm.com.br';
-const POWER_CRM_TOKEN = '67lNJQsBWQWgIOioh0FIuwlec91TS7RnbLY9IzbU1xtdEbptGrWR6kR1wqbDmAJKDwgtJ3rRsW5g2YLfGPQHLrvm3Mt5u3eDuUoH3uW91hH5zzLNSvIwahUHGUXkVGYtryMKVL1n4CUXaCYXksvvvYK5IpD4ekP589HFfIdXcTlUfRJMOebyT4rFfiVDdMzV79FgwlMPr9R1T8Z2Mu5SVY6s';
-
-const HINOVA_API_KEY = 'd72a483496963a9ff6dd35326e633418754e0474b89e7934fffb830a67139f49e7945aaf7b5f5e54ecdaf1f9fc2abc2767326aa6b1de68c1b2964d45e7242004ffcc923693b641710c0810efec8e6aee3a92c6a85c172119e424e88514adbc1fdb82cfe3fc23058af75166eedc1119ad';
-const HINOVA_LOGIN = 'Luiz';
-const HINOVA_SENHA = '187987Anpara';
-
-let TOKEN_USUARIO = null;
-
-// ===================== MENU =====================
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu("📊 Anpara")
-    .addItem("🧪 Testar conexão", "autenticarETestar")
-    .addSeparator()
-    .addItem("📊 Resumo Ativos/Inativos", "extrairResumoRapido")
-    .addItem("👥 Extrair Associados Ativos", "extrairAssociadosAtivos")
-    .addItem("🚗 Extrair Veículos Ativos", "extrairVeiculosAtivos")
-    .addItem("📋 Listar Situações e Motivos", "extrairSituacoesEMotivos")
-    .addItem("🔄 Extrair Alterações (últimos 7 dias)", "extrairAlteracoes7dias")
-    .addSeparator()
-    .addItem("📸 Salvar Snapshot de Hoje", "salvarSnapshot")
-    .addSeparator()
-    .addItem("📅 Reconstruir Histórico de Cancelamentos (3 anos)", "reconstruirHistoricoCancelamentos")
-    .addItem("📈 Analisar Cancelamentos 60 e 90 dias", "analisarCancelamentos60e90")
-    .addSeparator()
-    .addItem("🗑️ Invalidar Cache de Alterações", "invalidarCacheAlteracoes")
-    .addItem("🗑️ Invalidar Cache de Zona de Churn", "invalidarCacheZonaChurn")
-    .addItem("🗑️ Invalidar Cache Power CRM", "invalidarCachePowerCRM")
-    .addToUi();
-}
-
-// ===================== AUTENTICAÇÃO =====================
-function autenticar() {
-  var response = UrlFetchApp.fetch(BASE_URL + "/usuario/autenticar", {
-    method: "post",
-    headers: {
-      "Authorization": "Bearer " + HINOVA_API_KEY,
-      "Content-Type": "application/json"
-    },
-    payload: JSON.stringify({
-      "usuario": HINOVA_LOGIN,
-      "senha": HINOVA_SENHA
-    }),
-    muteHttpExceptions: true
-  });
-
-  var code = response.getResponseCode();
-  var body = JSON.parse(response.getContentText());
-
-  if (code !== 200 || !body.token_usuario) {
-    throw new Error("Falha na autenticação: " + response.getContentText());
-  }
-
-  TOKEN_USUARIO = body.token_usuario;
-  Logger.log("✅ Autenticado com sucesso!");
-  return TOKEN_USUARIO;
-}
-
-function chamarAPI(path, method, payload) {
-  if (!TOKEN_USUARIO) autenticar();
-
-  var options = {
-    method: method || "get",
-    headers: {
-      "Authorization": "Bearer " + TOKEN_USUARIO,
-      "Content-Type": "application/json"
-    },
-    muteHttpExceptions: true
-  };
-
-  if (payload && (method === "post" || method === "POST")) {
-    options.payload = JSON.stringify(payload);
-  }
-
-  var response = UrlFetchApp.fetch(BASE_URL + path, options);
-  var code = response.getResponseCode();
-  var text = response.getContentText();
-
-  Logger.log(method.toUpperCase() + " " + path + " → " + code);
-
-  if (code === 401) {
-    autenticar();
-    options.headers["Authorization"] = "Bearer " + TOKEN_USUARIO;
-    response = UrlFetchApp.fetch(BASE_URL + path, options);
-    code = response.getResponseCode();
-    text = response.getContentText();
-  }
-
-  if (code !== 200) {
-    Logger.log("ERRO: " + text.substring(0, 500));
-    return null;
-  }
-
-  return JSON.parse(text);
-}
-
-// ===================== TESTE DE CONEXÃO =====================
-function autenticarETestar() {
-  var ui = SpreadsheetApp.getUi();
-  try {
-    autenticar();
-    var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
-    if (resumo) {
-      ui.alert(
-        "✅ Conexão OK!",
-        "Autenticação funcionou!\n\n" +
-        "Associados ativos: " + (resumo.associados_ativos || "N/D") + "\n" +
-        "Associados inativos: " + (resumo.associados_inativos || "N/D") + "\n\n" +
-        "Agora você pode usar o menu 📊 Anpara para extrair dados.",
-        ui.ButtonSet.OK
-      );
-    } else {
-      ui.alert("⚠️ Autenticação OK, mas erro ao buscar resumo. Verifique as permissões do token no SGA.");
-    }
-  } catch (e) {
-    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
-  }
-}
-
-// ===================== RESUMO RÁPIDO =====================
-function extrairResumoRapido() {
-  var ui = SpreadsheetApp.getUi();
-  try {
-    autenticar();
-    var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
-    if (!resumo) { ui.alert("❌ Erro ao buscar resumo"); return; }
-
-    var situacoes = chamarAPI("/listar/situacao/todos", "get");
-    var motivos   = chamarAPI("/listar/situacaomotivo/todos", "get");
-
-    var ss  = SpreadsheetApp.getActiveSpreadsheet();
-    var aba = ss.getSheetByName("Resumo") || ss.insertSheet("Resumo");
-    aba.clear();
-
-    var dados = [
-      ["📊 RESUMO ANPARA", "", Utilities.formatDate(new Date(), "America/Sao_Paulo", "dd/MM/yyyy HH:mm")],
-      ["", "", ""],
-      ["Associados Ativos",   resumo.associados_ativos   || 0, ""],
-      ["Associados Inativos", resumo.associados_inativos || 0, ""],
-      ["", "", ""],
-      ["📋 SITUAÇÕES CADASTRADAS", "", ""],
-      ["Código", "Descrição", "Status"]
-    ];
-
-    if (Array.isArray(situacoes)) {
-      situacoes.forEach(function(s) {
-        dados.push([s.codigo_situacao, s.descricao_situacao, s.situacao]);
-      });
-    }
-
-    dados.push(["", "", ""]);
-    dados.push(["📋 MOTIVOS DE CANCELAMENTO/INATIVAÇÃO", "", ""]);
-    dados.push(["Código", "Descrição", "Objeto"]);
-
-    if (Array.isArray(motivos)) {
-      motivos.forEach(function(m) {
-        dados.push([m.codigo || "", m.descricao || "", m.objeto || ""]);
-      });
-    }
-
-    aba.getRange(1, 1, dados.length, 3).setValues(dados);
-    aba.getRange(1, 1, 1, 3).setFontWeight("bold").setFontSize(14);
-    aba.getRange(6, 1, 1, 3).setFontWeight("bold");
-    aba.autoResizeColumns(1, 3);
-    aba.setFrozenRows(1);
-
-    ui.alert("✅ Resumo extraído!", "Aba 'Resumo' criada com sucesso.", ui.ButtonSet.OK);
-  } catch (e) {
-    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
-    Logger.log(e.stack);
-  }
-}
-
-// ===================== EXTRAIR ASSOCIADOS =====================
-function extrairAssociadosAtivos() {
-  extrairAssociadosPorSituacao(1, "Associados Ativos");
-}
-
-function extrairAssociadosPorSituacao(codigoSituacao, nomeAba) {
-  var ui = SpreadsheetApp.getUi();
-  try {
-    autenticar();
-    var todos = [];
-    var pagina = 0;
-    var totalRegistros = 1;
-    var qtdPorPagina = 1000;
-
-    while (pagina < totalRegistros) {
-      var resultado = chamarAPI("/listar/associado", "post", {
-        "codigo_situacao": codigoSituacao,
-        "inicio_paginacao": pagina,
-        "quantidade_por_pagina": qtdPorPagina
-      });
-      if (!resultado || !resultado.associados || resultado.associados.length === 0) break;
-      totalRegistros = parseInt(resultado.total_associados) || 0;
-      todos = todos.concat(resultado.associados);
-      Logger.log("Offset " + pagina + "/" + totalRegistros + " — " + resultado.associados.length + " registros");
-      pagina += qtdPorPagina;
-      if (pagina < totalRegistros) Utilities.sleep(500);
-    }
-
-    if (todos.length === 0) { ui.alert("⚠️ Nenhum associado encontrado."); return; }
-
-    var ss     = SpreadsheetApp.getActiveSpreadsheet();
-    var aba    = ss.getSheetByName(nomeAba) || ss.insertSheet(nomeAba);
-    aba.clear();
-    var campos = Object.keys(todos[0]);
-    aba.getRange(1, 1, 1, campos.length).setValues([campos]);
-    aba.getRange(1, 1, 1, campos.length).setBackground("#1a1a2e").setFontColor("#ffffff").setFontWeight("bold");
-    var linhas = todos.map(function(reg) {
-      return campos.map(function(c) {
-        var v = reg[c];
-        if (v === null || v === undefined) return "";
-        if (typeof v === "object") return JSON.stringify(v);
-        return v;
-      });
-    });
-    aba.getRange(2, 1, linhas.length, campos.length).setValues(linhas);
-    aba.setFrozenRows(1);
-    campos.forEach(function(_, i) { aba.autoResizeColumn(i + 1); });
-
-    ui.alert("✅ Extração concluída!", "Total: " + todos.length + " associados", ui.ButtonSet.OK);
-  } catch (e) {
-    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
-    Logger.log(e.stack);
-  }
-}
-
-// ===================== EXTRAIR VEÍCULOS =====================
-function extrairVeiculosAtivos() {
-  var ui = SpreadsheetApp.getUi();
-  try {
-    autenticar();
-    var todos = [];
-    var pagina = 0;
-    var totalRegistros = 1;
-
-    while (pagina < totalRegistros) {
-      var resultado = chamarAPI("/listar/veiculo", "post", {
-        "codigo_situacao": 1,
-        "inicio_paginacao": pagina,
-        "quantidade_por_pagina": 1000
-      });
-      if (!resultado || !resultado.veiculos || resultado.veiculos.length === 0) break;
-      totalRegistros = parseInt(resultado.total_veiculos) || 0;
-      todos = todos.concat(resultado.veiculos);
-      pagina += 1000;
-      if (pagina < totalRegistros) Utilities.sleep(500);
-    }
-
-    if (todos.length === 0) { ui.alert("⚠️ Nenhum veículo encontrado."); return; }
-
-    var ss     = SpreadsheetApp.getActiveSpreadsheet();
-    var aba    = ss.getSheetByName("Veículos Ativos") || ss.insertSheet("Veículos Ativos");
-    aba.clear();
-    var campos = Object.keys(todos[0]);
-    aba.getRange(1, 1, 1, campos.length).setValues([campos]);
-    aba.getRange(1, 1, 1, campos.length).setBackground("#1a1a2e").setFontColor("#ffffff").setFontWeight("bold");
-    var linhas = todos.map(function(reg) {
-      return campos.map(function(c) {
-        var v = reg[c];
-        if (v === null || v === undefined) return "";
-        if (typeof v === "object") return JSON.stringify(v);
-        return v;
-      });
-    });
-    aba.getRange(2, 1, linhas.length, campos.length).setValues(linhas);
-    aba.setFrozenRows(1);
-    campos.forEach(function(_, i) { aba.autoResizeColumn(i + 1); });
-
-    ui.alert("✅ Veículos extraídos!", "Total: " + todos.length + " veículos", ui.ButtonSet.OK);
-  } catch (e) {
-    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
-    Logger.log(e.stack);
-  }
-}
-
-// ===================== SITUAÇÕES E MOTIVOS =====================
-function extrairSituacoesEMotivos() {
-  var ui = SpreadsheetApp.getUi();
-  try {
-    autenticar();
-    var situacoes = chamarAPI("/listar/situacao/todos", "get");
-    var motivos   = chamarAPI("/listar/situacaomotivo/todos", "get");
-    var ss        = SpreadsheetApp.getActiveSpreadsheet();
-
-    var abaSit = ss.getSheetByName("Situações") || ss.insertSheet("Situações");
-    abaSit.clear();
-    if (Array.isArray(situacoes) && situacoes.length > 0) {
-      var camposSit = Object.keys(situacoes[0]);
-      abaSit.getRange(1, 1, 1, camposSit.length).setValues([camposSit]);
-      abaSit.getRange(2, 1, situacoes.length, camposSit.length).setValues(
-        situacoes.map(function(s) { return camposSit.map(function(c) { return s[c] || ""; }); })
-      );
-      abaSit.getRange(1, 1, 1, camposSit.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
-    }
-
-    var abaMot = ss.getSheetByName("Motivos Cancelamento") || ss.insertSheet("Motivos Cancelamento");
-    abaMot.clear();
-    if (Array.isArray(motivos) && motivos.length > 0) {
-      var camposMot = Object.keys(motivos[0]);
-      abaMot.getRange(1, 1, 1, camposMot.length).setValues([camposMot]);
-      abaMot.getRange(2, 1, motivos.length, camposMot.length).setValues(
-        motivos.map(function(m) { return camposMot.map(function(c) { return m[c] || ""; }); })
-      );
-      abaMot.getRange(1, 1, 1, camposMot.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
-    }
-
-    ui.alert("✅ Extraído!", "Abas 'Situações' e 'Motivos Cancelamento' criadas.", ui.ButtonSet.OK);
-  } catch (e) {
-    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
-    Logger.log(e.stack);
-  }
-}
-
-// ===================== EXTRAIR ALTERAÇÕES 7 DIAS (menu) =====================
-function extrairAlteracoes7dias() {
-  var ui = SpreadsheetApp.getUi();
-  try {
-    autenticar();
-    var hoje          = new Date();
-    var seteDiasAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
-    var dataFinal     = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
-    var dataInicial   = Utilities.formatDate(seteDiasAtras, "America/Sao_Paulo", "dd/MM/yyyy");
-
-    var alteracoesAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
-      "data_inicial": dataInicial, "data_final": dataFinal, "campos": ["codigo_situacao"]
-    });
-    var alteracoesVeic = chamarAPI("/listar/alteracao-veiculos", "post", {
-      "data_inicial": dataInicial, "data_final": dataFinal, "campos": ["codigo_situacao"]
-    });
-
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    if (Array.isArray(alteracoesAssoc) && alteracoesAssoc.length > 0) {
-      var abaAA   = ss.getSheetByName("Alterações Associados") || ss.insertSheet("Alterações Associados");
-      abaAA.clear();
-      var camposAA = Object.keys(alteracoesAssoc[0]);
-      abaAA.getRange(1, 1, 1, camposAA.length).setValues([camposAA]);
-      abaAA.getRange(2, 1, alteracoesAssoc.length, camposAA.length).setValues(
-        alteracoesAssoc.map(function(r) { return camposAA.map(function(c) { return r[c] || ""; }); })
-      );
-      abaAA.getRange(1, 1, 1, camposAA.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
-      abaAA.setFrozenRows(1);
-    }
-
-    if (Array.isArray(alteracoesVeic) && alteracoesVeic.length > 0) {
-      var abaAV   = ss.getSheetByName("Alterações Veículos") || ss.insertSheet("Alterações Veículos");
-      abaAV.clear();
-      var camposAV = Object.keys(alteracoesVeic[0]);
-      abaAV.getRange(1, 1, 1, camposAV.length).setValues([camposAV]);
-      abaAV.getRange(2, 1, alteracoesVeic.length, camposAV.length).setValues(
-        alteracoesVeic.map(function(r) { return camposAV.map(function(c) { return r[c] || ""; }); })
-      );
-      abaAV.getRange(1, 1, 1, camposAV.length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
-      abaAV.setFrozenRows(1);
-    }
-
-    ui.alert(
-      "✅ Alterações extraídas!",
-      "Período: " + dataInicial + " a " + dataFinal + "\n\n" +
-      "Alterações de associados: " + (Array.isArray(alteracoesAssoc) ? alteracoesAssoc.length : 0) + "\n" +
-      "Alterações de veículos: "   + (Array.isArray(alteracoesVeic)  ? alteracoesVeic.length  : 0),
-      ui.ButtonSet.OK
-    );
-  } catch (e) {
-    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
-    Logger.log(e.stack);
-  }
-}
-
-// ===================== SNAPSHOT DIÁRIO =====================
-function salvarSnapshot() {
-  var ui = SpreadsheetApp.getUi();
-  try {
-    autenticar();
-    var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
-    if (!resumo) { ui.alert("❌ Erro ao buscar resumo"); return; }
-
-    var ss  = SpreadsheetApp.getActiveSpreadsheet();
-    var aba = ss.getSheetByName("Snapshots") || ss.insertSheet("Snapshots");
-
-    if (aba.getLastRow() === 0) {
-      aba.getRange(1, 1, 1, 3).setValues([["Data", "Ativos", "Inativos"]]);
-      aba.getRange(1, 1, 1, 3).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
-      aba.setFrozenRows(1);
-    }
-
-    var dataHoje = Utilities.formatDate(new Date(), "America/Sao_Paulo", "yyyy-MM-dd");
-    aba.getRange(aba.getLastRow() + 1, 1, 1, 3).setValues([[dataHoje, resumo.associados_ativos || 0, resumo.associados_inativos || 0]]);
-
-    ui.alert("📸 Snapshot salvo!", "Data: " + dataHoje + "\nAtivos: " + (resumo.associados_ativos || 0), ui.ButtonSet.OK);
-  } catch (e) {
-    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
-    Logger.log(e.stack);
-  }
-}
-
-function agendarExtracaoDiaria() {
-  ScriptApp.getProjectTriggers().forEach(function(t) { ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger("salvarSnapshot").timeBased().everyDays(1).atHour(6).create();
-  SpreadsheetApp.getUi().alert("⏰ Snapshot diário agendado para 6h da manhã.");
-}
-
-// ===================== FUNÇÕES DE DIAGNÓSTICO =====================
-function mapearSituacoes() {
-  autenticar();
-  var resultado = "";
-  for (var cod = 1; cod <= 40; cod++) {
-    var r = chamarAPI("/listar/associado", "post", {
-      "codigo_situacao": cod, "inicio_paginacao": 0, "quantidade_por_pagina": 1
-    });
-    if (r && r.total_associados && parseInt(r.total_associados) > 0) {
-      resultado += "Código " + cod + " → " + r.total_associados + " associados\n";
-    }
-    Utilities.sleep(300);
-  }
-  SpreadsheetApp.getUi().alert("Mapa de situações", resultado, SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-function extrairAssociadosInativos() {
-  extrairAssociadosPorSituacao(2, "Associados Inativos");
-}
-
-function testarPermissoes() {
-  autenticar();
-  var r1 = chamarAPI("/listar/situacao/todos", "get");
-  var r2 = chamarAPI("/listar/situacaomotivo/todos", "get");
-  Logger.log("876 Situações: " + (r1 ? "✅ LIBERADA" : "❌ BLOQUEADA"));
-  Logger.log("401 Motivos: "   + (r2 ? "✅ LIBERADA" : "❌ BLOQUEADA"));
-  SpreadsheetApp.getUi().alert(
-    "Permissões",
-    "876 Situações: " + (r1 ? "✅ LIBERADA" : "❌ BLOQUEADA") + "\n" +
-    "401 Motivos: "   + (r2 ? "✅ LIBERADA" : "❌ BLOQUEADA"),
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
-}
-
-function testarEndpointsFinanceiros() {
-  autenticar();
-  var endpoints = [
-    "/listar/inadimplente", "/inadimplente/listar", "/financeiro/listar",
-    "/listar/financeiro", "/cobranca/listar", "/listar/cobranca",
-    "/listar/pagamento", "/pagamento/listar", "/listar/mensalidade",
-    "/mensalidade/listar", "/listar/boleto", "/boleto/listar",
-    "/associado/inadimplente/listar", "/listar/associado/inadimplente",
-    "/financeiro/inadimplente/listar"
-  ];
-  var resultados = [];
-  endpoints.forEach(function(path) {
-    try {
-      var r = chamarAPI(path, "get");
-      resultados.push(path + " → " + (r ? "✅ EXISTE" : "❌ null"));
-    } catch(e) {
-      resultados.push(path + " → ERRO");
-    }
-    Utilities.sleep(300);
-  });
-  SpreadsheetApp.getUi().alert("Endpoints Financeiros", resultados.join("\n"), SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-function testarRotas876e401() {
-  autenticar();
-  var r876a = chamarAPI("/listar/situacao/todos", "get");
-  var r401a = chamarAPI("/listar/situacaomotivo/todos", "get");
-  var msg =
-    "=== ROTA 876 — Situações ===\n" +
-    "/listar/situacao/todos: " + (r876a ? "✅ " + JSON.stringify(r876a).substring(0,100) : "❌") + "\n\n" +
-    "=== ROTA 401 — Motivos ===\n" +
-    "/listar/situacaomotivo/todos: " + (r401a ? "✅ " + JSON.stringify(r401a).substring(0,100) : "❌");
-  SpreadsheetApp.getUi().alert("Teste Rotas 876/401", msg, SpreadsheetApp.getUi().ButtonSet.OK);
-}
-
-function testarInadimplencia() {
-  var hoje = new Date();
-  Logger.log("Hoje: dia " + hoje.getDate());
-  var resultado = chamarAPI("/listar/associado", "post", {
-    "codigo_situacao": 1, "inicio_paginacao": 0, "quantidade_por_pagina": 5
-  });
-  if (resultado && resultado.associados) {
-    resultado.associados.forEach(function(a) {
-      Logger.log("Nome: " + a.nome + " | dia_vencimento: " + a.dia_vencimento);
-    });
-  }
-}
-
-// ============================================================
-// doGet — API JSON PARA O DASHBOARD
-// ============================================================
-
-var SITUACOES_MAP = {
-  "1": "ATIVO",
-  "2": "INATIVO",
-  "3": "PENDENTE",
-  "4": "NEGADO"
+var CONFIG = {
+  BEARER_TOKEN: PropertiesService.getScriptProperties().getProperty('BEARER_TOKEN') || '',
+  BASE_URL: 'https://api.powercrm.com.br',
+  DATA_INICIO: '2024-01-01',
+  DATA_FIM: '',
+  TIPO_FILTRO_DATA: 1,  // 1=Criação | 2=Pagamento | 3=Cadastro SGA
 };
 
-function doGet(e) {
-  var acao = (e && e.parameter && e.parameter.acao) ? e.parameter.acao : "resumo";
-  var resultado;
+// ============================================================
+//  SALVAR TOKEN — execute esta função UMA VEZ para salvar
+//  o token Bearer no cofre seguro do Google (PropertiesService)
+//  Depois disso nunca mais precisa colar o token no código
+// ============================================================
 
-  try {
-    switch (acao) {
-      case "resumo":              resultado = getResumo();              break;
-      case "associados":
-        var situacao = e.parameter.situacao || "1";
-        resultado = getAssociados(situacao);
-        break;
-      case "veiculos":            resultado = getVeiculos();            break;
-      case "alteracoes":          resultado = getAlteracoes();          break;
-      case "snapshots":           resultado = getSnapshots();           break;
-      case "zona_churn":          resultado = getZonaChurn();           break;
-      case "panorama":            resultado = getPanorama();            break;
-      case "analise_cancelamentos": resultado = getAnaliseCancelamentos(); break;
-      case "historico_mensal":    resultado = getHistoricoMensal();     break;
-      case "analise_churn":       resultado = getAnaliseChurn();        break;
-      default: resultado = { erro: "Acao nao reconhecida: " + acao };
-    }
-  } catch (err) {
-    resultado = { erro: err.message };
-  }
-
-  return ContentService
-    .createTextOutput(JSON.stringify(resultado))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// ===================== PANORAMA GERAL =====================
-function getPanorama() {
-  autenticar();
-
-  var resumoAPI      = chamarAPI("/associado-ativo-inativo/listar", "get");
-  var novosContratos = chamarAPI("/associado/novos-contratos/listar", "get");
-  var snapshots      = getSnapshots();
-  var alteracoes     = getAlteracoes();
-
-  var cancelamentos7d = 0;
-  var reativacoes7d   = 0;
-  var seteDiasAtras   = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000);
-
-  if (Array.isArray(alteracoes.associados)) {
-    alteracoes.associados.forEach(function(a) {
-      if (a.nome_campo_tabela === "codigo_situacao") {
-        var dt = new Date(a.data_alteracao);
-        if (dt >= seteDiasAtras) {
-          if (String(a.valor_posterior) === "2") cancelamentos7d++;
-          if (String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1") reativacoes7d++;
-        }
-      }
-    });
-  }
-
-  var ativos   = resumoAPI ? parseInt(resumoAPI.associados_ativos   || 0) : 0;
-  var inativos = resumoAPI ? parseInt(resumoAPI.associados_inativos || 0) : 0;
-
-  return {
-    timestamp:             new Date().toISOString(),
-    base_ativa:            ativos,
-    base_inativa:          inativos,
-    base_total:            ativos + inativos,
-    novos_contratos_hoje:  novosContratos ? parseInt(novosContratos.quantidade_contratos || 0) : 0,
-    cancelamentos_7d:      cancelamentos7d,
-    reativacoes_7d:        reativacoes7d,
-    saldo_liquido_7d:      reativacoes7d - cancelamentos7d,
-    churn_rate_estimado:   ativos > 0 ? ((cancelamentos7d / 7 * 30) / ativos * 100).toFixed(2) + "%" : "N/A",
-    snapshots:             snapshots,
-    situacoes_map:         SITUACOES_MAP
-  };
-}
-
-// ===================== RESUMO =====================
-function getResumo() {
-  autenticar();
-  var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
-  return {
-    timestamp:            new Date().toISOString(),
-    associados_ativos:    resumo ? resumo.associados_ativos   : 0,
-    associados_inativos:  resumo ? resumo.associados_inativos : 0,
-    situacoes_map:        SITUACOES_MAP
-  };
-}
-
-// ===================== ZONA DE CHURN — COM CACHE 30min =====================
-function getZonaChurn() {
-  var cache = CacheService.getScriptCache();
-
-  // Lê do cache (suporta chunks para payloads > 100KB)
-  var nChunks = cache.get('zona_churn_chunks');
-  if (nChunks) {
-    try {
-      var json = '';
-      for (var c = 0; c < parseInt(nChunks); c++) {
-        json += cache.get('zona_churn_chunk_' + c) || '';
-      }
-      if (json) return JSON.parse(json);
-    } catch(e) {}
+function salvarToken() {
+  var token = Browser.inputBox('Cole seu Bearer Token do Power CRM:');
+  if (token && token !== 'cancel' && token.trim() !== '') {
+    PropertiesService.getScriptProperties().setProperty('BEARER_TOKEN', token.trim());
+    Browser.msgBox('Token salvo com sucesso! Pode fechar esta janela.');
   } else {
-    var cached = cache.get('zona_churn_completo');
-    if (cached) {
-      try { return JSON.parse(cached); } catch(e) {}
-    }
+    Browser.msgBox('Nenhum token salvo.');
   }
-
-  autenticar();
-  var hoje    = new Date();
-  var diaHoje = hoje.getDate();
-
-  var inadimplentes            = [];
-  var cancelamentosSolicitados = [];
-  var pagina                   = 0;
-  var totalRegistros           = 1;
-
-  while (pagina < totalRegistros) {
-    var resultado = chamarAPI("/listar/associado", "post", {
-      "codigo_situacao": 1,
-      "inicio_paginacao": pagina,
-      "quantidade_por_pagina": 1000
-    });
-    if (!resultado || !resultado.associados || resultado.associados.length === 0) break;
-    totalRegistros = parseInt(resultado.total_associados) || 0;
-
-    resultado.associados.forEach(function(assoc) {
-      var diaVenc         = parseInt(assoc.dia_vencimento) || 10;
-      var vencMesAtual    = new Date(hoje.getFullYear(), hoje.getMonth(), diaVenc);
-      var vencMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, diaVenc);
-      var dataVenc        = vencMesAtual <= hoje ? vencMesAtual : vencMesAnterior;
-      var diasAtraso      = Math.floor((hoje - dataVenc) / (1000 * 60 * 60 * 24));
-      var diasParaChurn   = 5 - diasAtraso;
-
-      var dataAdesao = assoc.data_contrato_associado && assoc.data_contrato_associado !== "0000-00-00"
-        ? assoc.data_contrato_associado
-        : (assoc.data_cadastro_associado || "");
-      var diasAssociado = "";
-      if (dataAdesao) {
-        try {
-          var dtAd = new Date(dataAdesao);
-          if (!isNaN(dtAd)) diasAssociado = Math.floor((hoje - dtAd) / (1000 * 60 * 60 * 24));
-        } catch(e) {}
-      }
-
-      if (diasAtraso > 0 && diasAtraso <= 15) {
-        inadimplentes.push({
-          codigo_associado:   assoc.codigo_associado,
-          nome:               assoc.nome,
-          cpf:                assoc.cpf,
-          telefone_celular:   (assoc.ddd_celular || "") + (assoc.telefone_celular || ""),
-          email:              assoc.email || "",
-          dia_vencimento:     diaVenc,
-          dias_atraso:        diasAtraso,
-          dias_para_churn:    Math.max(0, diasParaChurn),
-          status_churn:       diasParaChurn <= 0 ? "CHURN_IMINENTE" : "EM_RISCO",
-          codigo_regional:    assoc.codigo_regional    || "",
-          codigo_cooperativa: assoc.codigo_cooperativa || "",
-          data_adesao:        dataAdesao,
-          dias_associado:     diasAssociado
-        });
-      }
-    });
-
-    pagina += 1000;
-    if (pagina < totalRegistros) Utilities.sleep(300);
-  }
-
-  // Cancelamentos solicitados — últimos 30 dias
-  var trintaDiasAtras = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
-  var dataInicial     = Utilities.formatDate(trintaDiasAtras, "America/Sao_Paulo", "dd/MM/yyyy");
-  var dataFinal       = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
-
-  var alteracoesAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
-    "data_inicial": dataInicial,
-    "data_final":   dataFinal,
-    "campos":       ["codigo_situacao"]
-  });
-
-  var reativacoesRecentes = [];
-  if (Array.isArray(alteracoesAssoc)) {
-    alteracoesAssoc.forEach(function(a) {
-      if (String(a.valor_posterior) === "2" && String(a.valor_anterior) === "1") {
-        cancelamentosSolicitados.push({
-          codigo_associado:  a.codigo_associado,
-          nome:              a.nome_associado || "",
-          cpf:               a.cpf_associado  || "",
-          data_alteracao:    a.data_alteracao,
-          usuario_alteracao: a.nome_usuario_alteracao || "",
-          status_anterior:   SITUACOES_MAP[String(a.valor_anterior)]  || a.valor_anterior,
-          status_novo:       SITUACOES_MAP[String(a.valor_posterior)] || a.valor_posterior
-        });
-      }
-      if (String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1") {
-        reativacoesRecentes.push({
-          codigo_associado:  a.codigo_associado,
-          nome:              a.nome_associado || "",
-          cpf:               a.cpf_associado  || "",
-          data_reativacao:   a.data_alteracao,
-          usuario_alteracao: a.nome_usuario_alteracao || ""
-        });
-      }
-    });
-  }
-
-  inadimplentes.sort(function(a, b) { return a.dias_para_churn - b.dias_para_churn; });
-
-  var resultado = {
-    timestamp:                       new Date().toISOString(),
-    dia_referencia:                  diaHoje,
-    total_inadimplentes:             inadimplentes.length,
-    total_cancelamentos_solicitados: cancelamentosSolicitados.length,
-    total_reativacoes_recentes:      reativacoesRecentes.length,
-    total_zona_churn:                inadimplentes.length + cancelamentosSolicitados.length,
-    inadimplentes:                   inadimplentes,
-    cancelamentos_solicitados:       cancelamentosSolicitados,
-    reativacoes_recentes:            reativacoesRecentes,
-    meta_recuperacao: {
-      total_em_risco: inadimplentes.length + cancelamentosSolicitados.length,
-      recuperados:    0,
-      percentual:     "0%"
-    }
-  };
-
-  // Grava no cache por 30 minutos (1800s)
-  try {
-    var payload    = JSON.stringify(resultado);
-    var CHUNK_SIZE = 90000;
-    if (payload.length <= CHUNK_SIZE) {
-      cache.put('zona_churn_completo', payload, 1800);
-      cache.remove('zona_churn_chunks');
-    } else {
-      var totalChunks = Math.ceil(payload.length / CHUNK_SIZE);
-      for (var k = 0; k < totalChunks; k++) {
-        cache.put('zona_churn_chunk_' + k, payload.substring(k * CHUNK_SIZE, (k + 1) * CHUNK_SIZE), 1800);
-      }
-      cache.put('zona_churn_chunks', String(totalChunks), 1800);
-      cache.remove('zona_churn_completo');
-    }
-  } catch(e) {
-    Logger.log('Cache zona_churn write error: ' + e.message);
-  }
-
-  return resultado;
 }
 
-function invalidarCacheZonaChurn() {
-  var cache = CacheService.getScriptCache();
-  cache.remove('zona_churn_completo');
-  cache.remove('zona_churn_chunks');
-  for (var i = 0; i < 20; i++) cache.remove('zona_churn_chunk_' + i);
-  Logger.log('✅ Cache de zona_churn invalidado.');
-  try { SpreadsheetApp.getUi().alert("✅ Cache zona_churn invalidado."); } catch(e) {}
-}
-
-// ===================== ALTERAÇÕES — 365 DIAS COM CACHE =====================
-function getAlteracoes() {
-  var cache = CacheService.getScriptCache();
-
-  // Lê do cache (suporta chunks para payloads > 100KB)
-  var nChunks = cache.get('alteracoes_chunks');
-  if (nChunks) {
-    try {
-      var json = '';
-      for (var c = 0; c < parseInt(nChunks); c++) {
-        json += cache.get('alteracoes_chunk_' + c) || '';
-      }
-      if (json) return JSON.parse(json);
-    } catch(e) { /* cache inválido, busca fresco */ }
+function verToken() {
+  var token = PropertiesService.getScriptProperties().getProperty('BEARER_TOKEN');
+  if (token) {
+    Browser.msgBox('Token salvo: ' + token.slice(0,12) + '... (' + token.length + ' caracteres)');
   } else {
-    var cached = cache.get('alteracoes_completo');
-    if (cached) {
-      try { return JSON.parse(cached); } catch(e) {}
-    }
+    Browser.msgBox('Nenhum token salvo. Execute salvarToken primeiro.');
   }
+}
 
-  autenticar();
+var STATUS_MAP = {
+  1: 'Cotacoes recebidas',
+  2: 'Cotacoes recebidas',
+  3: 'Em negociacao',
+  4: 'Vistorias/Liberadas',
+  5: 'Vendas concretizadas',
+};
 
-  var hoje         = new Date();
-  var JANELA_DIAS  = 365;
-  var todoAssoc    = [];
-  var todoVeic     = [];
-  var totalJanelas = Math.ceil(JANELA_DIAS / 7);
+var STATUS_VENDA = [5];   // Vendas concretizadas
+var STATUS_PROP  = [3, 4]; // Em negociacao + Vistorias + Liberadas
+var STATUS_OPOR  = [1, 2]; // Cotacoes recebidas
 
-  for (var i = 0; i < totalJanelas; i++) {
-    var dataFim = new Date(hoje.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-    var dataIni = new Date(hoje.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
-    var dFim    = Utilities.formatDate(dataFim, "America/Sao_Paulo", "dd/MM/yyyy");
-    var dIni    = Utilities.formatDate(dataIni, "America/Sao_Paulo", "dd/MM/yyyy");
+// ============================================================
+//  PONTO DE ENTRADA
+// ============================================================
 
-    var resAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
-      "data_inicial": dIni, "data_final": dFim, "campos": ["codigo_situacao"]
-    });
-    if (Array.isArray(resAssoc)) todoAssoc = todoAssoc.concat(resAssoc);
-
-    var resVeic = chamarAPI("/listar/alteracao-veiculos", "post", {
-      "data_inicial": dIni, "data_final": dFim, "campos": ["codigo_situacao"]
-    });
-    if (Array.isArray(resVeic)) todoVeic = todoVeic.concat(resVeic);
-
-    Utilities.sleep(300);
-  }
-
-  // Remove duplicatas
-  function deduplicar(arr) {
-    var vistos = {};
-    return arr.filter(function(item) {
-      var chave = String(item.codigo_alteracao || item.data_alteracao + "_" + item.codigo_associado);
-      if (vistos[chave]) return false;
-      vistos[chave] = true;
-      return true;
-    });
-  }
-
-  todoAssoc = deduplicar(todoAssoc);
-  todoVeic  = deduplicar(todoVeic);
-
-  var dataFimStr = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
-  var dataIniStr = Utilities.formatDate(
-    new Date(hoje.getTime() - JANELA_DIAS * 24 * 60 * 60 * 1000),
-    "America/Sao_Paulo", "dd/MM/yyyy"
-  );
-
-  var resultado = {
-    timestamp:        new Date().toISOString(),
-    periodo:          dataIniStr + " a " + dataFimStr,
-    associados:       todoAssoc,
-    veiculos:         todoVeic,
-    total_alteracoes: todoAssoc.length + todoVeic.length
-  };
-
-  // Grava no cache por 1 hora
+function sincronizarTudo() {
+  var inicio = new Date();
+  Logger.log('Iniciando sincronizacao: ' + inicio);
   try {
-    var payload    = JSON.stringify(resultado);
-    var CHUNK_SIZE = 90000;
-    if (payload.length <= CHUNK_SIZE) {
-      cache.put('alteracoes_completo', payload, 3600);
-      cache.remove('alteracoes_chunks');
-    } else {
-      var totalChunks = Math.ceil(payload.length / CHUNK_SIZE);
-      for (var k = 0; k < totalChunks; k++) {
-        cache.put('alteracoes_chunk_' + k, payload.substring(k * CHUNK_SIZE, (k + 1) * CHUNK_SIZE), 3600);
-      }
-      cache.put('alteracoes_chunks', String(totalChunks), 3600);
-      cache.remove('alteracoes_completo');
+    var dados = buscarRelatorioDB();
+    if (!dados || dados.length === 0) {
+      Logger.log('API retornou 0 registros.');
+      registrarLog('AVISO', '0 registros', inicio);
+      return;
     }
+    Logger.log('Total de registros: ' + dados.length);
+    gravarDadosBrutos(dados);
+    atualizarKPIs(dados);
+    registrarLog('SUCESSO', dados.length + ' registros', inicio);
+    Logger.log('Concluido em ' + ((new Date() - inicio)/1000) + 's');
   } catch(e) {
-    Logger.log('Cache write error: ' + e.message);
+    registrarLog('ERRO', e.message, inicio);
+    Logger.log('Erro: ' + e.message);
+    throw e;
   }
-
-  return resultado;
 }
 
-// Invalida o cache manualmente (rode no editor antes de abrir o dashboard)
-function invalidarCacheAlteracoes() {
-  var cache = CacheService.getScriptCache();
-  cache.remove('alteracoes_completo');
-  cache.remove('alteracoes_chunks');
-  for (var i = 0; i < 20; i++) cache.remove('alteracoes_chunk_' + i);
-  Logger.log('✅ Cache de alterações invalidado.');
-  try {
-    SpreadsheetApp.getUi().alert("✅ Cache invalidado. Próxima chamada buscará dados frescos.");
-  } catch(e) {}
-}
+// ============================================================
+//  BUSCAR MÊS A MÊS
+// ============================================================
 
-// ===================== ANÁLISE CANCELAMENTOS =====================
-function getAnaliseCancelamentos() {
-  var ss  = SpreadsheetApp.getActiveSpreadsheet();
-  var aba = ss.getSheetByName("Historico Cancelamentos");
-  if (!aba || aba.getLastRow() < 2) return { erro: "Histórico não encontrado. Execute 'Reconstruir Histórico' no menu.", dados: [] };
+function buscarRelatorioDB() {
+  var dataFim = CONFIG.DATA_FIM ||
+    Utilities.formatDate(new Date(), 'GMT-3', 'yyyy-MM-dd');
+  var intervalos = gerarIntervalos(CONFIG.DATA_INICIO, dataFim);
+  Logger.log('Buscando em ' + intervalos.length + ' blocos mensais...');
 
-  var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
-  var iDias  = header.indexOf("dias_ate_cancelamento");
-  var iMes   = header.indexOf("mes_cancelamento");
-  var iData  = header.indexOf("data_cancelamento");
-  var dados  = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
-
-  var porMes = {};
-  dados.forEach(function(row) {
-    var dias = row[iDias];
-    var mes  = iMes !== -1 ? String(row[iMes]) : "";
-    if (!mes && iData !== -1 && row[iData]) {
+  var tudo = [];
+  for (var i = 0; i < intervalos.length; i++) {
+    var de  = intervalos[i].de;
+    var ate = intervalos[i].ate;
+    Logger.log('Bloco ' + (i+1) + '/' + intervalos.length + ': ' + de + ' -> ' + ate);
+    var ok = false;
+    for (var t = 1; t <= 3 && !ok; t++) {
       try {
-        var d = new Date(row[iData]);
-        if (!isNaN(d)) mes = Utilities.formatDate(d, "America/Sao_Paulo", "yyyy-MM");
-      } catch(e) {}
-    }
-    if (!mes) return;
-    if (!porMes[mes]) porMes[mes] = { mes: mes, total: 0, ate60: 0, ate90: 0 };
-    porMes[mes].total++;
-    if (dias !== "" && dias !== null) {
-      var n = parseInt(dias);
-      if (!isNaN(n) && n >= 0) {
-        if (n <= 60) porMes[mes].ate60++;
-        if (n <= 90) porMes[mes].ate90++;
+        var corpo = { from: de, to: ate, stringFilterTypeDate: CONFIG.TIPO_FILTRO_DATA };
+        var resp  = chamarAPI('POST', '/api/report/db', corpo);
+        var lista = Array.isArray(resp) ? resp
+          : (resp.data || resp.content || resp.result || resp.records || resp.items || []);
+        Logger.log('  -> ' + lista.length + ' registros');
+        for (var j = 0; j < lista.length; j++) tudo.push(lista[j]);
+        Utilities.sleep(600);
+        ok = true;
+      } catch(e) {
+        Logger.log('  Tentativa ' + t + ' falhou: ' + e.message.substring(0,120));
+        if (t < 3) Utilities.sleep(3000 * t);
+        else Logger.log('  Bloco ignorado: ' + de);
       }
     }
-  });
-
-  return {
-    timestamp:       new Date().toISOString(),
-    total_registros: dados.length,
-    por_mes:         Object.values(porMes).sort(function(a, b) { return a.mes.localeCompare(b.mes); })
-  };
-}
-
-// ===================== ASSOCIADOS / VEÍCULOS (Sheets) =====================
-function getAssociados(codigoSituacao) {
-  return lerAba(String(codigoSituacao) === "1" ? "Associados Ativos" : "Associados Inativos");
-}
-
-function getVeiculos() {
-  return lerAba("Veiculos Ativos");
-}
-
-// ===================== SNAPSHOTS =====================
-function getSnapshots() {
-  var ss  = SpreadsheetApp.getActiveSpreadsheet();
-  var aba = ss.getSheetByName("Snapshots");
-  if (!aba || aba.getLastRow() < 2) return [];
-
-  var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
-  var dados  = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
-
-  return dados.map(function(linha) {
-    var obj = {};
-    header.forEach(function(col, i) { obj[col] = linha[i]; });
-    return obj;
-  });
-}
-
-// ===================== UTILITÁRIO: LER ABA =====================
-function lerAba(nomeAba) {
-  var ss  = SpreadsheetApp.getActiveSpreadsheet();
-  var aba = ss.getSheetByName(nomeAba);
-  if (!aba || aba.getLastRow() < 2) return { erro: "Aba '" + nomeAba + "' vazia ou nao encontrada", dados: [] };
-
-  var header    = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
-  var dados     = aba.getRange(2, 1, Math.min(aba.getLastRow() - 1, 5000), aba.getLastColumn()).getValues();
-  var registros = dados.map(function(linha) {
-    var obj = {};
-    header.forEach(function(col, i) { obj[col] = linha[i]; });
-    return obj;
-  });
-
-  return { total: registros.length, aba: nomeAba, dados: registros };
-}
-
-// ===================== NOVOS CONTRATOS VIA POWER CRM =====================
-function getNovosContratosPorMes() {
-  // Cache de 1 hora — evita 12 chamadas à API a cada request
-  var cache  = CacheService.getScriptCache();
-  var cached = cache.get('power_crm_novos');
-  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
-
-  var porMes = {};
-  var hoje   = new Date();
-
-  for (var i = 11; i >= 0; i--) {
-    var d      = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-    var ano    = d.getFullYear();
-    var mesNum = d.getMonth() + 1;
-    var mesStr = ano + '-' + (mesNum < 10 ? '0' + mesNum : mesNum);
-    var ultimo = new Date(ano, mesNum, 0).getDate();
-    var from   = mesStr + '-01';
-    var to     = mesStr + '-' + (ultimo < 10 ? '0' + ultimo : ultimo);
-
-    try {
-      var resp = UrlFetchApp.fetch(POWER_CRM_URL + '/api/report/db', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + POWER_CRM_TOKEN,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        payload: JSON.stringify({ from: from, to: to, stringFilterTypeDate: 3 }),
-        muteHttpExceptions: true
-      });
-
-      if (resp.getResponseCode() !== 200) {
-        Logger.log('PowerCRM ' + mesStr + ': HTTP ' + resp.getResponseCode());
-        porMes[mesStr] = 0;
-        Utilities.sleep(400);
-        continue;
-      }
-
-      var data  = JSON.parse(resp.getContentText());
-      var lista = Array.isArray(data) ? data
-        : (data.data || data.content || data.result || data.records || data.items || []);
-
-      var count = 0;
-      lista.forEach(function(row) {
-        var status    = parseInt(row.cardStatus) || 0;
-        var arquivado = row.isShelved === true || row.isShelved === 1
-                     || String(row.isShelved).toUpperCase() === 'TRUE';
-        if (status === 5 && !arquivado) count++;
-      });
-
-      porMes[mesStr] = count;
-      Logger.log('PowerCRM ' + mesStr + ': ' + count + ' vendas');
-    } catch(e) {
-      Logger.log('PowerCRM erro ' + mesStr + ': ' + e.message);
-      porMes[mesStr] = 0;
-    }
-    Utilities.sleep(400);
   }
-
-  try { cache.put('power_crm_novos', JSON.stringify(porMes), 3600); } catch(e) {}
-  return porMes;
+  Logger.log('Total acumulado: ' + tudo.length + ' registros');
+  return tudo;
 }
 
-function invalidarCachePowerCRM() {
-  CacheService.getScriptCache().remove('power_crm_novos');
-  Logger.log('✅ Cache Power CRM invalidado.');
-  try { SpreadsheetApp.getUi().alert('✅ Cache Power CRM invalidado.'); } catch(e) {}
-}
-
-// ===================== HISTÓRICO MENSAL — cache próprio, 12 chamadas mensais =====================
-function getHistoricoMensal() {
-  var cache  = CacheService.getScriptCache();
-  var cached = cache.get('historico_mensal');
-  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
-
-  autenticar();
-
-  var novosMap  = getNovosContratosPorMes();
-  var hoje      = new Date();
-  var resultado = [];
-
-  for (var i = 11; i >= 0; i--) {
-    var d      = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-    var ano    = d.getFullYear();
-    var mesNum = d.getMonth() + 1;
-    var mesStr = ano + "-" + (mesNum < 10 ? "0" + mesNum : mesNum);
-    var ultimo = new Date(ano, mesNum, 0).getDate();
-    var dIni   = Utilities.formatDate(new Date(ano, mesNum - 1, 1),       "America/Sao_Paulo", "dd/MM/yyyy");
-    var dFim   = Utilities.formatDate(new Date(ano, mesNum - 1, ultimo),  "America/Sao_Paulo", "dd/MM/yyyy");
-
-    var cancelamentos = 0, reativacoes = 0;
-
-    try {
-      var res = chamarAPI("/listar/alteracao-associados/", "post", {
-        "data_inicial": dIni, "data_final": dFim, "campos": ["codigo_situacao"]
-      });
-      if (Array.isArray(res)) {
-        res.forEach(function(a) {
-          var de   = String(a.valor_anterior  || "").trim();
-          var para = String(a.valor_posterior || "").trim();
-          if (de === "1" && para === "2") cancelamentos++;
-          if (de === "2" && para === "1") reativacoes++;
-        });
-      }
-    } catch(e) {
-      Logger.log("Historico " + mesStr + " erro: " + e.message);
-    }
-
-    resultado.push({
-      mes:           mesStr,
-      cancelamentos: cancelamentos,
-      reativacoes:   reativacoes,
-      novos:         novosMap[mesStr] || 0
-    });
-
-    Utilities.sleep(300);
+function gerarIntervalos(inicio, fim) {
+  var partsI = inicio.split('-');
+  var partsF = fim.split('-');
+  var anoI = parseInt(partsI[0]), mesI = parseInt(partsI[1]);
+  var anoF = parseInt(partsF[0]), mesF = parseInt(partsF[1]);
+  var lista = [];
+  var ano = anoI, mes = mesI;
+  while (ano < anoF || (ano === anoF && mes <= mesF)) {
+    var de  = ano + '-' + ('0'+mes).slice(-2) + '-01';
+    var ultimo = new Date(ano, mes, 0).getDate();
+    var ate = ano + '-' + ('0'+mes).slice(-2) + '-' + ('0'+ultimo).slice(-2);
+    if (ate > fim) ate = fim;
+    lista.push({ de: de, ate: ate });
+    mes++;
+    if (mes > 12) { mes = 1; ano++; }
   }
-
-  var resAtivos = chamarAPI("/listar/associado", "post", {
-    "codigo_situacao": 1, "inicio_paginacao": 0, "quantidade_por_pagina": 1
-  });
-
-  var retorno = {
-    por_mes:          resultado,
-    base_ativa_atual: resAtivos ? (parseInt(resAtivos.total_associados) || 0) : 0
-  };
-
-  try { cache.put('historico_mensal', JSON.stringify(retorno), 3600); } catch(e) {}
-  return retorno;
+  return lista;
 }
 
-function invalidarCacheHistoricoMensal() {
-  CacheService.getScriptCache().remove('historico_mensal');
-  Logger.log('✅ Cache histórico mensal invalidado.');
-  try { SpreadsheetApp.getUi().alert('✅ Cache histórico mensal invalidado.'); } catch(e) {}
-}
+// ============================================================
+//  GRAVAR DADOS BRUTOS — aba "relatorio"
+//  Adiciona colunas calculadas: statusLabel, isVenda, isArquivado
+// ============================================================
 
-// ===================== ANÁLISE DE CHURN (via getAlteracoes) =====================
-function getAnaliseChurn() {
-  var alteracoes = getAlteracoes();
-  var assocList  = alteracoes.associados || [];
-
-  // Filtra apenas cancelamentos: ativo (1) → inativo (2)
-  var cancelamentos = assocList.filter(function(a) {
-    return String(a.valor_posterior) === "2" && String(a.valor_anterior) === "1";
-  });
-
-  // Mapa de regional e data_contrato via aba "Associados Inativos" (se disponível)
-  var contratosMap = {};
-  try {
-    var ss        = SpreadsheetApp.getActiveSpreadsheet();
-    var abaInativ = ss.getSheetByName("Associados Inativos");
-    if (abaInativ && abaInativ.getLastRow() >= 2) {
-      var header   = abaInativ.getRange(1, 1, 1, abaInativ.getLastColumn()).getValues()[0];
-      var iCod     = header.indexOf("codigo_associado");
-      var iReg     = header.indexOf("codigo_regional");
-      var iDtContr = header.indexOf("data_contrato_associado");
-      var iDtCad   = header.indexOf("data_cadastro_associado");
-      var linhas   = abaInativ.getRange(2, 1, abaInativ.getLastRow() - 1, abaInativ.getLastColumn()).getValues();
-      linhas.forEach(function(row) {
-        var cod = String(row[iCod] || "").trim();
-        if (!cod) return;
-        var dtContr = iDtContr !== -1 ? String(row[iDtContr] || "") : "";
-        var dtCad   = iDtCad   !== -1 ? String(row[iDtCad]   || "") : "";
-        contratosMap[cod] = {
-          regional: iReg !== -1 ? String(row[iReg] || "") : "",
-          data:     (dtContr && dtContr !== "0000-00-00") ? dtContr : dtCad
-        };
-      });
-    }
-  } catch(e) {
-    Logger.log("Aviso: não foi possível ler Associados Inativos — " + e.message);
-  }
-
-  var REGIONAL_NAMES        = { "1": "Ipatinga", "2": "Betim" };
-  var porMes                = {};
-  var porRegional           = {};
-  var porOperadora          = {};
-  var distribuicaoTempoCasa = { "0-30": 0, "31-90": 0, "91-180": 0, "181-365": 0, "366-730": 0, "730+": 0 };
-  var detalhes              = [];
-
-  cancelamentos.forEach(function(a) {
-    var dtCancelStr  = String(a.data_alteracao || "").substring(0, 10);
-    if (!dtCancelStr || dtCancelStr.length < 7) return;
-    var mesCancelStr = dtCancelStr.substring(0, 7);
-
-    var cod      = String(a.codigo_associado || "");
-    var info     = contratosMap[cod] || {};
-    var codReg   = info.regional || "";
-    var regNome  = REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional");
-    var operadora = String(a.nome_usuario_alteracao || "").trim() || "Sem Operadora";
-
-    var diasCasa = 0;
-    if (info.data && info.data !== "0000-00-00") {
-      try {
-        var dtContr  = new Date(info.data);
-        var dtCancel = new Date(a.data_alteracao);
-        if (!isNaN(dtContr) && !isNaN(dtCancel)) {
-          diasCasa = Math.max(0, Math.floor((dtCancel - dtContr) / (1000 * 60 * 60 * 24)));
-        }
-      } catch(e) {}
-    }
-
-    porMes[mesCancelStr]    = (porMes[mesCancelStr]    || 0) + 1;
-    porRegional[regNome]    = (porRegional[regNome]     || 0) + 1;
-    porOperadora[operadora] = (porOperadora[operadora]  || 0) + 1;
-
-    if      (diasCasa <= 30)  distribuicaoTempoCasa["0-30"]++;
-    else if (diasCasa <= 90)  distribuicaoTempoCasa["31-90"]++;
-    else if (diasCasa <= 180) distribuicaoTempoCasa["91-180"]++;
-    else if (diasCasa <= 365) distribuicaoTempoCasa["181-365"]++;
-    else if (diasCasa <= 730) distribuicaoTempoCasa["366-730"]++;
-    else                      distribuicaoTempoCasa["730+"]++;
-
-    detalhes.push({
-      codigo_associado:  a.codigo_associado,
-      nome:              a.nome_associado  || "",
-      data_cancelamento: dtCancelStr,
-      dias_casa:         diasCasa,
-      regional:          regNome,
-      operadora:         operadora
-    });
-  });
-
-  return {
-    total_cancelamentos: cancelamentos.length,
-    por_mes: Object.keys(porMes).sort().map(function(m) {
-      return { mes: m, cancelamentos: porMes[m] };
-    }),
-    por_regional: Object.keys(porRegional).map(function(r) {
-      return { regional: r, cancelamentos: porRegional[r] };
-    }).sort(function(a, b) { return b.cancelamentos - a.cancelamentos; }),
-    por_operadora: Object.keys(porOperadora).map(function(op) {
-      return { operadora: op, cancelamentos: porOperadora[op] };
-    }).sort(function(a, b) { return b.cancelamentos - a.cancelamentos; }),
-    distribuicao_tempo_casa: Object.keys(distribuicaoTempoCasa).map(function(f) {
-      return { faixa: f, quantidade: distribuicaoTempoCasa[f] };
-    }),
-    detalhes: detalhes
-  };
-}
-
-// ===================== RECONSTRUIR HISTÓRICO =====================
-function reconstruirHistoricoCancelamentos() {
-  autenticar();
-
+function gravarDadosBrutos(dados) {
   var ss  = SpreadsheetApp.getActiveSpreadsheet();
-  var aba = ss.getSheetByName("Historico Cancelamentos") || ss.insertSheet("Historico Cancelamentos");
-  aba.clear();
-  aba.getRange(1, 1, 1, 10).setValues([[
-    "codigo_associado", "nome", "cpf",
-    "data_cancelamento", "data_contrato", "dias_ate_cancelamento", "mes_cancelamento",
-    "codigo_regional", "codigo_cooperativa", "operadora"
-  ]]);
-  aba.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
+  var aba = ss.getSheetByName('relatorio');
+  if (!aba) aba = ss.insertSheet('relatorio');
+  aba.clearContents();
+
+  var prioridade = [
+    'createdDate','quotationCode','cardStatus','cardId',
+    'clientName','clientRegistration','clientEmail','clientMobile','clientPhone',
+    'clientBirthdate','clientGender','clientCity','clientState','clientZipcode',
+    'responsibleSalesman','responsibleSalesmanEmail',
+    'vehicleBrand','vehicleModel','vehicleModelYear','vehicleFabricationYear',
+    'vehiclePlates','vehicleType','vehicleFipeValue','vehicleKM',
+    'namePlan','namePriceTable',
+    'monthlyPaymentsPrice','acquisitionPrice','trackerPrice','quoteValue',
+    'currentMonthlyTotal','monthlyPaymentDiscount','acquisitionDiscount',
+    'quotationOrigin','quotationLeadSource','quotationLeadSourceSub',
+    'hasTracker','hasPayment','automaticSale','workVehicle',
+    'paymentConfirmedDate','paymentType',
+    'inspectionScheduledDate','inspectionFinalizedDate','inspectionDeniedDate',
+    'sentToHinovaDate','quotationNegotiatingDate',
+    'isShelved','shelvedReason','quoteShelvedDate',
+    'nameAffiliate','tags','observationsDatabase'
+  ];
+
+  var todosCampos = Object.keys(dados[0]);
+  var resto = todosCampos.filter(function(c){ return prioridade.indexOf(c) === -1; });
+  var camposAPI = prioridade.filter(function(c){ return todosCampos.indexOf(c) !== -1; }).concat(resto);
+
+  // Colunas calculadas adicionadas pelo script
+  var colsCalculadas = ['_statusLabel','_isVenda','_isArquivado','_anoMes'];
+  var colunas = camposAPI.concat(colsCalculadas);
+
+  aba.getRange(1, 1, 1, colunas.length).setValues([colunas]);
+  aba.getRange(1, 1, 1, colunas.length).setFontWeight('bold');
   aba.setFrozenRows(1);
 
-  var contratos      = {};
-  var pagina         = 0;
-  var totalRegistros = 1;
-
-  while (pagina < totalRegistros) {
-    var r = chamarAPI("/listar/associado", "post", {
-      "codigo_situacao": 2, "inicio_paginacao": pagina, "quantidade_por_pagina": 1000
-    });
-    if (!r || !r.associados || r.associados.length === 0) break;
-    totalRegistros = parseInt(r.total_associados) || 0;
-    r.associados.forEach(function(a) {
-      var dc = "";
-      if (a.data_contrato_associado && a.data_contrato_associado !== "0000-00-00") {
-        dc = a.data_contrato_associado;
-      } else if (a.data_cadastro_associado && a.data_cadastro_associado !== "0000-00-00") {
-        dc = a.data_cadastro_associado;
+  var LOTE = 500;
+  for (var i = 0; i < dados.length; i += LOTE) {
+    var fatia = dados.slice(i, i + LOTE);
+    var linhas = fatia.map(function(row) {
+      var statusNum   = parseInt(row['cardStatus']) || 0;
+      var arquivado   = row['isShelved'] === true || row['isShelved'] === 'true' || row['isShelved'] === 1;
+      var isVenda     = STATUS_VENDA.indexOf(statusNum) !== -1 && !arquivado;
+      var statusLabel = STATUS_MAP[statusNum] || ('Status ' + statusNum);
+      // Ano-Mês da data de criação
+      var dataRaw = String(row['createdDate'] || '');
+      var anoMes  = '';
+      if (dataRaw) {
+        var pts = dataRaw.split(' - ')[0].trim().split('/');
+        if (pts.length >= 3) anoMes = pts[2] + '-' + pts[1];
       }
-      contratos[String(a.codigo_associado)] = {
-        data: dc, regional: a.codigo_regional || "", coop: a.codigo_cooperativa || ""
-      };
-    });
-    Logger.log("Inativos offset " + pagina + "/" + totalRegistros);
-    pagina += 1000;
-    Utilities.sleep(400);
-  }
-
-  var totalSemanas = 156;
-  var hoje         = new Date();
-  var novasLinhas  = [];
-
-  for (var i = 0; i < totalSemanas; i++) {
-    var dataFimS = new Date(hoje.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-    var dataIniS = new Date(hoje.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
-    var dFimS    = Utilities.formatDate(dataFimS, "America/Sao_Paulo", "dd/MM/yyyy");
-    var dIniS    = Utilities.formatDate(dataIniS, "America/Sao_Paulo", "dd/MM/yyyy");
-
-    var alteracoes = chamarAPI("/listar/alteracao-associados/", "post", {
-      "data_inicial": dIniS, "data_final": dFimS, "campos": ["codigo_situacao"]
-    });
-
-    if (Array.isArray(alteracoes)) {
-      alteracoes.forEach(function(a) {
-        if (String(a.valor_posterior) !== "2" || String(a.valor_anterior) !== "1") return;
-        var cod          = String(a.codigo_associado);
-        var info         = contratos[cod] || {};
-        var dataContrato = info.data || "";
-        var diasAte      = "";
-        var mesCancel    = "";
-        var dtCancel     = new Date(a.data_alteracao);
-        if (!isNaN(dtCancel)) mesCancel = Utilities.formatDate(dtCancel, "America/Sao_Paulo", "yyyy-MM");
-        if (dataContrato) {
-          var dtContrato = new Date(dataContrato);
-          if (!isNaN(dtContrato) && !isNaN(dtCancel)) {
-            diasAte = Math.floor((dtCancel - dtContrato) / (1000 * 60 * 60 * 24));
-          }
-        }
-        novasLinhas.push([
-          a.codigo_associado, a.nome_associado || "", a.cpf_associado || "",
-          a.data_alteracao, dataContrato, diasAte, mesCancel,
-          info.regional || "", info.coop || "", a.nome_usuario_alteracao || ""
-        ]);
+      var linha = camposAPI.map(function(col) {
+        var v = row[col];
+        if (v === null || v === undefined) return '';
+        if (typeof v === 'object') return JSON.stringify(v);
+        return v;
       });
-    }
-
-    Logger.log("Semana " + (i+1) + "/" + totalSemanas + " — acumulado=" + novasLinhas.length);
-    Utilities.sleep(500);
+      linha.push(statusLabel);      // _statusLabel
+      linha.push(isVenda ? 1 : 0);  // _isVenda
+      linha.push(arquivado ? 1 : 0);// _isArquivado
+      linha.push(anoMes);           // _anoMes
+      return linha;
+    });
+    aba.getRange(i + 2, 1, linhas.length, colunas.length).setValues(linhas);
+    Logger.log('Gravados ' + Math.min(i + LOTE, dados.length) + '/' + dados.length);
+    Utilities.sleep(100);
   }
-
-  if (novasLinhas.length > 0) {
-    aba.getRange(2, 1, novasLinhas.length, 10).setValues(novasLinhas);
-  }
-
-  SpreadsheetApp.getUi().alert(
-    "✅ Histórico reconstruído!",
-    "Cancelamentos encontrados: " + novasLinhas.length,
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
+  Logger.log('Aba relatorio: ' + dados.length + ' registros, ' + colunas.length + ' colunas');
 }
 
-// ===================== ANÁLISE 60 E 90 DIAS =====================
-function analisarCancelamentos60e90() {
-  var ss      = SpreadsheetApp.getActiveSpreadsheet();
-  var abaHist = ss.getSheetByName("Historico Cancelamentos");
-  if (!abaHist || abaHist.getLastRow() < 2) {
-    SpreadsheetApp.getUi().alert("❌ Execute primeiro 'Reconstruir Histórico de Cancelamentos'.");
-    return;
-  }
+// ============================================================
+//  KPIs — usa isShelved como flag de arquivamento/perda
+// ============================================================
 
-  var header = abaHist.getRange(1, 1, 1, abaHist.getLastColumn()).getValues()[0];
-  var iDias  = header.indexOf("dias_ate_cancelamento");
-  var iMes   = header.indexOf("mes_cancelamento");
-  var iData  = header.indexOf("data_cancelamento");
+function atualizarKPIs(dados) {
+  Logger.log('Calculando KPIs...');
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName('kpis');
+  if (!aba) aba = ss.insertSheet('kpis');
+  aba.clearContents();
 
-  if (iDias === -1) {
-    SpreadsheetApp.getUi().alert("❌ Coluna 'dias_ate_cancelamento' não encontrada.");
-    return;
-  }
+  var porMes = {}, porVendedor = {}, porStatus = {},
+      porOrigem = {}, porPlano = {}, porMotivoPerda = {};
 
-  var dados     = abaHist.getRange(2, 1, abaHist.getLastRow() - 1, abaHist.getLastColumn()).getValues();
-  var porMes60  = {};
-  var porMes90  = {};
-  var porMesTot = {};
+  for (var i = 0; i < dados.length; i++) {
+    var row = dados[i];
 
-  dados.forEach(function(row) {
-    var dias = row[iDias];
-    var mes  = iMes !== -1 ? String(row[iMes]) : "";
-    if (!mes && iData !== -1 && row[iData]) {
-      try {
-        var d = new Date(row[iData]);
-        if (!isNaN(d)) mes = Utilities.formatDate(d, "America/Sao_Paulo", "yyyy-MM");
-      } catch(e) {}
+    // Data
+    var dataRaw = String(row['createdDate'] || '');
+    if (!dataRaw) continue;
+    var partes = dataRaw.split(' - ')[0].trim().split('/');
+    if (partes.length < 3) continue;
+    var mesKey = partes[2] + '-' + partes[1];
+
+    var statusNum  = parseInt(row['cardStatus']) || 0;
+    var arquivado  = row["_isArquivado"] === 1 || row["_isArquivado"] === "1" || row["isShelved"] === "S" || row["isShelved"] === true || String(row["isShelved"]).toUpperCase() === "TRUE";
+    var motivo     = String(row['shelvedReason'] || '').trim();
+    var vendedor   = String(row['responsibleSalesman'] || 'Sem vendedor').trim();
+    var origem     = String(row['quotationOrigin'] || row['quotationLeadSource'] || 'Sem origem').trim();
+    var plano      = String(row['namePlan'] || 'Sem plano').trim();
+    var premioStr  = String(row['monthlyPaymentsPrice'] || '0').replace(',','.');
+    var premio     = parseFloat(premioStr) || 0;
+
+    var isVenda    = STATUS_VENDA.indexOf(statusNum) !== -1 && !arquivado;
+    var isProposta = STATUS_PROP.indexOf(statusNum)  !== -1 && !arquivado;
+    var isOpor     = STATUS_OPOR.indexOf(statusNum)  !== -1 && !arquivado;
+
+    // Por mês
+    if (!porMes[mesKey]) porMes[mesKey] = {leads:0,oportunidades:0,propostas:0,vendas:0,receita:0,perdas:0};
+    porMes[mesKey].leads++;
+    if (isOpor)     porMes[mesKey].oportunidades++;
+    if (isProposta) porMes[mesKey].propostas++;
+    if (isVenda)    { porMes[mesKey].vendas++; porMes[mesKey].receita += premio; }
+    if (arquivado)  porMes[mesKey].perdas++;
+
+    // Por vendedor
+    if (!porVendedor[vendedor]) porVendedor[vendedor] = {leads:0,vendas:0,receita:0,perdas:0};
+    porVendedor[vendedor].leads++;
+    if (isVenda)   { porVendedor[vendedor].vendas++;  porVendedor[vendedor].receita += premio; }
+    if (arquivado)   porVendedor[vendedor].perdas++;
+
+    // Por status
+    var statusLabel = STATUS_MAP[statusNum] || ('Status ' + statusNum);
+    if (arquivado) statusLabel = 'Arquivado';
+    porStatus[statusLabel] = (porStatus[statusLabel]||0)+1;
+
+    // Por origem
+    porOrigem[origem] = (porOrigem[origem]||0)+1;
+
+    // Por plano
+    porPlano[plano] = (porPlano[plano]||0)+1;
+
+    // Motivo de perda (apenas arquivados com motivo preenchido)
+    if (arquivado && motivo) {
+      porMotivoPerda[motivo] = (porMotivoPerda[motivo]||0)+1;
+    } else if (arquivado) {
+      porMotivoPerda['Sem motivo informado'] = (porMotivoPerda['Sem motivo informado']||0)+1;
     }
-    if (!mes || mes === "") return;
-    porMesTot[mes] = (porMesTot[mes] || 0) + 1;
-    if (dias === "" || dias === null) return;
-    var n = parseInt(dias);
-    if (isNaN(n) || n < 0) return;
-    if (n <= 60) porMes60[mes] = (porMes60[mes] || 0) + 1;
-    if (n <= 90) porMes90[mes] = (porMes90[mes] || 0) + 1;
-  });
+  }
 
-  var abaRes  = ss.getSheetByName("Análise 60-90 dias") || ss.insertSheet("Análise 60-90 dias");
-  abaRes.clear();
-  var meses   = Object.keys(porMesTot).sort();
-  var cabecalho = [
-    ["📈 CANCELAMENTOS POR MÊS — Análise de Precocidade", "", "", "", ""],
-    ["Gerado em: " + new Date().toLocaleString("pt-BR"), "", "", "", ""],
-    ["", "", "", "", ""],
-    ["Mês", "Total Cancelamentos", "Até 60 dias de adesão", "Até 90 dias de adesão", "% em até 90 dias"]
+  var L = [];
+
+  L.push(['## KPIs por mes','','','','','','']);
+  L.push(['mes','leads','oportunidades','propostas','vendas','receita','perdas']);
+  Object.keys(porMes).sort().forEach(function(m){
+    var d=porMes[m];
+    L.push([m,d.leads,d.oportunidades,d.propostas,d.vendas,d.receita,d.perdas]);
+  });
+  L.push(['','','','','','','']);
+
+  L.push(['## KPIs por vendedor','','','','','','']);
+  L.push(['vendedor','leads','vendas','receita','conversao_%','perdas','']);
+  Object.entries(porVendedor).sort(function(a,b){return b[1].vendas-a[1].vendas;}).forEach(function(kv){
+    var v=kv[0],d=kv[1];
+    var conv = d.leads>0?((d.vendas/d.leads)*100).toFixed(1):0;
+    L.push([v,d.leads,d.vendas,d.receita,conv,d.perdas,'']);
+  });
+  L.push(['','','','','','','']);
+
+  L.push(['## Funil por status','','','','','','']);
+  L.push(['status','quantidade','','','','','']);
+  Object.entries(porStatus).sort(function(a,b){return b[1]-a[1];}).forEach(function(kv){
+    L.push([kv[0],kv[1],'','','','','']);
+  });
+  L.push(['','','','','','','']);
+
+  L.push(['## Motivos de perda (arquivamento)','','','','','','']);
+  L.push(['motivo','quantidade','','','','','']);
+  if (Object.keys(porMotivoPerda).length === 0) {
+    L.push(['Nenhum registro arquivado encontrado','0','','','','','']);
+  } else {
+    Object.entries(porMotivoPerda).sort(function(a,b){return b[1]-a[1];}).forEach(function(kv){
+      L.push([kv[0],kv[1],'','','','','']);
+    });
+  }
+  L.push(['','','','','','','']);
+
+  L.push(['## Por origem','','','','','','']);
+  L.push(['origem','quantidade','','','','','']);
+  Object.entries(porOrigem).sort(function(a,b){return b[1]-a[1];}).forEach(function(kv){
+    L.push([kv[0],kv[1],'','','','','']);
+  });
+  L.push(['','','','','','','']);
+
+  L.push(['## Por plano','','','','','','']);
+  L.push(['plano','quantidade','','','','','']);
+  Object.entries(porPlano).sort(function(a,b){return b[1]-a[1];}).forEach(function(kv){
+    L.push([kv[0],kv[1],'','','','','']);
+  });
+  L.push(['','','','','','','']);
+
+  var tLeads   = Object.values(porMes).reduce(function(s,d){return s+d.leads;},0);
+  var tVendas  = Object.values(porMes).reduce(function(s,d){return s+d.vendas;},0);
+  var tReceita = Object.values(porMes).reduce(function(s,d){return s+d.receita;},0);
+  var tPerdas  = Object.values(porMes).reduce(function(s,d){return s+d.perdas;},0);
+  var conv     = tLeads>0?((tVendas/tLeads)*100).toFixed(1):0;
+
+  L.push(['## Totais gerais','','','','','','']);
+  L.push(['total_leads',   tLeads,   '','','','','']);
+  L.push(['total_vendas',  tVendas,  '','','','','']);
+  L.push(['total_receita', tReceita, '','','','','']);
+  L.push(['total_perdas',  tPerdas,  '','','','','']);
+  L.push(['conversao_%',   conv,     '','','','','']);
+  L.push(['ultima_atualizacao', new Date().toISOString(),'','','','','']);
+
+  aba.getRange(1,1,L.length,7).setValues(L);
+  Logger.log('KPIs prontos. Vendas: ' + tVendas + ' | Perdas/Arquivados: ' + tPerdas);
+}
+
+// ============================================================
+//  RECALCULAR KPIs SEM REBUSCAR DA API
+// ============================================================
+
+function recalcularKPIsLocalmente() {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName('relatorio');
+  if (!aba || aba.getLastRow() < 2) { Logger.log('Aba relatorio vazia.'); return; }
+  var valores = aba.getDataRange().getValues();
+  var header  = valores[0];
+  var dados   = [];
+  for (var i = 1; i < valores.length; i++) {
+    var obj = {};
+    for (var j = 0; j < header.length; j++) obj[header[j]] = valores[i][j];
+    dados.push(obj);
+  }
+  Logger.log('Recalculando com ' + dados.length + ' registros locais...');
+  atualizarKPIs(dados);
+}
+
+// ============================================================
+//  UTILITÁRIOS
+// ============================================================
+
+function chamarAPI(metodo, endpoint, corpo) {
+  var url = CONFIG.BASE_URL + endpoint;
+  var opcoes = {
+    method: metodo,
+    headers: {
+      'Authorization': 'Bearer ' + CONFIG.BEARER_TOKEN,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    muteHttpExceptions: true,
+  };
+  if (corpo) opcoes.payload = JSON.stringify(corpo);
+  var resp   = UrlFetchApp.fetch(url, opcoes);
+  var codigo = resp.getResponseCode();
+  if (codigo === 401) throw new Error('Token Bearer invalido');
+  if (codigo === 429) { Utilities.sleep(10000); return chamarAPI(metodo, endpoint, corpo); }
+  if (codigo >= 400)  throw new Error('API retornou ' + codigo + ': ' + resp.getContentText().substring(0,300));
+  try { return JSON.parse(resp.getContentText()); }
+  catch(e) { throw new Error('Resposta nao e JSON: ' + resp.getContentText().substring(0,200)); }
+}
+
+function registrarLog(tipo, mensagem, inicio) {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName('_log');
+  if (!aba) { aba = ss.insertSheet('_log'); aba.appendRow(['data_hora','tipo','mensagem','duracao_s']); }
+  var duracao = inicio ? ((new Date()-inicio)/1000).toFixed(1) : '';
+  aba.appendRow([new Date(), tipo, mensagem, duracao]);
+  if (aba.getLastRow() > 101) aba.deleteRow(2);
+}
+
+function diagnosticarDatas() {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName('relatorio');
+  if (!aba) { Logger.log('Aba relatorio nao encontrada'); return; }
+
+  var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+  var colCard = header.indexOf('cardStatus');
+
+  var total = Math.min(aba.getLastRow()-1, 1000);
+  var vals  = aba.getRange(2, 1, total, aba.getLastColumn()).getDisplayValues();
+
+  // Pega o primeiro cardStatus=5 e mostra TODOS os campos com valor
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][colCard]) === '5') {
+      Logger.log('=== Linha ' + (i+2) + ' — todos os campos preenchidos ===');
+      for (var j = 0; j < header.length; j++) {
+        var v = String(vals[i][j]).trim();
+        if (v && v !== '' && v !== '0' && v !== 'false' && v !== 'N') {
+          Logger.log(header[j] + ': ' + v);
+        }
+      }
+      break;
+    }
+  }
+}
+
+function configurarTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t){ ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('sincronizarTudo').timeBased().everyHours(6).create();
+  Logger.log('Trigger configurado: a cada 6 horas');
+}
+
+function limparEResincronizar() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ['relatorio','kpis','_log'].forEach(function(nome){
+    var aba = ss.getSheetByName(nome); if (aba) ss.deleteSheet(aba);
+  });
+  sincronizarTudo();
+}
+
+// ============================================================
+//  CORRIGIR ABA RELATORIO — adiciona _isArquivado se não existe
+//  Execute UMA VEZ se a aba relatorio foi gerada por versão antiga
+// ============================================================
+
+function corrigirColunaArquivado() {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName('relatorio');
+  if (!aba || aba.getLastRow() < 2) { Logger.log('Aba relatorio vazia.'); return; }
+
+  var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+  Logger.log('Colunas existentes (primeiras 10): ' + header.slice(0,10).join(' | '));
+
+  // Encontra coluna isShelved
+  var colShelved = header.indexOf('isShelved');
+  var colArq     = header.indexOf('_isArquivado');
+  var colReason  = header.indexOf('shelvedReason');
+
+  if (colShelved === -1) { Logger.log('Coluna isShelved nao encontrada!'); return; }
+
+  // Lê todos os valores de isShelved para diagnóstico
+  var vals = aba.getRange(2, colShelved+1, Math.min(10, aba.getLastRow()-1), 1).getValues();
+  Logger.log('Primeiros 10 valores de isShelved: ' + vals.map(function(r){return JSON.stringify(r[0]);}).join(', '));
+
+  // Se _isArquivado não existe, cria no final
+  if (colArq === -1) {
+    var novaCol = aba.getLastColumn() + 1;
+    aba.getRange(1, novaCol).setValue('_isArquivado');
+    aba.getRange(1, novaCol).setFontWeight('bold');
+    colArq = novaCol - 1;
+    Logger.log('Coluna _isArquivado criada na coluna ' + novaCol);
+  }
+
+  // Lê todos os isShelved e escreve _isArquivado como 0/1
+  var total = aba.getLastRow() - 1;
+  var LOTE  = 1000;
+  var count = 0;
+
+  for (var i = 0; i < total; i += LOTE) {
+    var tam   = Math.min(LOTE, total - i);
+    var dados = aba.getRange(i+2, colShelved+1, tam, 1).getValues();
+    var saida = dados.map(function(row) {
+      var v = row[0];
+      // Cobre todos os formatos possíveis do Sheets
+      var arq = (v === true || v === 1 || v === "S" || v === "s" || String(v).toUpperCase() === "TRUE" || v === "true" || v === "1") ? 1 : 0;
+      return [arq];
+    });
+    aba.getRange(i+2, colArq+1, tam, 1).setValues(saida);
+    count += saida.filter(function(r){return r[0]===1;}).length;
+    Logger.log('Processados ' + Math.min(i+LOTE, total) + '/' + total + ' | Arquivados ate agora: ' + count);
+    Utilities.sleep(100);
+  }
+
+  Logger.log('CONCLUIDO. Total arquivados: ' + count + ' de ' + total + ' registros');
+  Logger.log('Agora rode recalcularKPIsLocalmente');
+}
+
+// ============================================================
+//  WEB APP — transforma o Apps Script em API para o dashboard
+//  Deploy: Implantar → Novo implantação → Web App
+//          Executar como: Eu (sua conta)
+//          Quem tem acesso: Qualquer pessoa
+// ============================================================
+
+// ============================================================
+//  WEB APP — substitui as funções doGet, getDadosKPIs e getDadosRaw
+//  Cole no final do script, substituindo as existentes
+// ============================================================
+
+function doGet(e) {
+  var params = e ? (e.parameter || {}) : {};
+  var acao   = params.acao || 'kpis';
+  try {
+    var resultado;
+    if      (acao === 'kpis') resultado = getDadosKPIs();
+    else if (acao === 'raw')  resultado = getDadosRaw();
+    else resultado = { erro: 'Acao desconhecida' };
+    return ContentService
+      .createTextOutput(JSON.stringify(resultado))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(e) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ erro: e.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// KPIs agregados — carregamento rápido (~1s)
+function getDadosKPIs() {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName('kpis');
+  if (!aba) return { erro: 'Aba kpis nao encontrada' };
+
+  var valores = aba.getDataRange().getValues();
+  var resultado = {
+    porMes: [], porVendedor: [], porStatus: [],
+    porOrigem: [], porPlano: [], motivosPerda: [], totais: {}
+  };
+  var secao = null;
+
+  function str(v) {
+    if (v === null || v === undefined || v === '') return '';
+    if (v instanceof Date) {
+      var y = v.getFullYear();
+      var m = ('0' + (v.getMonth()+1)).slice(-2);
+      return y + '-' + m;
+    }
+    return String(v).trim();
+  }
+
+  for (var i = 0; i < valores.length; i++) {
+    var row   = valores[i];
+    var campo = str(row[0]);
+    if (!campo) continue;
+
+    if (campo.indexOf('KPIs por mes')      !== -1) { secao = 'mes';      continue; }
+    if (campo.indexOf('KPIs por vendedor') !== -1) { secao = 'vendedor'; continue; }
+    if (campo.indexOf('Funil por status')  !== -1) { secao = 'status';   continue; }
+    if (campo.indexOf('Motivos de perda')  !== -1) { secao = 'perda';    continue; }
+    if (campo.indexOf('Por origem')        !== -1) { secao = 'origem';   continue; }
+    if (campo.indexOf('Por plano')         !== -1) { secao = 'plano';    continue; }
+    if (campo.indexOf('Totais gerais')     !== -1) { secao = 'totais';   continue; }
+    if (campo.startsWith('##'))                    { secao = null;        continue; }
+    if (campo === 'mes' || campo === 'vendedor' || campo === 'status' ||
+        campo === 'motivo' || campo === 'origem' || campo === 'plano')  continue;
+
+    if (secao === 'mes' && campo.match(/^\d{4}-\d{2}$/)) {
+      resultado.porMes.push({
+        mes:           campo,
+        leads:         Number(row[1]) || 0,
+        oportunidades: Number(row[2]) || 0,
+        propostas:     Number(row[3]) || 0,
+        vendas:        Number(row[4]) || 0,
+        receita:       Number(row[5]) || 0,
+        perdas:        Number(row[6]) || 0,
+      });
+    } else if (secao === 'vendedor' && campo) {
+      var conv = row[4];
+      if (conv instanceof Date) conv = 0;
+      conv = parseFloat(String(conv).replace(',','.')) || 0;
+      resultado.porVendedor.push({
+        vendedor:  campo,
+        leads:     Number(row[1]) || 0,
+        vendas:    Number(row[2]) || 0,
+        receita:   Number(row[3]) || 0,
+        conversao: conv,
+        perdas:    Number(row[5]) || 0,
+      });
+    } else if (secao === 'status' && campo) {
+      resultado.porStatus.push({ status: campo, quantidade: Number(row[1]) || 0 });
+    } else if (secao === 'perda' && campo && campo !== 'Nenhum registro arquivado encontrado') {
+      resultado.motivosPerda.push({ motivo: campo, quantidade: Number(row[1]) || 0 });
+    } else if (secao === 'origem' && campo) {
+      resultado.porOrigem.push({ origem: campo, quantidade: Number(row[1]) || 0 });
+    } else if (secao === 'plano' && campo) {
+      resultado.porPlano.push({ plano: campo, quantidade: Number(row[1]) || 0 });
+    } else if (secao === 'totais' && campo) {
+      resultado.totais[campo] = row[1];
+    }
+  }
+  return resultado;
+}
+
+// Dados brutos para funil estático e filtros dinâmicos
+// Retorna apenas campos necessários — sem dados pessoais
+function getDadosRaw() {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName('relatorio');
+  if (!aba || aba.getLastRow() < 2) return { erro: 'Aba relatorio vazia', dados: [] };
+
+  var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+
+  // Apenas campos necessários para funil estático — sem dados pessoais
+  var colsNecessarias = [
+    'createdDate',              // Cotacoes recebidas (etapa 1)
+    'quotationNegotiatingDate', // Em negociacao (etapa 2)
+    'clearForInspectionDate',   // Liberada p/ vistoria (etapa 3)
+    'inspectionFinalizedDate',  // Vistoria finalizada (etapa 4)
+    'sentToHinovaDate',         // Venda concretizada (etapa 5)
+    'quoteShelvedDate',         // Perda/Arquivado
+    'isShelved',                // Flag de perda
+    'monthlyPaymentsPrice',     // Receita
+    'responsibleSalesman',      // Vendedor
+    'namePlan',                 // Plano
+    'quotationOrigin',          // Origem
+    'quotationLeadSource',      // Origem alternativa
+    'shelvedReason',            // Motivo de perda
+    'cardStatus',               // Status atual
+    'cooperative',              // Unidade/Associação
+    'cardId',                   // ID único da cotação no Power CRM
+    'quotationCode',            // Código legível da cotação
+    'clientName',               // Nome do cliente
+    'clientMobile',             // Celular
+    'clientPhone',              // Telefone fixo (fallback se clientMobile vazio)
+    'vehiclePlates',            // Placa do veículo
+    'vehicleBrand',             // Marca
+    'vehicleModel',             // Modelo
+    'vehicleModelYear',         // Ano modelo
   ];
-  var linhas = meses.map(function(mes) {
-    var tot = porMesTot[mes] || 0;
-    var c60 = porMes60[mes]  || 0;
-    var c90 = porMes90[mes]  || 0;
-    return [mes, tot, c60, c90, tot > 0 ? ((c90/tot)*100).toFixed(1)+"%" : "-"];
+
+  // Mapeia índices
+  var indices = {};
+  colsNecessarias.forEach(function(col) {
+    var idx = header.indexOf(col);
+    if (idx !== -1) indices[col] = idx;
   });
-  var tTot = meses.reduce(function(s,m){ return s+(porMesTot[m]||0); }, 0);
-  var t60  = meses.reduce(function(s,m){ return s+(porMes60[m] ||0); }, 0);
-  var t90  = meses.reduce(function(s,m){ return s+(porMes90[m] ||0); }, 0);
-  linhas.push(["TOTAL", tTot, t60, t90, tTot > 0 ? ((t90/tTot)*100).toFixed(1)+"%" : "-"]);
 
-  var tudo = cabecalho.concat(linhas);
-  abaRes.getRange(1, 1, tudo.length, 5).setValues(tudo);
-  abaRes.getRange(1, 1, 1, 5).setFontWeight("bold").setFontSize(13).setBackground("#1a1a2e").setFontColor("#fff");
-  abaRes.getRange(4, 1, 1, 5).setFontWeight("bold").setBackground("#2d3561").setFontColor("#fff");
-  abaRes.getRange(4 + linhas.length, 1, 1, 5).setFontWeight("bold").setBackground("#374785").setFontColor("#fff");
-  abaRes.setFrozenRows(4);
-  for (var c = 1; c <= 5; c++) abaRes.autoResizeColumn(c);
+  // Lê todos os dados de uma vez
+  var totalLinhas = aba.getLastRow() - 1;
+  var valores = aba.getRange(2, 1, totalLinhas, aba.getLastColumn()).getDisplayValues();
 
-  SpreadsheetApp.getUi().alert(
-    "✅ Análise concluída!",
-    "Total: " + tTot + "\nAté 60 dias: " + t60 + "\nAté 90 dias: " + t90,
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
-}
-
-// ===================== TESTE doGet =====================
-function testarDoGet() {
-  var resultados = {};
-  ["resumo", "panorama", "zona_churn", "snapshots"].forEach(function(acao) {
-    try {
-      var e        = { parameter: { acao: acao } };
-      var response = doGet(e);
-      var json     = JSON.parse(response.getContent());
-      resultados[acao] = json.erro ? "ERRO: " + json.erro : "OK";
-      Logger.log(acao + ": " + JSON.stringify(json).substring(0, 500));
-    } catch (err) {
-      resultados[acao] = "ERRO: " + err.message;
+  function fmtData(v) {
+    if (v === null || v === undefined || v === '') return '';
+    // Objeto Date do Sheets
+    if (v instanceof Date) {
+      if (isNaN(v.getTime())) return '';
+      return v.getFullYear() + '-' +
+             ('0'+(v.getMonth()+1)).slice(-2) + '-' +
+             ('0'+v.getDate()).slice(-2);
     }
-  });
-  var msg = Object.keys(resultados).map(function(k) { return k + ": " + resultados[k]; }).join("\n");
-  SpreadsheetApp.getUi().alert("Teste doGet", msg, SpreadsheetApp.getUi().ButtonSet.OK);
+    var s = String(v).trim();
+    if (!s || s === '0' || s === 'null' || s === 'undefined') return '';
+    // Formato dd/mm/yyyy - hh:mm ou dd/mm/yyyy
+    if (s.indexOf('/') !== -1) {
+      var parte = s.split(' - ')[0].trim();
+      var pts = parte.split('/');
+      if (pts.length >= 3) {
+        var dia = pts[0].trim().padStart(2,'0');
+        var mes = pts[1].trim().padStart(2,'0');
+        var ano = pts[2].trim().slice(0,4);
+        if (ano.length === 4 && !isNaN(+ano)) return ano + '-' + mes + '-' + dia;
+      }
+    }
+    // Formato yyyy-mm-dd já correto
+    if (s.match(/^\d{4}-\d{2}-\d{2}/)) return s.slice(0,10);
+    return '';
+  }
+
+  var dados = [];
+  for (var i = 0; i < valores.length; i++) {
+    var row = valores[i];
+    var arq = false;
+    if (indices['isShelved'] !== undefined) {
+      var sv = row[indices['isShelved']];
+      arq = (sv === 'S' || sv === true || sv === 1 || String(sv).toUpperCase() === 'TRUE');
+    }
+
+    var preco = 0;
+    if (indices['monthlyPaymentsPrice'] !== undefined) {
+      var precoStr = String(row[indices['monthlyPaymentsPrice']] || '0');
+      // Remove "R$", pontos de milhar e troca virgula por ponto: "R$1.061,97" -> 1061.97
+      precoStr = precoStr.replace('R$','').replace(/\./g,'').replace(',','.').trim();
+      preco = parseFloat(precoStr) || 0;
+    }
+
+    // dtVenda: usa sentToHinovaDate; se vazio mas o negocio ja esta Vendido (status 5)
+    // e nao arquivado, cai para createdDate — evita que a venda "desapareca" dos
+    // filtros de data quando esse campo administrativo nao foi preenchido no Power CRM
+    var statusAtual = indices['cardStatus'] !== undefined ? parseInt(row[indices['cardStatus']]) || 0 : 0;
+    var dtVendaRaw  = indices['sentToHinovaDate'] !== undefined ? row[indices['sentToHinovaDate']] : '';
+    var dtVenda     = fmtData(dtVendaRaw);
+    if (!dtVenda && statusAtual === 5 && !arq) {
+      dtVenda = fmtData(indices['createdDate'] !== undefined ? row[indices['createdDate']] : '');
+    }
+
+    dados.push([
+      fmtData(indices['createdDate']              !== undefined ? row[indices['createdDate']]              : ''),
+      fmtData(indices['quotationNegotiatingDate'] !== undefined ? row[indices['quotationNegotiatingDate']] : ''),
+      fmtData(indices['clearForInspectionDate']   !== undefined ? row[indices['clearForInspectionDate']]   : ''),
+      fmtData(indices['inspectionFinalizedDate']  !== undefined ? row[indices['inspectionFinalizedDate']]  : ''),
+      dtVenda,
+      fmtData(indices['quoteShelvedDate']         !== undefined ? row[indices['quoteShelvedDate']]         : ''),
+      arq ? 1 : 0,
+      preco,
+      String(indices['responsibleSalesman'] !== undefined ? row[indices['responsibleSalesman']] : '').trim(),
+      String(indices['namePlan']            !== undefined ? row[indices['namePlan']]            : '').trim(),
+      String(indices['quotationLeadSource'] !== undefined ? row[indices['quotationLeadSource']] : (indices['quotationOrigin'] !== undefined ? row[indices['quotationOrigin']] : '')).trim(),
+      String(indices['shelvedReason']       !== undefined ? row[indices['shelvedReason']]       : '').trim(),
+      String(indices['cooperative']          !== undefined ? row[indices['cooperative']]          : '').trim(),
+      String(row[indices['cardId']]           || '').trim(),
+      String(row[indices['quotationCode']]    || '').trim(),
+      String(row[indices['clientName']]       || '').trim(),
+      String(row[indices['clientMobile']]     || (indices['clientPhone'] !== undefined ? row[indices['clientPhone']] : '') || '').trim(),
+      String(row[indices['vehiclePlates']]    || '').trim(),
+      String(row[indices['vehicleBrand']]     || '').trim(),
+      String(row[indices['vehicleModel']]     || '').trim(),
+      String(row[indices['vehicleModelYear']] || '').trim(),
+    ]);
+  }
+
+  return {
+    cols: ['dtLead','dtNeg','dtLibVist','dtVistoria','dtVenda','dtPerda','isPerda','receita','vendedor','plano','origem','motivoPerda','unidade',
+      'cardId','quotationCode','clientName','clientPhone','vehiclePlates','vehicleBrand','vehicleModel','vehicleModelYear'],
+    dados: dados
+  };
 }

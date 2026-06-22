@@ -99,8 +99,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 .cs{font-size:11px;color:var(--mu2);margin-bottom:16px;font-weight:500;}
 
 .ranking{list-style:none;}
-.ri{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--b);}
+.ri{display:flex;align-items:center;gap:10px;padding:9px 6px;border-bottom:1px solid var(--b);cursor:pointer;border-radius:6px;}
 .ri:last-child{border-bottom:none;}
+.ri:hover{background:var(--s2);}
 .rn{font-size:11px;font-weight:700;color:var(--mu);width:18px;text-align:right;}
 .rname{flex:1;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .rbar{width:60px;height:3px;background:var(--s3);border-radius:2px;overflow:hidden;}
@@ -122,6 +123,21 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .footer{text-align:center;padding-top:20px;border-top:1px solid var(--b);font-size:11px;color:var(--mu);font-weight:500;margin-top:8px;}
+
+/* TABELA DE REGISTROS DETALHADOS */
+.tbl-wrap{overflow-x:auto;}
+.tbl{width:100%;border-collapse:collapse;font-size:11px;}
+.tbl thead th{position:sticky;top:0;background:var(--s3);font-weight:700;text-transform:uppercase;letter-spacing:0.8px;padding:8px 10px;text-align:left;white-space:nowrap;}
+.tbl tbody td{height:36px;padding:0 10px;border-bottom:1px solid var(--b);white-space:nowrap;}
+.tbl tbody tr:hover{background:var(--s2);}
+.tbl .vz{color:var(--mu);}
+.tbl-id{cursor:pointer;}
+.tbl-id:hover{color:var(--blue);}
+.tbl-badge{padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;}
+.tbl-pag-btn{background:var(--s2);border:1px solid var(--b2);color:var(--mu2);padding:5px 12px;border-radius:var(--r);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;}
+.tbl-pag-btn:hover:not(:disabled){background:var(--s3);color:var(--tx);}
+.tbl-pag-btn:disabled{opacity:.35;cursor:default;}
+.ri.sel{background:rgba(79,122,255,.1);border-left:2px solid var(--blue);}
 </style>
 </head>
 <body>
@@ -166,8 +182,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 <script>
 const API='https://script.google.com/macros/s/AKfycbw4rX9x64xg4PWvW3Zw_g6rv3rggoqqOP9tRdmBCGW5fcorCt5A4Kkd71cypViYp3c6qw/exec';
 let DAGR=null,DRAW=null,CH={},ANOS_DADOS=[];
+let FILTRO_VISUAL={tipo:null,valor:null};
+let TABELA_PAG=0;
 
-const CI={dtLead:0,dtNeg:1,dtLibVist:2,dtVistoria:3,dtVenda:4,dtPerda:5,isPerda:6,receita:7,vendedor:8,plano:9,origem:10,motivoPerda:11,unidade:12};
+const CI={dtLead:0,dtNeg:1,dtLibVist:2,dtVistoria:3,dtVenda:4,dtPerda:5,isPerda:6,receita:7,vendedor:8,plano:9,origem:10,motivoPerda:11,unidade:12,
+  cardId:13,quotationCode:14,clientName:15,clientPhone:16,vehiclePlates:17,vehicleBrand:18,vehicleModel:19,vehicleModelYear:20};
 
 const ETAPAS=[
   {key:'dtLead',    lbl:'Cotações recebidas',     cor:'#4f7aff'},
@@ -301,6 +320,13 @@ function renderAgr(){
 
 function norm(v,fb){return v&&v.trim()?v.trim():fb;}
 
+// Data de perda — usa dtPerda se existir, senão dtLead como fallback
+function dtPerdaEfetiva(r){
+  const dp=r[CI.dtPerda];
+  if(dp&&dp!=='') return dp;
+  return r[CI.dtLead]||'';
+}
+
 /* ================================================================
    CORREÇÃO: filtro de data aplicado POR ETAPA
    - vendedor/plano/origem/unidade filtram o registro inteiro
@@ -331,13 +357,6 @@ function renderRaw(){
     if(f.unid&&norm(r[CI.unidade],'Sem unidade')!==f.unid)    return false;
     return true;
   });
-
-  // Helper: data de perda — usa dtPerda se existir, senão dtLead como fallback
-  const dtPerdaEfetiva=r=>{
-    const dp=r[CI.dtPerda];
-    if(dp&&dp!=='') return dp;
-    return r[CI.dtLead]||'';
-  };
 
   // Contagem por etapa (cada uma usa sua própria data)
   const tL    = temDt ? base.filter(r=>inP(r[CI.dtLead])).length      : base.length;
@@ -433,6 +452,51 @@ function renderRaw(){
   renderMotivos(mpArr);
   renderRanking(vArr);
   setFooter();
+  TABELA_PAG=0;
+  atualizarTabela();
+}
+
+/* ================================================================
+   Registros filtrados para a tabela detalhada — parte do mesmo
+   filtro de dropdowns do renderRaw e aplica o FILTRO_VISUAL (clique
+   em etapa do funil / vendedor / plano / origem). Sem filtro visual,
+   usa dtLead (data de criação) seguindo a mesma lógica de contagem
+   do KPI de Leads (tL) no renderRaw.
+   ================================================================ */
+function getRegistrosFiltrados(){
+  if(!DRAW) return [];
+  const f=getF();
+  const temDt=!!(f.de||f.ate);
+  const inP=dt=>{
+    if(!dt||dt==='') return false;
+    if(f.de&&dt<f.de) return false;
+    if(f.ate&&dt>f.ate) return false;
+    return true;
+  };
+  const tem=dt=>dt&&dt!=='';
+
+  const base=DRAW.filter(r=>{
+    if(f.vend&&norm(r[CI.vendedor],'Sem vendedor')!==f.vend)  return false;
+    if(f.plano&&norm(r[CI.plano],'Sem plano')!==f.plano)       return false;
+    if(f.orig&&norm(r[CI.origem],'Sem origem')!==f.orig)       return false;
+    if(f.unid&&norm(r[CI.unidade],'Sem unidade')!==f.unid)    return false;
+    return true;
+  });
+
+  if(FILTRO_VISUAL.tipo==='vendedor') return base.filter(r=>norm(r[CI.vendedor],'Sem vendedor')===FILTRO_VISUAL.valor);
+  if(FILTRO_VISUAL.tipo==='origem')   return base.filter(r=>norm(r[CI.origem],'Sem origem')===FILTRO_VISUAL.valor);
+  if(FILTRO_VISUAL.tipo==='plano')    return base.filter(r=>norm(r[CI.plano],'Sem plano')===FILTRO_VISUAL.valor);
+
+  if(FILTRO_VISUAL.tipo==='funil'){
+    const v=FILTRO_VISUAL.valor;
+    if(v==='perdas') return base.filter(r=>r[CI.isPerda]===1&&(!temDt||inP(dtPerdaEfetiva(r))));
+    return base.filter(r=>{
+      const dt=r[CI[v]];
+      return tem(dt)&&(!temDt||inP(dt));
+    });
+  }
+
+  return temDt ? base.filter(r=>inP(r[CI.dtLead])) : base;
 }
 
 function buildHTML(tR,tk,conv,ciclo,vols,tPerd,meses,vends,motivos,orig,plano){
@@ -456,7 +520,10 @@ function buildHTML(tR,tk,conv,ciclo,vols,tPerd,meses,vends,motivos,orig,plano){
       convProx=Math.round((vols[i+1]/v)*100);
     }
 
-    funilParts+=`<div class="fe" ${i===0?'style="border-radius:var(--r2) 0 0 var(--r2)"':''}>
+    const fAtivo=FILTRO_VISUAL.tipo==='funil'&&FILTRO_VISUAL.valor===e.key;
+    const fBorda=fAtivo?`border-top:2px solid ${e.cor};border-bottom:2px solid ${e.cor};border-left:2px solid ${e.cor};`:'';
+    const fRadius=i===0?'border-radius:var(--r2) 0 0 var(--r2);':'';
+    funilParts+=`<div class="fe" data-funil-key="${e.key}" style="cursor:pointer;${fRadius}${fBorda}" onclick="toggleFiltroVisual('funil','${e.key}')">
       <div class="fe-lbl">${e.lbl}</div>
       <div class="fe-val" style="color:${e.cor}">${v!=null?fmt(v):'<span style="color:var(--mu);font-size:14px">—</span>'}</div>
       <div class="fe-pct-total">${pctTotal!=null?pctTotal+'% do total':''}</div>
@@ -472,7 +539,8 @@ function buildHTML(tR,tk,conv,ciclo,vols,tPerd,meses,vends,motivos,orig,plano){
   });
 
   const pctPerd=base>0?Math.round((tPerd/base)*100):0;
-  funilParts+=`<div class="fe-perda">
+  const pAtivo=FILTRO_VISUAL.tipo==='funil'&&FILTRO_VISUAL.valor==='perdas';
+  funilParts+=`<div class="fe-perda" data-funil-key="perdas" style="cursor:pointer;${pAtivo?'border:2px solid var(--red);':''}" onclick="toggleFiltroVisual('funil','perdas')">
     <div class="fe-lbl">Perdas</div>
     <div class="fe-val">${fmt(tPerd)}</div>
     <div class="fe-pct-total" style="color:rgba(255,79,106,.5)">${pctPerd}% do total</div>
@@ -524,6 +592,17 @@ function buildHTML(tR,tk,conv,ciclo,vols,tPerd,meses,vends,motivos,orig,plano){
       <div class="ct">Por origem</div><div class="cs">fonte dos leads conforme filtros</div>
       <canvas id="c-orig" height="210"></canvas>
     </div>
+  </div>
+  <div class="card" style="margin-top:12px;animation-delay:.36s">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+      <div>
+        <div class="ct" id="tabela-titulo">Registros detalhados</div>
+        <div class="cs" id="tabela-subtitulo">todos os registros no filtro</div>
+      </div>
+      <button class="btn" onclick="exportarCSV()" id="btn-exportar" style="flex-shrink:0">⬇ Exportar CSV</button>
+    </div>
+    <div id="tabela-registros"></div>
+    <div id="tabela-paginacao" style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:12px;font-size:11px;color:var(--mu2)"></div>
   </div>`;}
 
 Chart.defaults.color='#55576e';
@@ -678,7 +757,12 @@ function renderCharts(meses,vends,orig,plano){
     const cores=['#4f7aff','#00c896','#f5a623','#ff4f6a','#9d7dff','#22d3ee'];
     CH['c-plano']=new Chart(cp,{type:'bar',
       data:{labels:top.map(p=>p.plano),datasets:[{data:top.map(p=>p.quantidade),backgroundColor:cores.slice(0,top.length),borderRadius:5,borderSkipped:false}]},
-      options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{...GR.x},y:{...GR.y,ticks:{color:'#8a8da8',font:{size:11}}}}}
+      options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{...GR.x},y:{...GR.y,ticks:{color:'#8a8da8',font:{size:11}}}},
+        onClick:(evt,elements)=>{
+          if(!elements.length) return;
+          const label=CH['c-plano'].data.labels[elements[0].index];
+          toggleFiltroVisual('plano',label);
+        }}
     });
   }
 
@@ -690,7 +774,12 @@ function rDonut(id,arr,key){
   const top=arr.slice(0,6),cores=['#4f7aff','#00c896','#f5a623','#ff4f6a','#9d7dff','#22d3ee'];
   CH[id]=new Chart(el,{type:'doughnut',
     data:{labels:top.map(i=>i[key]),datasets:[{data:top.map(i=>i.quantidade),backgroundColor:cores,borderWidth:0,hoverOffset:8}]},
-    options:{cutout:'64%',plugins:{legend:{position:'right',labels:{color:'#8a8da8',boxWidth:8,usePointStyle:true,font:{size:11},padding:12}}}}
+    options:{cutout:'64%',plugins:{legend:{position:'right',labels:{color:'#8a8da8',boxWidth:8,usePointStyle:true,font:{size:11},padding:12}}},
+      onClick:(evt,elements)=>{
+        if(!elements.length) return;
+        const label=CH[id].data.labels[elements[0].index];
+        toggleFiltroVisual(key,label);
+      }}
   });
 }
 
@@ -704,7 +793,201 @@ function renderMotivos(arr){
 function renderRanking(vs){
   const w=document.getElementById('ranking');if(!w)return;
   const top=vs.slice(0,8),maxV=Math.max(...top.map(v=>v.vendas),1);
-  w.innerHTML=top.map((v,i)=>`<li class="ri"><span class="rn">${i+1}</span><span class="rname">${v.vendedor}</span><div class="rbar"><div class="rfill" style="width:${Math.round(v.vendas/maxV*100)}%"></div></div><span class="rval">${fmt(v.vendas)} vd</span><span class="rpct">${v.conversao}%</span></li>`).join('');
+  w.innerHTML=top.map((v,i)=>{
+    const sel=FILTRO_VISUAL.tipo==='vendedor'&&FILTRO_VISUAL.valor===v.vendedor;
+    const vEsc=v.vendedor.replace(/'/g,"\\'");
+    return `<li class="ri${sel?' sel':''}" data-vendedor="${v.vendedor}" onclick="toggleFiltroVisual('vendedor','${vEsc}')"><span class="rn">${i+1}</span><span class="rname">${v.vendedor}</span><div class="rbar"><div class="rfill" style="width:${Math.round(v.vendas/maxV*100)}%"></div></div><span class="rval">${fmt(v.vendas)} vd</span><span class="rpct">${v.conversao}%</span></li>`;
+  }).join('');
+}
+
+function fmtDataBR(s){
+  if(!s) return null;
+  const[y,m,d]=s.split('-');
+  if(!y||!m||!d) return null;
+  return d+'/'+m+'/'+y;
+}
+
+function situacaoDe(r){
+  if(r[CI.isPerda]===1)   return{lbl:'Perda',cor:'#ff4f6a'};
+  if(r[CI.dtVenda])       return{lbl:'Venda',cor:'#00c896'};
+  if(r[CI.dtVistoria])    return{lbl:'Vistoria',cor:'#22d3ee'};
+  if(r[CI.dtLibVist])     return{lbl:'Lib. Vistoria',cor:'#9d7dff'};
+  if(r[CI.dtNeg])         return{lbl:'Negociação',cor:'#f5a623'};
+  return{lbl:'Lead',cor:'#4f7aff'};
+}
+
+function cicloDias(r){
+  if(!r[CI.dtLead]||!r[CI.dtVenda]) return null;
+  const dias=Math.round((new Date(r[CI.dtVenda])-new Date(r[CI.dtLead]))/(1000*60*60*24));
+  return dias>=0?dias:null;
+}
+
+function veiculoStr(r){
+  const partes=[r[CI.vehicleBrand],r[CI.vehicleModel],r[CI.vehicleModelYear]].filter(v=>v&&v.trim());
+  return partes.length?partes.join(' / '):null;
+}
+
+function celTbl(v){
+  return(v!==null&&v!==undefined&&String(v).trim()!=='')?v:'<span class="vz">—</span>';
+}
+
+function copiarId(id){
+  navigator.clipboard.writeText(id).catch(()=>{});
+}
+
+const TABELA_POR_PAG=50;
+
+function renderPaginacao(total,totalPag){
+  const w=document.getElementById('tabela-paginacao');
+  if(!w) return;
+  if(!total){w.innerHTML='';return;}
+  w.innerHTML=`<button class="tbl-pag-btn" onclick="mudarPagina(-1)" ${TABELA_PAG<=0?'disabled':''}>‹ Anterior</button>
+    <span>Página ${TABELA_PAG+1} de ${totalPag} — ${fmt(total)} registros</span>
+    <button class="tbl-pag-btn" onclick="mudarPagina(1)" ${TABELA_PAG>=totalPag-1?'disabled':''}>Próximo ›</button>`;
+}
+
+function mudarPagina(delta){
+  TABELA_PAG+=delta;
+  renderTabela(getRegistrosFiltrados());
+}
+
+function renderTabela(registros){
+  const w=document.getElementById('tabela-registros');
+  if(!w) return;
+  if(!registros||!registros.length){
+    w.innerHTML='<p style="color:var(--mu);font-size:12px;padding:8px 0">Nenhum registro encontrado</p>';
+    renderPaginacao(0,0);
+    return;
+  }
+
+  const totalPag=Math.max(1,Math.ceil(registros.length/TABELA_POR_PAG));
+  if(TABELA_PAG>=totalPag) TABELA_PAG=totalPag-1;
+  if(TABELA_PAG<0) TABELA_PAG=0;
+  const ini=TABELA_PAG*TABELA_POR_PAG;
+  const pagina=registros.slice(ini,ini+TABELA_POR_PAG);
+
+  const cabecalho=['ID','Cód. Cotação','Cliente','Telefone','Placa','Veículo','Situação','Vendedor','Unidade','Plano','Origem','Receita','Ciclo (dias)','Motivo Perda','Data Lead','Data Neg.','Data Lib.Vist','Data Vistoria','Data Venda','Data Perda'];
+
+  const linhas=pagina.map(r=>{
+    const sit=situacaoDe(r);
+    const ciclo=cicloDias(r);
+    const veic=veiculoStr(r);
+    const id=r[CI.cardId];
+    // TODO: quando confirmar URL do Power CRM, trocar por: <a href="URL/{cardId}" target="_blank">
+    const idCel=id?`<span class="tbl-id" title="Copiar ID" onclick="copiarId('${id}')">📋 ${id}</span>`:'<span class="vz">—</span>';
+    return `<tr>
+      <td>${idCel}</td>
+      <td>${celTbl(r[CI.quotationCode])}</td>
+      <td>${celTbl(r[CI.clientName])}</td>
+      <td>${celTbl(r[CI.clientPhone])}</td>
+      <td>${celTbl(r[CI.vehiclePlates]?r[CI.vehiclePlates].toUpperCase():null)}</td>
+      <td>${celTbl(veic)}</td>
+      <td><span class="tbl-badge" style="background:${sit.cor}26;color:${sit.cor}">${sit.lbl}</span></td>
+      <td>${celTbl(r[CI.vendedor])}</td>
+      <td>${celTbl(r[CI.unidade])}</td>
+      <td>${celTbl(r[CI.plano])}</td>
+      <td>${celTbl(r[CI.origem])}</td>
+      <td>${sit.lbl==='Venda'?fmtR(r[CI.receita]):'<span class="vz">—</span>'}</td>
+      <td>${celTbl(ciclo)}</td>
+      <td>${sit.lbl==='Perda'?celTbl(r[CI.motivoPerda]):'<span class="vz">—</span>'}</td>
+      <td>${celTbl(fmtDataBR(r[CI.dtLead]))}</td>
+      <td>${celTbl(fmtDataBR(r[CI.dtNeg]))}</td>
+      <td>${celTbl(fmtDataBR(r[CI.dtLibVist]))}</td>
+      <td>${celTbl(fmtDataBR(r[CI.dtVistoria]))}</td>
+      <td>${celTbl(fmtDataBR(r[CI.dtVenda]))}</td>
+      <td>${celTbl(fmtDataBR(r[CI.dtPerda]))}</td>
+    </tr>`;
+  }).join('');
+
+  w.innerHTML=`<div class="tbl-wrap"><table class="tbl">
+    <thead><tr>${cabecalho.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${linhas}</tbody>
+  </table></div>`;
+
+  renderPaginacao(registros.length,totalPag);
+}
+
+const FILTRO_VISUAL_LBL={
+  dtLead:'Cotações recebidas', dtNeg:'Em negociação', dtLibVist:'Lib. p/ vistoria',
+  dtVistoria:'Vistoria finalizada', dtVenda:'Vendas concretizadas', perdas:'Perdas'
+};
+
+function atualizarTabela(){
+  const registros=getRegistrosFiltrados();
+  renderTabela(registros);
+  const titulo=document.getElementById('tabela-titulo');
+  const sub=document.getElementById('tabela-subtitulo');
+  if(titulo) titulo.textContent='Registros detalhados — '+registros.length+' registros';
+  if(sub) sub.textContent=FILTRO_VISUAL.valor
+    ? 'Filtrando: '+(FILTRO_VISUAL_LBL[FILTRO_VISUAL.valor]||FILTRO_VISUAL.valor)
+    : 'todos os registros no filtro';
+}
+
+function toggleFiltroVisual(tipo,valor){
+  if(FILTRO_VISUAL.tipo===tipo&&FILTRO_VISUAL.valor===valor){
+    FILTRO_VISUAL={tipo:null,valor:null};
+  } else {
+    FILTRO_VISUAL={tipo:tipo,valor:valor};
+  }
+  TABELA_PAG=0;
+  atualizarTabela();
+  rebuildFunilVisual();
+  rebuildRankingVisual();
+}
+
+function rebuildFunilVisual(){
+  document.querySelectorAll('[data-funil-key]').forEach(el=>{
+    const key=el.dataset.funilKey;
+    const ativo=FILTRO_VISUAL.tipo==='funil'&&FILTRO_VISUAL.valor===key;
+    if(key==='perdas'){
+      el.style.border=ativo?'2px solid var(--red)':'';
+      return;
+    }
+    const etapa=ETAPAS.find(e=>e.key===key);
+    const cor=etapa?etapa.cor:'var(--b)';
+    el.style.borderTop=ativo?`2px solid ${cor}`:'';
+    el.style.borderBottom=ativo?`2px solid ${cor}`:'';
+    el.style.borderLeft=ativo?`2px solid ${cor}`:'';
+  });
+}
+
+function rebuildRankingVisual(){
+  document.querySelectorAll('[data-vendedor]').forEach(el=>{
+    const ativo=FILTRO_VISUAL.tipo==='vendedor'&&FILTRO_VISUAL.valor===el.dataset.vendedor;
+    el.classList.toggle('sel',ativo);
+  });
+}
+
+function exportarCSV(){
+  const registros=getRegistrosFiltrados();
+  const cabecalho=['ID','Cód. Cotação','Cliente','Telefone','Placa','Veículo','Situação','Vendedor','Unidade','Plano','Origem','Receita','Ciclo (dias)','Motivo Perda','Data Lead','Data Neg.','Data Lib.Vist','Data Vistoria','Data Venda','Data Perda'];
+  const esc=v=>'"'+String(v===null||v===undefined?'':v).replace(/"/g,'""')+'"';
+
+  const linhas=registros.map(r=>{
+    const sit=situacaoDe(r);
+    const ciclo=cicloDias(r);
+    return [
+      r[CI.cardId]||'', r[CI.quotationCode]||'', r[CI.clientName]||'', r[CI.clientPhone]||'',
+      (r[CI.vehiclePlates]||'').toUpperCase(), veiculoStr(r)||'', sit.lbl,
+      r[CI.vendedor]||'', r[CI.unidade]||'', r[CI.plano]||'', r[CI.origem]||'',
+      sit.lbl==='Venda'?(+r[CI.receita]||0).toFixed(2).replace('.',','):'',
+      ciclo!=null?ciclo:'',
+      sit.lbl==='Perda'?(r[CI.motivoPerda]||''):'',
+      fmtDataBR(r[CI.dtLead])||'', fmtDataBR(r[CI.dtNeg])||'', fmtDataBR(r[CI.dtLibVist])||'',
+      fmtDataBR(r[CI.dtVistoria])||'', fmtDataBR(r[CI.dtVenda])||'', fmtDataBR(r[CI.dtPerda])||''
+    ].map(esc).join(';');
+  });
+
+  const csv='﻿'+cabecalho.map(esc).join(';')+'\n'+linhas.join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='registros_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function setFooter(){
