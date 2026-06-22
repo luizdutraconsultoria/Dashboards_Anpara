@@ -11,9 +11,10 @@ let _zona       = null;
 let _analise    = null;
 
 /* ---- CHART INSTANCES ---- */
-let _cEntradas  = null;
-let _cCancel    = null;
-let _cEvolucao  = null;
+let _cEntradas     = null;
+let _cCancel       = null;
+let _cEvolucao     = null;
+let _cBaseEvolucao = null;
 
 /* ---- TABLE STATE ---- */
 const _stateInad = { sort: { col: 'dias_atraso', dir: 'desc' }, page: 1, search: '' };
@@ -189,8 +190,64 @@ function renderP1() {
   populateSel('p1-regional', regs, v => regionalLabel(v), fs.regional);
 
   /* Charts */
+  renderBaseEvolucaoChart();
   renderEntradasChart();
   renderRankRegional();
+}
+
+function renderBaseEvolucaoChart() {
+  const ctx = document.getElementById('chart-base-evolucao');
+  if (!ctx) return;
+  if (_cBaseEvolucao) _cBaseEvolucao.destroy();
+
+  const pm = _hist?.por_mes;
+  if (!pm || pm.length === 0 || !_panorama) {
+    ctx.closest('.chart-area').innerHTML = '<div class="empty">Sem histórico</div>';
+    return;
+  }
+
+  /* Reconstruir base ativa retroativamente a partir do snapshot atual */
+  const baseEvolucao = new Array(pm.length);
+  baseEvolucao[pm.length - 1] = _panorama.base_ativa;
+  for (let i = pm.length - 2; i >= 0; i--) {
+    const next = pm[i + 1];
+    baseEvolucao[i] = baseEvolucao[i + 1] - next.novos - next.reativacoes + next.cancelamentos;
+  }
+
+  const labels = pm.map(m => {
+    const [y, mo] = m.mes.split('-');
+    return monthShort(Number(mo)) + '/' + String(y).slice(2);
+  });
+
+  _cBaseEvolucao = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: baseEvolucao,
+        borderColor: '#00CEC9',
+        backgroundColor: 'rgba(0,206,201,0.08)',
+        fill: true,
+        tension: 0.35,
+        pointRadius: 3,
+        pointBackgroundColor: '#00CEC9',
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 18 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: item => fmtNum(item.parsed.y) } },
+      },
+      scales: {
+        x: { grid: GRID, ticks: TICKS },
+        y: { grid: GRID, ticks: { ...TICKS, precision: 0 }, min: Math.min(...baseEvolucao) - 100 },
+      },
+    },
+  });
 }
 
 function renderEntradasChart() {
