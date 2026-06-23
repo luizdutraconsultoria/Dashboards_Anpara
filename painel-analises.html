@@ -452,7 +452,7 @@ function buildHTML(cA,cB,pa,pb){
   const mensal=`<div class="row">
     <div class="card" style="animation-delay:.06s">
       <div class="ct" id="mensal-title">Comparativo mensal — últimos ${_mensalWindow} meses</div>
-      <div class="cs">Barra colorida = acumulado até o dia ${diaAtual} de cada mês · Barra cinza = total do mês</div>
+      <div class="cs">Barra colorida = acumulado até o dia ${diaAtual} de cada mês · Barra cinza = total do mês · Linha pontilhada = média do período</div>
       <div class="toggle-grp" style="margin-bottom:8px">
         <button class="tgl m-leads ${_mensalMetric==='leads'?'on':''}"     data-mm="leads"   onclick="setMensalMetric('leads')">Leads</button>
         <button class="tgl m-vendas ${_mensalMetric==='vendas'?'on':''}"   data-mm="vendas"  onclick="setMensalMetric('vendas')">Vendas</button>
@@ -515,6 +515,7 @@ const topLabelsPlugin={
     if(chart.config.type==='line') return;
     const ctx=chart.ctx;
     chart.data.datasets.forEach((ds,di)=>{
+      if(ds.type==='line') return;
       const meta=chart.getDatasetMeta(di);
       if(meta.hidden) return;
       meta.data.forEach((bar,i)=>{
@@ -626,6 +627,13 @@ function renderMensal(){
   const cor=MENSAL_COR[_mensalMetric];
   const fmtV=v=>isR?fmtR(v):fmt(v);
 
+  /* Média do período: usa o total dos meses já encerrados; se nenhum mês
+     do período estiver encerrado (ex.: janela = mês atual), cai para o MTD */
+  const completos=meses.filter(m=>m.total!=null);
+  const media=completos.length
+    ? completos.reduce((s,m)=>s+m.total,0)/completos.length
+    : (meses.length?meses.reduce((s,m)=>s+m.mtd,0)/meses.length:0);
+
   _chartMensal=new Chart(el,{
     type:'bar',
     data:{
@@ -633,6 +641,7 @@ function renderMensal(){
       datasets:[
         {label:'Total do mês',data:meses.map(m=>m.total),backgroundColor:'rgba(255,255,255,.08)',borderRadius:4,barPercentage:.7,categoryPercentage:.8,grouped:false,_fmt:fmtV,_labelColor:'#8a8da8'},
         {label:'Acumulado MTD',data:meses.map(m=>m.mtd),backgroundColor:cor,borderRadius:4,barPercentage:.38,categoryPercentage:.8,grouped:false,_fmt:fmtV,_labelColor:cor},
+        {type:'line',label:'Média do período',data:meses.map(()=>media),borderColor:'#ffb454',borderWidth:2,borderDash:[6,4],pointRadius:0,pointHoverRadius:0,pointHitRadius:6,fill:false,tension:0},
       ]
     },
     options:{
@@ -649,6 +658,7 @@ function renderMensal(){
             label:c=>{
               const m=meses[c.dataIndex];
               if(c.datasetIndex===0) return ` Total do mês: ${fmtV(m.total)}`;
+              if(c.datasetIndex===2) return ` Média do período: ${fmtV(media)}`;
               let s=` Acumulado (até dia ${m.mtdDia}): ${fmtV(m.mtd)}`;
               if(m.total) s+=` · ${(m.mtd/m.total*100).toFixed(0)}% do total`;
               return s;
