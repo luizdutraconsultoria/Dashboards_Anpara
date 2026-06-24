@@ -33,15 +33,22 @@ function render() {
   setEl('kpi-churn',  _panorama.churn_rate_estimado || '—');
   setEl('kpi-novos',  fmtNum(_panorama.novos_contratos_hoje));
 
-  /* Variação da base via historicoMensal */
+  /* Variação da base via historicoMensal — compara o ritmo do mês atual (parcial)
+     com o ritmo do mês anterior no mesmo número de dias, não o mês anterior cheio */
   if (_historicoMensal && _historicoMensal.por_mes && _historicoMensal.por_mes.length >= 2) {
     const pm  = _historicoMensal.por_mes;
     const cur = pm[pm.length - 1];
     const prv = pm[pm.length - 2];
-    const diff = (cur.novos - cur.cancelamentos) - (prv.novos - prv.cancelamentos);
+    const hoje = new Date();
+    const diaAtual = hoje.getDate();
+    const diasNoMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0).getDate();
+    const fatorMTD = Math.min(diaAtual, diasNoMesAnterior) / diasNoMesAnterior;
+    const saldoCur = cur.novos - cur.cancelamentos;
+    const saldoPrvMTD = (prv.novos - prv.cancelamentos) * fatorMTD;
+    const diff = saldoCur - saldoPrvMTD;
     const sub  = document.getElementById('kpi-ativos-sub');
     if (sub) {
-      sub.textContent = (diff >= 0 ? '+' : '') + fmtNum(diff) + ' saldo líquido vs mês anterior';
+      sub.textContent = (diff >= 0 ? '+' : '') + fmtNum(Math.round(diff)) + ` saldo líquido vs mês anterior (até o dia ${diaAtual})`;
       sub.className   = 'kpi-sub ' + (diff >= 0 ? 'pos' : 'neg');
     }
   }

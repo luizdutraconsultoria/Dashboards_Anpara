@@ -185,6 +185,10 @@ function renderP1() {
   setText('m-churn', _panorama.churn_rate_estimado || '—');
   setText('m-churn-delta', '% da base ativa em risco');
 
+  /* Cancelamento de veículo — associado continua ativo, perdeu 1 veículo */
+  setText('m-cancel-veic', fmtNum(_panorama.cancelamentos_veiculo_7d || 0));
+  setText('m-cancel-veic-delta', 'últimos 7 dias');
+
   /* Dropdown regional */
   const regs = [...new Set(_alt.map(a => a.codigo_regional).filter(Boolean))].sort();
   populateSel('p1-regional', regs, v => regionalLabel(v), fs.regional);
