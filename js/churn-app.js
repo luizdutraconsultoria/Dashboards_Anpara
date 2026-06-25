@@ -157,11 +157,22 @@ function renderP1() {
     const pm   = _hist.por_mes;
     const cur  = pm[pm.length - 1];
     const prv  = pm[pm.length - 2];
-    const diff = (cur.novos + cur.reativacoes - cur.cancelamentos) -
-                 (prv.novos + prv.reativacoes - prv.cancelamentos);
-    const el   = document.getElementById('m-ativos-delta');
+
+    // Compara o ritmo do mês atual (parcial) com o mês anterior no mesmo
+    // número de dias — não o mês anterior inteiro (senão favorece sempre
+    // o mês em andamento, que teve menos dias para acumular cancelamento)
+    const hoje              = new Date();
+    const diaAtual          = hoje.getDate();
+    const diasNoMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0).getDate();
+    const fatorMTD          = Math.min(diaAtual, diasNoMesAnterior) / diasNoMesAnterior;
+
+    const saldoCur    = cur.novos + cur.reativacoes - cur.cancelamentos;
+    const saldoPrvMTD = (prv.novos + prv.reativacoes - prv.cancelamentos) * fatorMTD;
+    const diff        = Math.round(saldoCur - saldoPrvMTD);
+
+    const el = document.getElementById('m-ativos-delta');
     if (el) {
-      el.textContent  = (diff >= 0 ? '▲ ' : '▼ ') + Math.abs(diff) + ' saldo líquido vs mês anterior';
+      el.textContent  = (diff >= 0 ? '▲ ' : '▼ ') + Math.abs(diff) + ` saldo líquido vs mês anterior (até o dia ${diaAtual})`;
       el.className    = 'metric-delta ' + (diff >= 0 ? 'up' : 'dn');
     }
   }
