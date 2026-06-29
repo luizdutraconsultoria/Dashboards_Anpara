@@ -352,7 +352,7 @@ td{padding:8px 10px;vertical-align:middle}
         </div>
       </div>
       <div style="height:12px"></div>
-      <div class="card-section">
+      <div class="card-section" id="p3-detail-card">
         <div class="card-section-header"><span class="card-section-title" id="p3-tabela-titulo">Cancelamentos Detalhados</span></div>
         <div id="p3-filtro-status" class="filtro-status" style="margin:8px 14px 0">
           <span></span>
@@ -468,6 +468,7 @@ const App = {
     const saldoMes     = mesAtual.saldo_veiculo ?? (entradasV - saidasV);
     const snapshots = panorama.snapshots || [];
 
+    const mesFiltro = mesAtual.mes || '';
     document.getElementById('p1-kpis').innerHTML =
       `<div class="card">
         <div class="kpi-label">Placas Ativas</div>
@@ -475,17 +476,17 @@ const App = {
         <div class="kpi-sub">${this.fmt(panorama.base_ativa)} associados</div>
       </div>
 
-      <div class="card">
+      <div class="card kpi-clickable" onclick="App.loadView('p2')" title="Ver Zona de Risco">
         <div class="kpi-label">Entradas no Mês</div>
         <div class="kpi-value">${this.fmt(entradasV)}</div>
         <div class="kpi-delta ${entradasV >= mediaEntradas ? 'pos' : 'neg'}">${entradasV >= mediaEntradas ? '+' : ''}${this.fmt(entradasV - mediaEntradas)} vs média 3m</div>
       </div>
-      <div class="card">
+      <div class="card kpi-clickable" onclick="App.irParaP3ComFiltro('mes','${mesFiltro}')" title="Ver cancelamentos do mês em detalhes">
         <div class="kpi-label">Saídas no Mês</div>
         <div class="kpi-value ${saidasV > mediaSaidas ? 'red' : ''}">${this.fmt(saidasV)}</div>
         <div class="kpi-delta ${saidasV <= mediaSaidas ? 'pos' : 'neg'}">${saidasV > mediaSaidas ? '+' : ''}${this.fmt(saidasV - mediaSaidas)} vs média 3m</div>
       </div>
-      <div class="card">
+      <div class="card kpi-clickable" onclick="App.irParaP3ComFiltro('mes','${mesFiltro}')" title="Ver cancelamentos do mês em detalhes">
         <div class="kpi-label">Saldo de Placas</div>
         <div class="kpi-value ${saldoMes < 0 ? 'red' : 'green'}">${saldoMes >= 0 ? '+' : ''}${this.fmt(saldoMes)}</div>
         <div class="kpi-delta ${saldoMes >= mediaSaldo ? 'pos' : 'neg'}">${saldoMes >= mediaSaldo ? '+' : ''}${this.fmt(saldoMes - mediaSaldo)} vs média 3m</div>
@@ -663,9 +664,15 @@ const App = {
         scales:{
           x:{ grid:{ display:false }, ticks:{ font:{ size:10 }, color:'#6B6B67' } },
           y:{ grid:{ color:'#F1EFE8' }, ticks:{ font:{ size:10 }, color:'#6B6B67' } }
+        },
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const idx = elements[0].index;
+          if (porMes[idx]) App.toggleFiltroP3('mes', porMes[idx].mes);
         }
       }
     });
+    canvas.style.cursor = 'pointer';
 
     // Regional
     const regs = (analise.por_regional || []).sort((a, b) => b.cancelamentos - a.cancelamentos);
@@ -899,7 +906,7 @@ App.switchTab = function(tabName) {
   document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
   const tc = document.getElementById('tab-' + tabName);
   if (tc) tc.classList.add('active');
-  tc && tc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('p2-tabs-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
 App.matchFiltroP3 = function(r) {
@@ -908,6 +915,7 @@ App.matchFiltroP3 = function(r) {
   if (tipo === 'regional')  return r.regional === valor;
   if (tipo === 'operadora') return r.operadora === valor;
   if (tipo === 'faixa')     return this.diasInFaixa(r.dias_casa, valor);
+  if (tipo === 'mes')       return String(r.data_cancelamento || '').substring(0, 7) === valor;
   return true;
 };
 
@@ -929,19 +937,29 @@ App.toggleFiltroP3 = function(tipo, valor) {
   this.filterTbl('p3', q, r => (!reg || r.regional === reg) && this.matchFiltroP3(r));
   this.atualizarStatusFiltroP3();
   this.atualizarVisualFiltroP3();
-  document.getElementById('p3-filtro-status')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.getElementById('p3-detail-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 };
 
 App.irParaP3ComFiltro = function(tipo, valor) {
   this.filtroP3 = { tipo, valor };
   const wasLoaded = !!this.loadedViews['p3'];
-  this.loadView('p3');
+  const doScroll = () => setTimeout(() => {
+    document.getElementById('p3-detail-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
   if (wasLoaded) {
+    this.loadView('p3');
     const q   = document.getElementById('srch-p3')?.value || '';
     const reg = document.getElementById('fil-p3-reg')?.value || '';
     this.filterTbl('p3', q, r => (!reg || r.regional === reg) && this.matchFiltroP3(r));
     this.atualizarStatusFiltroP3();
     this.atualizarVisualFiltroP3();
+    doScroll();
+  } else {
+    this.loadView('p3');
+    // renderP3 is async; scroll after it finishes
+    const wait = setInterval(() => {
+      if (this.loadedViews['p3']) { clearInterval(wait); doScroll(); }
+    }, 200);
   }
 };
 
@@ -955,8 +973,10 @@ App.atualizarStatusFiltroP3 = function() {
     return;
   }
   const faixaMap = { '0-30':'0–30 dias','31-90':'31–90 dias','91-180':'91–180 dias','181-365':'181–365 dias','366-730':'1–2 anos','730+':'+2 anos' };
-  const tipoLabel = tipo === 'regional' ? 'Regional' : tipo === 'faixa' ? 'Tempo de casa' : 'Consultor';
-  const valorLabel = tipo === 'faixa' ? (faixaMap[valor] || valor) : valor;
+  const tipoLabel = tipo === 'regional' ? 'Regional' : tipo === 'faixa' ? 'Tempo de casa' : tipo === 'mes' ? 'Mês' : 'Consultor';
+  const valorLabel = tipo === 'faixa' ? (faixaMap[valor] || valor)
+    : tipo === 'mes' ? (()=>{ const [y,m]=valor.split('-'); return m+'/'+y; })()
+    : valor;
   el.style.display = 'flex';
   el.querySelector('span').innerHTML = `${tipoLabel}: <strong>${valorLabel}</strong> — ${this.tables.p3.filtered.length} registro${this.tables.p3.filtered.length !== 1 ? 's' : ''}`;
   document.getElementById('p3-tabela-titulo').textContent = `Cancelamentos Detalhados — ${valorLabel}`;
