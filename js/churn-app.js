@@ -156,10 +156,10 @@ function renderP1() {
   setText('m-ativos', fmtNum(placasAtivas));
   if (_hist?.por_mes?.length >= 1) {
     const cur   = _hist.por_mes[_hist.por_mes.length - 1];
-    const saldo = Math.round(cur.novos + cur.reativacoes - cur.cancelamentos);
+    const saldo = cur.saldo_veiculo ?? Math.round(cur.novos + cur.reativacoes - cur.cancelamentos);
     const el    = document.getElementById('m-ativos-delta');
     if (el) {
-      el.textContent = (saldo >= 0 ? '+' : '') + fmtNum(saldo) + ' crescimento líquido no mês';
+      el.textContent = (saldo >= 0 ? '+' : '') + fmtNum(saldo) + ' saldo líquido de placas no mês';
       el.className   = 'metric-delta ' + (saldo >= 0 ? 'up' : 'dn');
     }
   }
@@ -218,7 +218,8 @@ function renderBaseEvolucaoChart() {
   baseEvolucao[pm.length - 1] = _panorama.veiculos_ativos || _panorama.base_ativa;
   for (let i = pm.length - 2; i >= 0; i--) {
     const next = pm[i + 1];
-    baseEvolucao[i] = baseEvolucao[i + 1] - next.novos - next.reativacoes + next.cancelamentos;
+    const saldo = next.saldo_veiculo ?? (next.novos + next.reativacoes - next.cancelamentos);
+    baseEvolucao[i] = baseEvolucao[i + 1] - saldo;
   }
 
   const labels = pm.map(m => {
