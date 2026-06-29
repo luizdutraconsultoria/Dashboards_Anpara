@@ -458,14 +458,13 @@ const App = {
     const porMes = (historico.por_mes || []);
     const mesAtual = porMes[porMes.length - 1] || {};
     const prev3 = porMes.slice(-4, -1);
-    const mediaNovos  = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.novos || 0), 0) / prev3.length) : 0;
-    const mediaSaldo  = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.saldo_veiculo ?? 0), 0) / prev3.length) : 0;
-    const mediaEntradas = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.entradas_veiculo || 0), 0) / prev3.length) : 0;
-    const mediaSaidas   = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.saidas_veiculo || 0), 0) / prev3.length) : 0;
-    const novos        = mesAtual.novos || 0;
-    const entradasV    = mesAtual.entradas_veiculo || 0;
-    const saidasV      = mesAtual.saidas_veiculo   || 0;
-    const saldoMes     = mesAtual.saldo_veiculo ?? (entradasV - saidasV);
+    const mediaNovos         = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.novos || 0), 0) / prev3.length) : 0;
+    const mediaCancelamentos = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.cancelamentos_veiculo || 0), 0) / prev3.length) : 0;
+    const mediaReativacoes   = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.reativacoes_veiculo || 0), 0) / prev3.length) : 0;
+    const novosV         = mesAtual.novos                 || 0;
+    const cancelamentosV = mesAtual.cancelamentos_veiculo || 0;
+    const reaticacoesV   = mesAtual.reativacoes_veiculo   || 0;
+    const saldoLiquido   = novosV + reaticacoesV - cancelamentosV;
     const snapshots = panorama.snapshots || [];
 
     const mesFiltro = mesAtual.mes || '';
@@ -475,21 +474,25 @@ const App = {
         <div class="kpi-value">${this.fmt(panorama.veiculos_ativos)}</div>
         <div class="kpi-sub">${this.fmt(panorama.base_ativa)} associados</div>
       </div>
-
-      <div class="card kpi-clickable" onclick="App.loadView('p2')" title="Ver Zona de Risco">
-        <div class="kpi-label">Entradas no Mês</div>
-        <div class="kpi-value">${this.fmt(entradasV)}</div>
-        <div class="kpi-delta ${entradasV >= mediaEntradas ? 'pos' : 'neg'}">${entradasV >= mediaEntradas ? '+' : ''}${this.fmt(entradasV - mediaEntradas)} vs média 3m</div>
+      <div class="card kpi-clickable" onclick="App.loadView('p2')" title="Ver zona de risco">
+        <div class="kpi-label">Novos no Mês</div>
+        <div class="kpi-value">${this.fmt(novosV)}</div>
+        <div class="kpi-delta ${novosV >= mediaNovos ? 'pos' : 'neg'}">${novosV >= mediaNovos ? '+' : ''}${this.fmt(novosV - mediaNovos)} vs média 3m</div>
       </div>
-      <div class="card kpi-clickable" onclick="App.irParaP3ComFiltro('mes','${mesFiltro}')" title="Ver cancelamentos do mês em detalhes">
-        <div class="kpi-label">Saídas no Mês</div>
-        <div class="kpi-value ${saidasV > mediaSaidas ? 'red' : ''}">${this.fmt(saidasV)}</div>
-        <div class="kpi-delta ${saidasV <= mediaSaidas ? 'pos' : 'neg'}">${saidasV > mediaSaidas ? '+' : ''}${this.fmt(saidasV - mediaSaidas)} vs média 3m</div>
+      <div class="card kpi-clickable" onclick="App.irParaP3ComFiltro('mes','${mesFiltro}')" title="Ver cancelamentos do mês">
+        <div class="kpi-label">Cancelamentos</div>
+        <div class="kpi-value ${cancelamentosV > mediaCancelamentos ? 'red' : ''}">${this.fmt(cancelamentosV)}</div>
+        <div class="kpi-delta ${cancelamentosV <= mediaCancelamentos ? 'pos' : 'neg'}">${cancelamentosV > mediaCancelamentos ? '+' : ''}${this.fmt(cancelamentosV - mediaCancelamentos)} vs média 3m</div>
       </div>
-      <div class="card kpi-clickable" onclick="App.irParaP3ComFiltro('mes','${mesFiltro}')" title="Ver cancelamentos do mês em detalhes">
-        <div class="kpi-label">Saldo de Placas</div>
-        <div class="kpi-value ${saldoMes < 0 ? 'red' : 'green'}">${saldoMes >= 0 ? '+' : ''}${this.fmt(saldoMes)}</div>
-        <div class="kpi-delta ${saldoMes >= mediaSaldo ? 'pos' : 'neg'}">${saldoMes >= mediaSaldo ? '+' : ''}${this.fmt(saldoMes - mediaSaldo)} vs média 3m</div>
+      <div class="card kpi-clickable" onclick="App.irParaP2ComTab('reativacoes')" title="Ver lista de reativações">
+        <div class="kpi-label">Reativações</div>
+        <div class="kpi-value green">${this.fmt(reaticacoesV)}</div>
+        <div class="kpi-delta ${reaticacoesV >= mediaReativacoes ? 'pos' : 'neg'}">${reaticacoesV >= mediaReativacoes ? '+' : ''}${this.fmt(reaticacoesV - mediaReativacoes)} vs média 3m</div>
+      </div>
+      <div class="card kpi-clickable" onclick="App.irParaP3ComFiltro('mes','${mesFiltro}')" title="Ver cancelamentos do mês">
+        <div class="kpi-label">Saldo Líquido</div>
+        <div class="kpi-value ${saldoLiquido < 0 ? 'red' : 'green'}">${saldoLiquido >= 0 ? '+' : ''}${this.fmt(saldoLiquido)}</div>
+        <div class="kpi-sub" style="font-size:10px">novos + reat. − cancelamentos</div>
       </div>
       `;
 
@@ -527,18 +530,20 @@ const App = {
     const esEl = document.getElementById('p1-es-wrap');
     esEl.innerHTML = `
       <div class="chart-legend">
-        <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>Entradas (placas →ativas)</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div>Saídas (placas ativas→)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#3B82F6"></div>Novos</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>Reativações</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div>Cancelamentos</div>
       </div>
-      <div class="chart-title">Entradas × Saídas de Placas por Mês</div>
+      <div class="chart-title">Novos · Reativações · Cancelamentos por Mês (veículos)</div>
       <div class="chart-canvas-wrap" style="height:200px"><canvas id="chart-es"></canvas></div>`;
 
     if (this.charts.es) this.charts.es.destroy();
     this.charts.es = new Chart(document.getElementById('chart-es'), {
       type: 'bar',
       data: { labels: barLabels, datasets: [
-        { label:'Entradas', data: last12.map(m => m.entradas_veiculo || 0), backgroundColor:'#1D9E75', borderRadius:2 },
-        { label:'Saídas',   data: last12.map(m => m.saidas_veiculo   || 0), backgroundColor:'#E24B4A', borderRadius:2 }
+        { label:'Novos',         data: last12.map(m => m.novos                 || 0), backgroundColor:'#3B82F6', borderRadius:2 },
+        { label:'Reativações',   data: last12.map(m => m.reativacoes_veiculo   || 0), backgroundColor:'#1D9E75', borderRadius:2 },
+        { label:'Cancelamentos', data: last12.map(m => m.cancelamentos_veiculo || 0), backgroundColor:'#E24B4A', borderRadius:2 }
       ]},
       plugins: [{
         id: 'barLabels',
@@ -899,6 +904,11 @@ const App = {
 };
 
 /* ======= FILTRO INTERATIVO ======= */
+App.irParaP2ComTab = async function(tabName) {
+  await this.loadView('p2');
+  this.switchTab(tabName);
+};
+
 App.switchTab = function(tabName) {
   document.querySelectorAll('#p2-tabs .tab-btn').forEach(b => b.classList.remove('active'));
   const btn = document.querySelector(`#p2-tabs .tab-btn[data-tab="${tabName}"]`);
