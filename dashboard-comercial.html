@@ -124,6 +124,29 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .footer{text-align:center;padding-top:20px;border-top:1px solid var(--b);font-size:11px;color:var(--mu);font-weight:500;margin-top:8px;}
 
+/* RECONCILIAÇÃO */
+.rec-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;align-items:center;justify-content:center;padding:20px;}
+.rec-overlay.open{display:flex;}
+.rec-box{background:var(--s1);border:1px solid var(--b2);border-radius:var(--r2);width:100%;max-width:860px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;}
+.rec-hdr{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--b);}
+.rec-hdr h2{font-size:15px;font-weight:800;letter-spacing:-.3px;}
+.rec-close{background:none;border:none;color:var(--mu2);font-size:20px;cursor:pointer;line-height:1;padding:4px;}
+.rec-close:hover{color:var(--tx);}
+.rec-badges{display:flex;gap:10px;padding:14px 22px;border-bottom:1px solid var(--b);}
+.rec-badge{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;}
+.rec-badge.crm{background:rgba(79,122,255,.12);color:var(--blue);}
+.rec-badge.sga{background:rgba(0,200,150,.12);color:var(--green);}
+.rec-badge.pend{background:rgba(245,166,35,.12);color:var(--amber);}
+.rec-badge.warn{background:rgba(255,79,106,.12);color:var(--red);}
+.rec-body{overflow-y:auto;padding:16px 22px;}
+.rec-sect{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:var(--mu);margin:12px 0 8px;}
+.rec-tbl{width:100%;border-collapse:collapse;font-size:11px;}
+.rec-tbl thead th{position:sticky;top:0;background:var(--s2);font-weight:700;text-transform:uppercase;letter-spacing:.7px;padding:7px 10px;text-align:left;white-space:nowrap;color:var(--mu2);}
+.rec-tbl tbody td{height:34px;padding:0 10px;border-bottom:1px solid var(--b);white-space:nowrap;}
+.rec-tbl tbody tr:hover{background:var(--s2);}
+.rec-load{text-align:center;padding:40px;color:var(--mu2);}
+.rec-spin{width:20px;height:20px;border:2px solid var(--b2);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px;}
+
 /* TABELA DE REGISTROS DETALHADOS */
 .tbl-wrap{overflow-x:auto;}
 .tbl{width:100%;border-collapse:collapse;font-size:11px;}
@@ -151,6 +174,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
   <div class="hdr-r">
     <span class="live" id="pill" style="display:none"><span class="live-dot"></span>ao vivo</span>
     <a class="btn" href="painel-analises.html" style="text-decoration:none">📊 Análise comparativa</a>
+    <button class="btn" onclick="abrirReconciliacao()" id="btn-rec">⇄ Reconciliar SGA</button>
     <button class="btn" onclick="carregar()">↻ atualizar</button>
   </div>
 </header>
@@ -177,6 +201,20 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
 
 <div id="conteudo"><div class="estado"><div class="spin"></div><h3>Carregando...</h3><p>conectando ao Power CRM</p></div></div>
 <div class="footer" id="footer"></div>
+</div>
+
+<!-- MODAL DE RECONCILIAÇÃO -->
+<div class="rec-overlay" id="rec-overlay" onclick="fecharReconciliacao(event)">
+  <div class="rec-box" onclick="event.stopPropagation()">
+    <div class="rec-hdr">
+      <h2 id="rec-titulo">Reconciliação CRM vs SGA</h2>
+      <button class="rec-close" onclick="fecharReconciliacao()">×</button>
+    </div>
+    <div class="rec-badges" id="rec-badges"></div>
+    <div class="rec-body" id="rec-body">
+      <div class="rec-load"><div class="rec-spin"></div>Carregando dados do SGA...</div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -1010,6 +1048,129 @@ window.addEventListener('load',()=>{
   mAti('todos');
   carregar();
 });
+
+/* ================================================================
+   RECONCILIAÇÃO CRM vs SGA
+   Compara as vendas concretizadas no mês atual (CRM) com os novos
+   associados ativados no SGA, usando a placa como chave de match.
+   ================================================================ */
+
+const CHURN_PROXY = 'https://anpara-proxy.luizdutraconsultoria.workers.dev';
+
+function normPlaca(p) {
+  return String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function mesAtualRange() {
+  const h = new Date();
+  const de = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0') + '-01';
+  const ate = h.toISOString().slice(0, 10);
+  return { de, ate, label: fmtM(de.slice(0, 7)) };
+}
+
+function vendasMesAtual() {
+  if (!DRAW) return [];
+  const { de, ate } = mesAtualRange();
+  return DRAW.filter(r => {
+    const dt = r[CI.dtVenda];
+    return dt && dt >= de && dt <= ate;
+  });
+}
+
+async function abrirReconciliacao() {
+  document.getElementById('rec-overlay').classList.add('open');
+  document.getElementById('rec-badges').innerHTML = '';
+  document.getElementById('rec-body').innerHTML = '<div class="rec-load"><div class="rec-spin"></div>Carregando dados do SGA...</div>';
+
+  if (!DRAW) {
+    document.getElementById('rec-body').innerHTML = '<div class="rec-load">Aguarde o carregamento dos dados do CRM.</div>';
+    return;
+  }
+
+  const { label } = mesAtualRange();
+  document.getElementById('rec-titulo').textContent = `Reconciliação CRM vs SGA — ${label}`;
+
+  let novos = [];
+  let sgaErr = false;
+  try {
+    const resp = await fetch(`${CHURN_PROXY}?acao=novos_contratos&_=${Date.now()}`);
+    const data = await resp.json();
+    if (data.erro) throw new Error(data.erro);
+    novos = data.novos || [];
+  } catch (e) {
+    sgaErr = e.message;
+  }
+
+  const vendas = vendasMesAtual();
+  // Match primário: cardId (ambas as fontes vêm do Power CRM)
+  // Fallback: placa normalizada (caso cardId esteja vazio em algum registro)
+  const novoIds    = new Set(novos.map(n => String(n.card_id || '')).filter(Boolean));
+  const novoPlacas = new Set(novos.map(n => normPlaca(n.placa)).filter(Boolean));
+
+  const emNovos = r => {
+    const id = String(r[CI.cardId] || '');
+    if (id && novoIds.has(id)) return true;
+    const p = normPlaca(r[CI.vehiclePlates]);
+    return p && novoPlacas.has(p);
+  };
+
+  const confirmados = vendas.filter(r => emNovos(r));
+  const pendentes   = vendas.filter(r => !emNovos(r));
+
+  const bdg = document.getElementById('rec-badges');
+  bdg.innerHTML = `
+    <span class="rec-badge crm">${vendas.length} no CRM</span>
+    <span class="rec-badge sga">${sgaErr ? '— SGA indisponível' : novos.length + ' no SGA'}</span>
+    <span class="rec-badge pend">${confirmados.length} confirmados</span>
+    <span class="rec-badge warn">${pendentes.length} pendentes no SGA</span>`;
+
+  const body = document.getElementById('rec-body');
+
+  if (sgaErr) {
+    body.innerHTML = `<div class="rec-load" style="color:var(--red)">
+      Erro ao buscar dados do SGA: ${sgaErr}<br>
+      <span style="font-size:11px;color:var(--mu);margin-top:6px;display:block">
+        Verifique se o endpoint <code>acao=novos_contratos</code> está ativo no Apps Script.
+      </span>
+    </div>`;
+    return;
+  }
+
+  const linhaVenda = r => `<tr>
+    <td>${r[CI.clientName] || '<span style="color:var(--mu)">—</span>'}</td>
+    <td>${r[CI.vehiclePlates] ? r[CI.vehiclePlates].toUpperCase() : '<span style="color:var(--mu)">sem placa</span>'}</td>
+    <td>${r[CI.vendedor] || '—'}</td>
+    <td>${fmtDataBR(r[CI.dtVenda]) || '—'}</td>
+    <td>${r[CI.plano] || '—'}</td>
+  </tr>`;
+
+  const cabTbl = `<thead><tr>
+    <th>Cliente</th><th>Placa</th><th>Vendedor</th><th>Data Venda</th><th>Plano</th>
+  </tr></thead>`;
+
+  let html = '';
+
+  if (pendentes.length === 0) {
+    html += `<div style="text-align:center;padding:24px;color:var(--green);font-weight:700">
+      ✓ Todas as ${vendas.length} vendas já estão ativas no SGA.
+    </div>`;
+  } else {
+    html += `<div class="rec-sect">⚠ ${pendentes.length} venda(s) no CRM ainda não ativa(s) no SGA</div>
+    <table class="rec-tbl">${cabTbl}<tbody>${pendentes.map(linhaVenda).join('')}</tbody></table>`;
+  }
+
+  if (confirmados.length > 0) {
+    html += `<div class="rec-sect" style="margin-top:20px">✓ ${confirmados.length} confirmado(s) em ambos</div>
+    <table class="rec-tbl">${cabTbl}<tbody>${confirmados.map(linhaVenda).join('')}</tbody></table>`;
+  }
+
+  body.innerHTML = html;
+}
+
+function fecharReconciliacao(e) {
+  if (e && e.target !== document.getElementById('rec-overlay')) return;
+  document.getElementById('rec-overlay').classList.remove('open');
+}
 </script>
 </body>
 </html>

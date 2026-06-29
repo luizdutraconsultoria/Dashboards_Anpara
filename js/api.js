@@ -17,6 +17,7 @@ const API = {
   alteracoes()      { return this._get('alteracoes'); },
   historicoMensal() { return this._get('historico_mensal'); },
   analiseChurn()    { return this._get('analise_churn'); },
+  novosContratos()  { return this._get('novos_contratos'); },
 };
 
 /* ——— UTILITIES ——— */

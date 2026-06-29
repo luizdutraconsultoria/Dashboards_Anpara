@@ -56,7 +56,7 @@ const CHART_OPTS = {
 /* ---- TOP-OF-BAR VALUE LABELS ---- */
 const topLabelsPlugin = {
   id: 'topLabels',
-  afterDatasetsDraw(chart) {
+  afterDraw(chart) {
     if (chart.config.type === 'line') return;
     const { ctx } = chart;
     chart.data.datasets.forEach((ds, di) => {
@@ -71,7 +71,7 @@ const topLabelsPlugin = {
         ctx.font = '600 10px DM Sans, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(String(val), bar.x, bar.y - 3);
+        ctx.fillText(fmtNum(val), bar.x, bar.y - 3);
         ctx.restore();
       });
     });
@@ -151,30 +151,22 @@ function renderP1() {
   if (!_panorama) return;
   const fs = _fs.p1;
 
-  /* Base ativa */
-  setText('m-ativos', fmtNum(_panorama.base_ativa));
-  if (_hist?.por_mes?.length >= 2) {
-    const pm   = _hist.por_mes;
-    const cur  = pm[pm.length - 1];
-    const prv  = pm[pm.length - 2];
-
-    // Compara o ritmo do mês atual (parcial) com o mês anterior no mesmo
-    // número de dias — não o mês anterior inteiro (senão favorece sempre
-    // o mês em andamento, que teve menos dias para acumular cancelamento)
-    const hoje              = new Date();
-    const diaAtual          = hoje.getDate();
-    const diasNoMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0).getDate();
-    const fatorMTD          = Math.min(diaAtual, diasNoMesAnterior) / diasNoMesAnterior;
-
-    const saldoCur    = cur.novos + cur.reativacoes - cur.cancelamentos;
-    const saldoPrvMTD = (prv.novos + prv.reativacoes - prv.cancelamentos) * fatorMTD;
-    const diff        = Math.round(saldoCur - saldoPrvMTD);
-
-    const el = document.getElementById('m-ativos-delta');
+  /* Base ativa — placas como métrica principal */
+  const placasAtivas = _panorama.veiculos_ativos || _panorama.base_ativa;
+  setText('m-ativos', fmtNum(placasAtivas));
+  if (_hist?.por_mes?.length >= 1) {
+    const cur   = _hist.por_mes[_hist.por_mes.length - 1];
+    const saldo = Math.round(cur.novos + cur.reativacoes - cur.cancelamentos);
+    const el    = document.getElementById('m-ativos-delta');
     if (el) {
-      el.textContent  = (diff >= 0 ? '▲ ' : '▼ ') + Math.abs(diff) + ` saldo líquido vs mês anterior (até o dia ${diaAtual})`;
-      el.className    = 'metric-delta ' + (diff >= 0 ? 'up' : 'dn');
+      el.textContent = (saldo >= 0 ? '+' : '') + fmtNum(saldo) + ' crescimento líquido no mês';
+      el.className   = 'metric-delta ' + (saldo >= 0 ? 'up' : 'dn');
     }
+  }
+
+  /* Associados ativos como informação secundária */
+  if (_panorama.base_ativa) {
+    setText('m-veiculos', fmtNum(_panorama.base_ativa) + ' associados ativos');
   }
 
   /* Novas vendas */
@@ -221,9 +213,9 @@ function renderBaseEvolucaoChart() {
     return;
   }
 
-  /* Reconstruir base ativa retroativamente a partir do snapshot atual */
+  /* Reconstruir base ativa (placas) retroativamente a partir do snapshot atual */
   const baseEvolucao = new Array(pm.length);
-  baseEvolucao[pm.length - 1] = _panorama.base_ativa;
+  baseEvolucao[pm.length - 1] = _panorama.veiculos_ativos || _panorama.base_ativa;
   for (let i = pm.length - 2; i >= 0; i--) {
     const next = pm[i + 1];
     baseEvolucao[i] = baseEvolucao[i + 1] - next.novos - next.reativacoes + next.cancelamentos;
@@ -293,6 +285,22 @@ function renderEntradasChart() {
 
   const labelMap = {};
   [...gCancel, ...gReat].forEach(g => { labelMap[g.key] = g.label; });
+
+  // Inclui meses de _hist que estejam no período mas sem entradas no _alt,
+  // para que as barras de "Novos" apareçam mesmo quando não há cancel./reat.
+  if (gran === 'month' && !fs.regional && _hist?.por_mes?.length) {
+    const _mths = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    _hist.por_mes.forEach(m => {
+      if (labelMap[m.mes]) return;
+      const mStart = new Date(m.mes + '-01');
+      const mEnd   = new Date(mStart.getFullYear(), mStart.getMonth() + 1, 0, 23, 59, 59);
+      if (from && mEnd   < from) return;
+      if (to   && mStart > to)   return;
+      const [y, mo] = m.mes.split('-');
+      labelMap[m.mes] = `${_mths[Number(mo) - 1]}/${String(y).slice(2)}`;
+    });
+  }
+
   const keys   = Object.keys(labelMap).sort();
   const labels = keys.map(k => labelMap[k]);
 

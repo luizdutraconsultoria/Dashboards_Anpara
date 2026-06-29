@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anpara — Dashboard de Churn</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F5F5F3;--surface:#FFFFFF;--border:#E0DED8;--text:#1A1A18;--muted:#6B6B67;--accent:#1A1A18;
+  --green:#1D9E75;--red:#E24B4A;--amber:#F59E0B;--purple:#7F77DD;--blue:#3B82F6;
+  --tag-red-bg:#FCEBEB;--tag-red-text:#791F1F;
+  --tag-amber-bg:#FAEEDA;--tag-amber-text:#633806;
+  --tag-green-bg:#EAF3DE;--tag-green-text:#3B6D11;
+  --tag-purple-bg:#EFEDFD;--tag-purple-text:#3D37A3;
+  --tag-gray-bg:#F1EFE8;--tag-gray-text:#444441;
+  --br:8px;--bw:0.5px;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:13px;height:100vh;overflow:hidden}
+.app{display:flex;height:100vh;overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{width:52px;flex-shrink:0;background:var(--surface);border-right:var(--bw) solid var(--border);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:2px}
+.sidebar-logo{width:32px;height:32px;background:#1A1A18;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600;letter-spacing:0.5px;margin-bottom:10px;flex-shrink:0;text-decoration:none}
+.nav-btn{width:36px;height:36px;border-radius:8px;border:none;background:transparent;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;position:relative;transition:background .15s,color .15s;text-decoration:none}
+.nav-btn:hover{background:#EDEDEB;color:var(--text)}
+.nav-btn.active{background:#EDEDEB;color:var(--text)}
+.nav-btn .tip{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);background:#1A1A18;color:#fff;font-size:11px;padding:4px 8px;border-radius:4px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:200}
+.nav-btn:hover .tip{opacity:1}
+.nav-divider{width:24px;height:0.5px;background:var(--border);margin:6px 0;flex-shrink:0}
+.nav-bottom{margin-top:auto}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* TOPBAR */
+.topbar{background:var(--surface);border-bottom:var(--bw) solid var(--border);padding:0 16px;height:46px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.topbar-title{font-size:13px;font-weight:600}
+.topbar-right{display:flex;align-items:center;gap:8px}
+.topbar-ts{font-size:11px;color:var(--muted)}
+.btn-refresh{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:var(--text);background:transparent;border:var(--bw) solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit}
+.btn-refresh:hover{background:#EDEDEB}
+
+/* CONTENT */
+.content{flex:1;overflow-y:auto;padding:16px;min-width:0}
+.view{display:none}
+.view.active{display:block}
+
+/* CARDS */
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--br);padding:12px 14px}
+.card-section{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--br);margin-bottom:12px;overflow:hidden}
+.card-section-header{padding:10px 14px;border-bottom:var(--bw) solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-section-title{font-size:12px;font-weight:600}
+
+/* KPI GRID */
+.kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+.kpi-label{font-size:11px;color:var(--muted);font-weight:500;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi-value{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:500;color:var(--text);line-height:1.1}
+.kpi-value.green{color:var(--green)}
+.kpi-value.red{color:var(--red)}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:3px}
+.kpi-delta{font-size:11px;font-weight:500;margin-top:2px}
+.kpi-delta.pos{color:var(--green)}
+.kpi-delta.neg{color:var(--red)}
+
+/* RISK GRID */
+.risk-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.card-risk-main{border-left:3px solid var(--red) !important}
+
+/* CHART */
+.chart-card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:var(--br);padding:12px 14px;margin-bottom:12px}
+.chart-title{font-size:12px;font-weight:600;margin-bottom:8px}
+.chart-canvas-wrap{position:relative}
+
+/* LAYOUT ROWS */
+.row-2fr1fr{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:12px}
+.row-1fr1fr{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+
+/* LEGEND */
+.chart-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+.legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+
+/* RANK BARS */
+.rank-list{display:flex;flex-direction:column;gap:7px}
+.rank-item{display:flex;flex-direction:column;gap:2px}
+.rank-item-header{display:flex;justify-content:space-between;font-size:11px}
+.rank-item-name{color:var(--text);font-weight:500}
+.rank-item-val{color:var(--muted)}
+.rank-bar-bg{height:5px;background:#F1EFE8;border-radius:3px;overflow:hidden}
+.rank-bar-fill{height:100%;border-radius:3px;background:var(--red)}
+
+/* TABLES */
+.toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:var(--bw) solid var(--border);flex-wrap:wrap}
+.search-input{flex:1;min-width:120px;border:var(--bw) solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;font-family:inherit;color:var(--text);background:var(--bg);outline:none}
+.search-input:focus{border-color:#999}
+.filter-select{border:var(--bw) solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit;color:var(--text);background:var(--bg);outline:none;cursor:pointer}
+.btn-export{font-size:11px;font-weight:500;color:var(--muted);background:transparent;border:var(--bw) solid var(--border);border-radius:6px;padding:5px 10px;cursor:pointer;white-space:nowrap;font-family:inherit}
+.btn-export:hover{background:#EDEDEB;color:var(--text)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{position:sticky;top:0;background:var(--surface);font-weight:600;font-size:11px;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:var(--bw) solid var(--border);white-space:nowrap;user-select:none}
+thead th.sortable{cursor:pointer}
+thead th.sortable:hover{color:var(--text)}
+tbody tr{border-bottom:var(--bw) solid var(--border)}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:#FAFAF8}
+td{padding:8px 10px;vertical-align:middle}
+.td-name{font-weight:600;color:var(--text)}
+.td-sub{font-size:11px;color:var(--muted)}
+
+/* PAGINATION */
+.pagination{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px;border-top:var(--bw) solid var(--border);font-size:11px;color:var(--muted)}
+.btn-page{font-size:11px;color:var(--text);background:transparent;border:var(--bw) solid var(--border);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit}
+.btn-page:hover{background:#EDEDEB}
+.btn-page:disabled{opacity:.4;cursor:not-allowed}
+
+/* TABS */
+.tabs{display:flex;border-bottom:var(--bw) solid var(--border);padding:0 14px;overflow-x:auto}
+.tab-btn{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--muted);background:transparent;border:none;border-bottom:2px solid transparent;padding:10px 12px 9px;cursor:pointer;white-space:nowrap;margin-bottom:-1px;font-family:inherit;transition:color .15s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--text)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.3px}
+.badge-red{background:var(--tag-red-bg);color:var(--tag-red-text)}
+.badge-amber{background:var(--tag-amber-bg);color:var(--tag-amber-text)}
+.badge-green{background:var(--tag-green-bg);color:var(--tag-green-text)}
+.badge-purple{background:var(--tag-purple-bg);color:var(--tag-purple-text)}
+.badge-gray{background:var(--tag-gray-bg);color:var(--tag-gray-text)}
+
+/* PROGRESS */
+.progress-wrap{background:#F1EFE8;border-radius:4px;height:8px;overflow:hidden;margin:8px 0}
+.progress-fill{height:100%;background:var(--green);border-radius:4px;transition:width .5s ease}
+
+/* BUTTONS */
+.btn-wa{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;color:#fff;background:#25D366;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;white-space:nowrap;font-family:inherit}
+.btn-wa:hover{background:#1cb954}
+.btn-sga{display:inline-flex;align-items:center;font-size:11px;font-weight:500;color:var(--text);background:transparent;border:var(--bw) solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn-sga:hover{background:#EDEDEB}
+
+/* SKELETON */
+.skeleton{background:linear-gradient(90deg,#eceae8 25%,#f5f4f2 50%,#eceae8 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* STATES */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;color:var(--muted);font-size:12px;gap:6px;text-align:center}
+.error-banner{background:var(--tag-red-bg);border:var(--bw) solid #f0b0b0;border-radius:var(--br);padding:12px 14px;color:var(--tag-red-text);font-size:12px;margin-bottom:12px}
+.info-note{font-size:11px;color:var(--muted);font-style:italic}
+.insight-txt{font-size:11px;font-weight:500;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <a href="index.html" class="sidebar-logo">AN</a>
+
+  <button class="nav-btn active" data-view="p1">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    <span class="tip">Saúde da Base</span>
+  </button>
+
+  <button class="nav-btn" data-view="p2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span class="tip">Zona de Risco</span>
+  </button>
+
+  <button class="nav-btn" data-view="p3">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <span class="tip">Por que Cancela</span>
+  </button>
+
+  <div class="nav-divider"></div>
+
+  <div class="nav-bottom">
+    <a href="index.html" class="nav-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span class="tip">Outros dashboards</span>
+    </a>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <header class="topbar">
+    <span class="topbar-title" id="topbarTitle">Saúde da Base</span>
+    <div class="topbar-right">
+      <span class="topbar-ts" id="topbarTs"></span>
+      <button class="btn-refresh" id="btnRefresh">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Atualizar
+      </button>
+    </div>
+  </header>
+
+  <div class="content" id="mainContent">
+
+    <!-- VIEW 1: SAÚDE DA BASE -->
+    <div class="view active" id="view-p1">
+      <!-- KPIs -->
+      <div class="kpi-grid" id="p1-kpis">
+        <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
+        <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
+        <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
+        <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
+        <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
+      </div>
+      <!-- Evolution -->
+      <div id="p1-evolution-wrap" class="chart-card">
+        <div class="chart-title">Evolução da Base Ativa (Placas)</div>
+        <div class="skeleton" style="height:180px;border-radius:4px"></div>
+      </div>
+      <!-- Row 3 -->
+      <div class="row-2fr1fr">
+        <div class="chart-card" style="margin-bottom:0" id="p1-es-wrap">
+          <div class="skeleton" style="height:240px;border-radius:4px"></div>
+        </div>
+        <div class="chart-card" style="margin-bottom:0" id="p1-reg-wrap">
+          <div class="chart-title">Churn por Regional</div>
+          <div class="skeleton" style="height:12px;margin-bottom:8px"></div>
+          <div class="skeleton" style="height:12px;margin-bottom:8px"></div>
+          <div class="skeleton" style="height:12px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 2: ZONA DE RISCO -->
+    <div class="view" id="view-p2">
+      <div class="risk-grid" id="p2-kpis">
+        <div class="card" style="height:88px"><div class="skeleton" style="height:100%"></div></div>
+        <div class="card" style="height:88px"><div class="skeleton" style="height:100%"></div></div>
+        <div class="card" style="height:88px"><div class="skeleton" style="height:100%"></div></div>
+        <div class="card" style="height:88px"><div class="skeleton" style="height:100%"></div></div>
+      </div>
+      <div class="card" id="p2-recovery" style="margin-bottom:12px">
+        <div class="skeleton" style="height:12px;width:50%;margin-bottom:10px"></div>
+        <div class="progress-wrap"><div class="progress-fill" style="width:0%"></div></div>
+        <div class="skeleton" style="height:10px;width:60%;margin-top:8px"></div>
+      </div>
+      <div class="card-section" id="p2-tabs-card">
+        <div class="tabs" id="p2-tabs">
+          <button class="tab-btn active" data-tab="inadimplentes">⚠️ Inadimplentes <span class="badge badge-red" id="cnt-inad">—</span></button>
+          <button class="tab-btn" data-tab="cancelamentos">🚪 Cancelamentos <span class="badge badge-amber" id="cnt-canc">—</span></button>
+          <button class="tab-btn" data-tab="reativacoes">🔄 Reativações <span class="badge badge-purple" id="cnt-reat">—</span></button>
+        </div>
+        <!-- Inadimplentes -->
+        <div class="tab-content active" id="tab-inadimplentes">
+          <div class="toolbar">
+            <input class="search-input" type="text" placeholder="Buscar por nome ou CPF…" id="srch-inad">
+            <button class="btn-export" id="exp-inad">↓ CSV</button>
+          </div>
+          <div class="table-wrap">
+            <table id="tbl-inad">
+              <thead><tr>
+                <th class="sortable" data-col="nome">Associado ↕</th>
+                <th>Telefone</th>
+                <th class="sortable" data-col="dia_vencimento">Vencimento ↕</th>
+                <th class="sortable" data-col="dias_atraso">Atraso ↕</th>
+                <th class="sortable" data-col="dias_associado">Tempo ANPARA ↕</th>
+                <th class="sortable" data-col="dias_para_churn">Contagem ↕</th>
+                <th>Status</th>
+                <th>Ação</th>
+              </tr></thead>
+              <tbody id="body-inad"><tr><td colspan="8"><div class="empty-state">Carregando…</div></td></tr></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="pag-inad"></div>
+        </div>
+        <!-- Cancelamentos -->
+        <div class="tab-content" id="tab-cancelamentos">
+          <div class="toolbar">
+            <input class="search-input" type="text" placeholder="Buscar por nome…" id="srch-canc">
+            <button class="btn-export" id="exp-canc">↓ CSV</button>
+          </div>
+          <div class="table-wrap">
+            <table id="tbl-canc">
+              <thead><tr>
+                <th class="sortable" data-col="nome">Associado ↕</th>
+                <th class="sortable" data-col="data_alteracao">Data ↕</th>
+                <th class="sortable" data-col="usuario_alteracao">Operador ↕</th>
+                <th>Ação</th>
+              </tr></thead>
+              <tbody id="body-canc"><tr><td colspan="4"><div class="empty-state">Carregando…</div></td></tr></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="pag-canc"></div>
+        </div>
+        <!-- Reativações -->
+        <div class="tab-content" id="tab-reativacoes">
+          <div class="toolbar">
+            <input class="search-input" type="text" placeholder="Buscar por nome…" id="srch-reat">
+            <button class="btn-export" id="exp-reat">↓ CSV</button>
+          </div>
+          <div class="table-wrap">
+            <table id="tbl-reat">
+              <thead><tr>
+                <th class="sortable" data-col="nome">Associado ↕</th>
+                <th class="sortable" data-col="data_reativacao">Data Reativação ↕</th>
+                <th class="sortable" data-col="dias_associado">Tempo ANPARA ↕</th>
+                <th>Telefone</th>
+                <th>Ação</th>
+              </tr></thead>
+              <tbody id="body-reat"><tr><td colspan="5"><div class="empty-state">Carregando…</div></td></tr></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="pag-reat"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 3: POR QUE CANCELA -->
+    <div class="view" id="view-p3">
+      <div class="row-2fr1fr">
+        <div class="chart-card" style="margin-bottom:0">
+          <div class="chart-title">Cancelamentos por Período</div>
+          <div class="chart-canvas-wrap" style="height:220px">
+            <div class="skeleton" style="height:220px;border-radius:4px" id="skel-p3m"></div>
+            <canvas id="chart-p3m" style="display:none"></canvas>
+          </div>
+        </div>
+        <div class="chart-card" style="margin-bottom:0">
+          <div class="chart-title">Por Regional</div>
+          <div id="p3-reg-list"><div class="skeleton" style="height:12px;margin-bottom:8px"></div><div class="skeleton" style="height:12px"></div></div>
+        </div>
+      </div>
+      <div style="height:12px"></div>
+      <div class="row-1fr1fr">
+        <div class="chart-card" style="margin-bottom:0">
+          <div class="chart-title">Tempo de Casa no Cancelamento</div>
+          <div id="p3-tempo-list"><div class="skeleton" style="height:12px;margin-bottom:8px"></div><div class="skeleton" style="height:12px;margin-bottom:8px"></div><div class="skeleton" style="height:12px"></div></div>
+        </div>
+        <div class="chart-card" style="margin-bottom:0">
+          <div class="chart-title">Por Consultor (quem executou)</div>
+          <div id="p3-op-list"><div class="skeleton" style="height:12px;margin-bottom:8px"></div><div class="skeleton" style="height:12px;margin-bottom:8px"></div><div class="skeleton" style="height:12px"></div></div>
+          <p class="info-note" style="margin-top:8px">Reflete quem executou no SGA, não necessariamente quem vendeu</p>
+        </div>
+      </div>
+      <div style="height:12px"></div>
+      <div class="card-section">
+        <div class="card-section-header"><span class="card-section-title">Cancelamentos Detalhados</span></div>
+        <div class="toolbar">
+          <input class="search-input" type="text" placeholder="Buscar por nome…" id="srch-p3">
+          <select class="filter-select" id="fil-p3-reg"><option value="">Todas as regionais</option></select>
+          <button class="btn-export" id="exp-p3">↓ CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table id="tbl-p3">
+            <thead><tr>
+              <th class="sortable" data-col="nome">Associado ↕</th>
+              <th class="sortable" data-col="data_cancelamento">Data Cancelamento ↕</th>
+              <th class="sortable" data-col="dias_casa">Tempo de Casa ↕</th>
+              <th class="sortable" data-col="regional">Regional ↕</th>
+              <th class="sortable" data-col="operadora">Operador ↕</th>
+            </tr></thead>
+            <tbody id="body-p3"><tr><td colspan="5"><div class="empty-state">Carregando…</div></td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="pag-p3"></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+const App = {
+  API_URL: 'https://anpara-proxy.luizdutraconsultoria.workers.dev',
+  cache: {},
+  charts: {},
+  currentView: 'p1',
+  loadedViews: {},
+  lastUpdate: null,
+  tables: {
+    inad: { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 },
+    canc: { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 },
+    reat: { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 },
+    p3:   { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 }
+  },
+
+  async apiFetch(acao) {
+    if (this.cache[acao]) return this.cache[acao];
+    const res = await fetch(`${this.API_URL}?acao=${acao}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data && data.erro) throw new Error(data.erro);
+    this.cache[acao] = data;
+    return data;
+  },
+
+  async loadView(viewId, force) {
+    if (force) {
+      this.cache = {};
+      this.loadedViews = {};
+      Object.values(this.charts).forEach(c => { try { c && c.destroy(); } catch(e){} });
+      this.charts = {};
+      // Clear error banners
+      document.querySelectorAll('.error-banner').forEach(b => b.remove());
+    }
+    this.currentView = viewId;
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + viewId).classList.add('active');
+    document.querySelectorAll('.nav-btn[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === viewId));
+    const titles = { p1:'Saúde da Base', p2:'Zona de Risco', p3:'Por que Cancela' };
+    document.getElementById('topbarTitle').textContent = titles[viewId];
+    if (this.loadedViews[viewId]) return;
+    try {
+      if (viewId === 'p1') await this.renderP1();
+      else if (viewId === 'p2') await this.renderP2();
+      else if (viewId === 'p3') await this.renderP3();
+      this.loadedViews[viewId] = true;
+      this.lastUpdate = new Date();
+      this.updateTs();
+    } catch(e) {
+      const view = document.getElementById('view-' + viewId);
+      const banner = document.createElement('div');
+      banner.className = 'error-banner';
+      banner.textContent = 'Erro ao carregar dados: ' + e.message;
+      view.prepend(banner);
+    }
+  },
+
+  updateTs() {
+    if (!this.lastUpdate) return;
+    const diff = Math.floor((Date.now() - this.lastUpdate) / 60000);
+    document.getElementById('topbarTs').textContent = diff === 0 ? 'Atualizado agora' : 'Atualizado há ' + diff + ' min';
+  },
+
+  /* ======= VIEW 1 ======= */
+  async renderP1() {
+    const [panorama, historico, analise] = await Promise.all([
+      this.apiFetch('panorama'),
+      this.apiFetch('historico_mensal'),
+      this.apiFetch('analise_churn')
+    ]);
+
+    const porMes = (historico.por_mes || []);
+    const mesAtual = porMes[porMes.length - 1] || {};
+    const prev3 = porMes.slice(-4, -1);
+    const mediaNovos = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.novos || 0), 0) / prev3.length) : 0;
+    const mediaCanc  = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.cancelamentos_veiculo || 0), 0) / prev3.length) : 0;
+    const novos      = mesAtual.novos || 0;
+    const cancelV    = mesAtual.cancelamentos_veiculo || 0;
+    const reat       = mesAtual.reativacoes_veiculo ?? mesAtual.reativacoes ?? 0;
+    const saldoMes   = novos - cancelV + reat;
+    const snapshots = panorama.snapshots || [];
+
+    document.getElementById('p1-kpis').innerHTML =
+      `<div class="card">
+        <div class="kpi-label">Placas Ativas</div>
+        <div class="kpi-value">${this.fmt(panorama.veiculos_ativos)}</div>
+        <div class="kpi-sub">${this.fmt(panorama.base_ativa)} associados</div>
+      </div>
+
+      <div class="card">
+        <div class="kpi-label">Novas no Mês</div>
+        <div class="kpi-value">${this.fmt(novos)}</div>
+        <div class="kpi-delta ${novos >= mediaNovos ? 'pos' : 'neg'}">${novos >= mediaNovos ? '+' : ''}${this.fmt(novos - mediaNovos)} vs média 3m</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label">Cancelamentos Mês</div>
+        <div class="kpi-value ${cancelV > mediaCanc ? 'red' : ''}">${this.fmt(cancelV)}</div>
+        <div class="kpi-delta ${cancelV <= mediaCanc ? 'pos' : 'neg'}">${cancelV > mediaCanc ? '+' : ''}${this.fmt(cancelV - mediaCanc)} vs média 3m</div>
+      </div>
+      `;
+
+    // Evolution chart
+    const evolEl = document.getElementById('p1-evolution-wrap');
+    if (snapshots.length === 0) {
+      evolEl.innerHTML = '<div class="chart-title">Evolução da Base Ativa (Placas)</div><div class="empty-state">Execute "Preencher Histórico" no menu do Apps Script para ver a evolução da base</div>';
+    } else {
+      const snapLabels = snapshots.map(s => this.fmtDateShort(s['Data'] || s['data']));
+      const snapVals   = snapshots.map(s => s['Veículos Ativos'] || 0);
+      snapLabels.push('Hoje');
+      snapVals.push(panorama.veiculos_ativos || 0);
+
+      evolEl.innerHTML = `<div class="chart-title">Evolução da Base Ativa (Placas)</div>
+        <div class="chart-canvas-wrap" style="height:180px"><canvas id="chart-evol"></canvas></div>`;
+
+      if (this.charts.evol) this.charts.evol.destroy();
+      this.charts.evol = new Chart(document.getElementById('chart-evol'), {
+        type: 'line',
+        data: { labels: snapLabels, datasets: [{ data: snapVals, borderColor:'#1D9E75', backgroundColor:'transparent',
+          pointBackgroundColor:'#1D9E75', pointRadius:3, borderWidth:2, tension:0.3 }] },
+        options: { responsive:true, maintainAspectRatio:false,
+          plugins: { legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => this.fmt(ctx.parsed.y) + ' placas' } } },
+          scales: {
+            x:{ grid:{ color:'#F1EFE8' }, ticks:{ font:{ size:10 }, color:'#6B6B67', maxTicksLimit:12 } },
+            y:{ grid:{ color:'#F1EFE8' }, ticks:{ font:{ size:10 }, color:'#6B6B67', callback: v => this.fmt(v) } }
+          }
+        }
+      });
+    }
+
+    // Entradas x Saídas
+    const last12 = porMes.slice(-12);
+    const barLabels = last12.map(m => { const [y, mo] = m.mes.split('-'); return mo + '/' + y.slice(2); });
+    const esEl = document.getElementById('p1-es-wrap');
+    esEl.innerHTML = `
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>Novos</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#7F77DD"></div>Reativações</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div>Cancelamentos</div>
+      </div>
+      <div class="chart-title">Entradas × Saídas por Mês</div>
+      <div class="chart-canvas-wrap" style="height:200px"><canvas id="chart-es"></canvas></div>`;
+
+    if (this.charts.es) this.charts.es.destroy();
+    this.charts.es = new Chart(document.getElementById('chart-es'), {
+      type: 'bar',
+      data: { labels: barLabels, datasets: [
+        { label:'Novos',        data: last12.map(m => m.novos || 0),                backgroundColor:'#1D9E75', borderRadius:2 },
+        { label:'Reativações',  data: last12.map(m => m.reativacoes_veiculo ?? m.reativacoes ?? 0), backgroundColor:'#7F77DD', borderRadius:2 },
+        { label:'Cancelamentos',data: last12.map(m => m.cancelamentos_veiculo || 0),backgroundColor:'#E24B4A', borderRadius:2 }
+      ]},
+      plugins: [{
+        id: 'barLabels',
+        afterDraw(chart) {
+          const { ctx } = chart;
+          chart.data.datasets.forEach((ds, di) => {
+            const meta = chart.getDatasetMeta(di);
+            meta.data.forEach((bar, i) => {
+              const val = ds.data[i];
+              if (!val) return;
+              ctx.save();
+              ctx.fillStyle = '#6B6B67';
+              ctx.font = '600 10px DM Sans, sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'bottom';
+              ctx.fillText(Number(val).toLocaleString('pt-BR'), bar.x, bar.y - 2);
+              ctx.restore();
+            });
+          });
+        }
+      }],
+      options: { responsive:true, maintainAspectRatio:false,
+        layout: { padding: { top: 16 } },
+        plugins:{ legend:{ display:false } },
+        scales:{
+          x:{ grid:{ display:false }, ticks:{ font:{ size:10 }, color:'#6B6B67' } },
+          y:{ grid:{ color:'#F1EFE8' }, ticks:{ font:{ size:10 }, color:'#6B6B67' } }
+        }
+      }
+    });
+
+    // Regional
+    const regs = (analise.por_regional || []).sort((a, b) => b.cancelamentos - a.cancelamentos);
+    const totalReg = regs.reduce((s, r) => s + r.cancelamentos, 0);
+    const maxReg   = regs[0] ? regs[0].cancelamentos : 1;
+    document.getElementById('p1-reg-wrap').innerHTML = `<div class="chart-title">Churn por Regional</div>` +
+      (regs.length
+        ? `<div class="rank-list">${regs.map(r => this.rankBarHTML(r.regional, r.cancelamentos, maxReg, totalReg)).join('')}</div>`
+        : '<div class="empty-state">Sem dados</div>');
+  },
+
+  /* ======= VIEW 2 ======= */
+  async renderP2() {
+    const zona = await this.apiFetch('zona_churn');
+    const totalInad = zona.total_inadimplentes || 0;
+    const totalCanc = zona.total_cancelamentos_solicitados || 0;
+    const totalReat = zona.total_reativacoes_recentes || 0;
+    const totalRisco = totalInad + totalCanc;
+
+    document.getElementById('p2-kpis').innerHTML =
+      `<div class="card card-risk-main">
+        <div class="kpi-label">Em Risco (Total)</div>
+        <div class="kpi-value red">${this.fmt(totalRisco)}</div>
+        <div class="kpi-sub">inad. + canc. solicitados</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label">⚠️ Inadimplentes</div>
+        <div class="kpi-value">${this.fmt(totalInad)}</div>
+        <div class="kpi-sub">em atraso</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label">🚪 Canc. Solicitados</div>
+        <div class="kpi-value">${this.fmt(totalCanc)}</div>
+        <div class="kpi-sub">aguardando</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label">🔄 Reativações Recentes</div>
+        <div class="kpi-value" style="color:var(--purple)">${this.fmt(totalReat)}</div>
+        <div class="kpi-sub">últimos 30 dias</div>
+      </div>`;
+
+    document.getElementById('p2-recovery').innerHTML =
+      `<div style="font-size:12px;font-weight:600;margin-bottom:6px">Meta de recuperação — associados em risco regularizados</div>
+      <div class="progress-wrap"><div class="progress-fill" style="width:0%"></div></div>
+      <div class="info-note">Em breve: integração com status de recuperação</div>`;
+
+    document.getElementById('cnt-inad').textContent = totalInad;
+    document.getElementById('cnt-canc').textContent = totalCanc;
+    document.getElementById('cnt-reat').textContent = totalReat;
+
+    this.tables.inad.data = zona.inadimplentes || [];
+    this.tables.canc.data = zona.cancelamentos_solicitados || [];
+    this.tables.reat.data = zona.reativacoes_recentes || [];
+    this.tables.inad.filtered = this.tables.inad.data.slice();
+    this.tables.canc.filtered = this.tables.canc.data.slice();
+    this.tables.reat.filtered = this.tables.reat.data.slice();
+
+    this.renderTbl('inad');
+    this.renderTbl('canc');
+    this.renderTbl('reat');
+  },
+
+  /* ======= VIEW 3 ======= */
+  async renderP3() {
+    const analise = await this.apiFetch('analise_churn');
+    const porMes = (analise.por_mes || []).slice(-12);
+    const labels = porMes.map(m => { const [y, mo] = m.mes.split('-'); return mo + '/' + y.slice(2); });
+    const vals   = porMes.map(m => m.cancelamentos_veiculo ?? m.cancelamentos ?? 0);
+    const media  = vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : 0;
+
+    document.getElementById('skel-p3m').style.display = 'none';
+    const canvas = document.getElementById('chart-p3m');
+    canvas.style.display = 'block';
+    if (this.charts.p3m) this.charts.p3m.destroy();
+    this.charts.p3m = new Chart(canvas, {
+      type: 'line',
+      data: { labels, datasets: [
+        { label:'Cancelamentos', data:vals, borderColor:'#E24B4A', backgroundColor:'transparent',
+          pointBackgroundColor:'#E24B4A', pointRadius:3, borderWidth:2, tension:0.3 },
+        { label:'Média', data:vals.map(() => media), borderColor:'#6B6B67', backgroundColor:'transparent',
+          borderDash:[4,4], pointRadius:0, borderWidth:1.5 }
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false }, tooltip:{ mode:'index', intersect:false } },
+        scales:{
+          x:{ grid:{ display:false }, ticks:{ font:{ size:10 }, color:'#6B6B67' } },
+          y:{ grid:{ color:'#F1EFE8' }, ticks:{ font:{ size:10 }, color:'#6B6B67' } }
+        }
+      }
+    });
+
+    // Regional
+    const regs = (analise.por_regional || []).sort((a, b) => b.cancelamentos - a.cancelamentos);
+    const totalReg = regs.reduce((s, r) => s + r.cancelamentos, 0);
+    const maxReg   = regs[0] ? regs[0].cancelamentos : 1;
+    document.getElementById('p3-reg-list').innerHTML = regs.length
+      ? `<div class="rank-list">${regs.map(r => this.rankBarHTML(r.regional, r.cancelamentos, maxReg, totalReg)).join('')}</div>`
+      : '<div class="empty-state">Sem dados</div>';
+
+    // Tempo de casa
+    const faixaMap = { '0-30':'0–30 dias','31-90':'31–90 dias','91-180':'91–180 dias','181-365':'181–365 dias','366-730':'1–2 anos','730+':'+2 anos' };
+    const dist = analise.distribuicao_tempo_casa || [];
+    const totalD = dist.reduce((s, t) => s + t.quantidade, 0);
+    const maxD   = Math.max(...dist.map(t => t.quantidade), 1);
+    const dom    = dist.slice().sort((a, b) => b.quantidade - a.quantidade)[0];
+    document.getElementById('p3-tempo-list').innerHTML = dist.length
+      ? `<div class="rank-list">${dist.map(t => {
+          const isDom = dom && t.faixa === dom.faixa;
+          const pct = totalD > 0 ? ((t.quantidade / totalD) * 100).toFixed(1) : '0.0';
+          const bar = `<div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${(t.quantidade/maxD*100)}%;background:${isDom ? '#E24B4A' : '#E24B4A66'}"></div></div>`;
+          return `<div class="rank-item"><div class="rank-item-header"><span class="rank-item-name" style="${isDom ? 'color:var(--red);font-weight:700' : ''}">${faixaMap[t.faixa] || t.faixa}</span><span class="rank-item-val">${t.quantidade} (${pct}%)</span></div>${bar}</div>`;
+        }).join('')}</div>
+        ${dom && totalD > 0 ? `<p class="insight-txt" style="color:var(--red)">${((dom.quantidade/totalD)*100).toFixed(1)}% cancela com ${faixaMap[dom.faixa] || dom.faixa} de associação</p>` : ''}`
+      : '<div class="empty-state">Sem dados</div>';
+
+    // Por consultor
+    const ops = (analise.por_operadora || []).sort((a, b) => b.cancelamentos - a.cancelamentos).slice(0, 8);
+    const maxOp = ops[0] ? ops[0].cancelamentos : 1;
+    document.getElementById('p3-op-list').innerHTML = ops.length
+      ? `<div class="rank-list">${ops.map(op => {
+          const bar = `<div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${(op.cancelamentos/maxOp*100)}%;background:#E24B4A88"></div></div>`;
+          return `<div class="rank-item"><div class="rank-item-header"><span class="rank-item-name">${op.operadora}</span><span class="rank-item-val">${op.cancelamentos}</span></div>${bar}</div>`;
+        }).join('')}</div>`
+      : '<div class="empty-state">Sem dados</div>';
+
+    // Table
+    this.tables.p3.data = analise.detalhes || [];
+    this.tables.p3.filtered = this.tables.p3.data.slice();
+    const regionais = [...new Set(this.tables.p3.data.map(d => d.regional).filter(Boolean))].sort();
+    const sel = document.getElementById('fil-p3-reg');
+    sel.innerHTML = '<option value="">Todas as regionais</option>';
+    regionais.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o); });
+    this.renderTbl('p3');
+  },
+
+  /* ======= TABLE RENDERER ======= */
+  renderTbl(id) {
+    const s = this.tables[id];
+    const start = (s.page - 1) * s.perPage;
+    const rows  = s.filtered.slice(start, start + s.perPage);
+    const tbody = document.getElementById('body-' + id);
+
+    if (id === 'inad') {
+      tbody.innerHTML = rows.length ? rows.map(r => {
+        const aClass = r.dias_atraso > 20 ? 'var(--red)' : r.dias_atraso >= 10 ? 'var(--amber)' : 'var(--muted)';
+        const cClass = (r.dias_para_churn || 0) <= 5 ? 'var(--red)' : (r.dias_para_churn || 0) <= 15 ? 'var(--amber)' : 'var(--green)';
+        const st     = r.status_churn === 'CHURN_IMINENTE' ? 'badge-red' : 'badge-amber';
+        const nome   = (r.nome || '').replace(/'/g, '&#39;');
+        return `<tr>
+          <td><div class="td-name">${r.nome || '—'}</div><div class="td-sub">${r.cpf || '—'}</div></td>
+          <td>${r.telefone_celular || '—'}</td>
+          <td>Dia ${r.dia_vencimento || '—'}</td>
+          <td><span style="color:${aClass}">${r.dias_atraso || 0} dias</span></td>
+          <td>${this.diasParaTempo(r.dias_associado)}</td>
+          <td><span style="color:${cClass}">${Math.max(0, r.dias_para_churn || 0)} dias</span></td>
+          <td><span class="badge ${st}">${r.status_churn || '—'}</span></td>
+          <td><button class="btn-wa" onclick="App.openWA('${r.telefone_celular || ''}','${nome}')">WhatsApp</button></td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="8"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>`;
+    } else if (id === 'canc') {
+      tbody.innerHTML = rows.length ? rows.map(r =>
+        `<tr>
+          <td><div class="td-name">${r.nome || '—'}</div><div class="td-sub">Cód. ${r.codigo_associado || '—'}</div></td>
+          <td>${this.fmtDate(r.data_alteracao)}</td>
+          <td>${r.usuario_alteracao || '—'}</td>
+          <td><a href="https://sga.hinova.com.br" target="_blank" class="btn-sga">Ver no SGA ↗</a></td>
+        </tr>`
+      ).join('') : `<tr><td colspan="4"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>`;
+    } else if (id === 'reat') {
+      tbody.innerHTML = rows.length ? rows.map(r => {
+        const nome = (r.nome || '').replace(/'/g, '&#39;');
+        const wa   = r.telefone_celular ? `<button class="btn-wa" onclick="App.openWA('${r.telefone_celular}','${nome}')">WhatsApp</button>` : '—';
+        return `<tr>
+          <td><div class="td-name">${r.nome || '—'}</div><div class="td-sub">Cód. ${r.codigo_associado || '—'}</div></td>
+          <td>${this.fmtDate(r.data_reativacao)}</td>
+          <td>${this.diasParaTempo(r.dias_associado)}</td>
+          <td>${r.telefone_celular || '—'}</td>
+          <td>${wa}</td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="5"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>`;
+    } else if (id === 'p3') {
+      tbody.innerHTML = rows.length ? rows.map(r =>
+        `<tr>
+          <td><div class="td-name">${r.nome || '—'}</div></td>
+          <td>${this.fmtDate(r.data_cancelamento)}</td>
+          <td>${this.diasParaTempo(r.dias_casa)}</td>
+          <td>${r.regional || '—'}</td>
+          <td>${r.operadora || '—'}</td>
+        </tr>`
+      ).join('') : `<tr><td colspan="5"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>`;
+    }
+
+    this.renderPag(id);
+  },
+
+  renderPag(id) {
+    const s = this.tables[id];
+    const total = Math.max(1, Math.ceil(s.filtered.length / s.perPage));
+    const el = document.getElementById('pag-' + id);
+    if (!el) return;
+    el.innerHTML = s.filtered.length === 0 ? '' :
+      `<button class="btn-page" onclick="App.goPage('${id}',${s.page-1})" ${s.page<=1?'disabled':''}>← Anterior</button>
+       <span>Página ${s.page} de ${total} &nbsp;(${s.filtered.length} registro${s.filtered.length!==1?'s':''})</span>
+       <button class="btn-page" onclick="App.goPage('${id}',${s.page+1})" ${s.page>=total?'disabled':''}>Próxima →</button>`;
+  },
+
+  goPage(id, page) {
+    const s = this.tables[id];
+    const total = Math.ceil(s.filtered.length / s.perPage);
+    s.page = Math.max(1, Math.min(page, total || 1));
+    this.renderTbl(id);
+  },
+
+  filterTbl(id, q, extra) {
+    const s = this.tables[id];
+    s.page = 1;
+    const lq = (q || '').toLowerCase().trim();
+    s.filtered = s.data.filter(r => {
+      const matchQ = !lq || Object.values(r).some(v => String(v || '').toLowerCase().includes(lq));
+      return matchQ && (!extra || extra(r));
+    });
+    this.renderTbl(id);
+  },
+
+  sortTbl(id, col, th) {
+    const s = this.tables[id];
+    s.sortDir = s.sortCol === col ? -s.sortDir : 1;
+    s.sortCol = col;
+    s.filtered.sort((a, b) => {
+      const av = a[col], bv = b[col];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const cmp = typeof av === 'number' && typeof bv === 'number'
+        ? av - bv
+        : String(av).localeCompare(String(bv), 'pt-BR');
+      return cmp * s.sortDir;
+    });
+    s.page = 1;
+    // Update header indicators
+    const tbl = document.getElementById('tbl-' + id);
+    if (tbl) {
+      tbl.querySelectorAll('thead th.sortable').forEach(t => {
+        const base = t.textContent.replace(/\s?[↕↑↓]$/, '').trim();
+        t.textContent = base + (t.dataset.col === col ? (s.sortDir === 1 ? ' ↑' : ' ↓') : ' ↕');
+      });
+    }
+    this.renderTbl(id);
+  },
+
+  /* ======= UTILS ======= */
+  fmt(n) {
+    if (n == null || n === '' || isNaN(Number(n))) return '—';
+    return Number(n).toLocaleString('pt-BR');
+  },
+  fmtDate(s) {
+    if (!s) return '—';
+    try { return new Date(s.length === 10 ? s + 'T00:00:00' : s).toLocaleDateString('pt-BR'); } catch(e) { return s; }
+  },
+  fmtDateShort(s) {
+    if (!s) return '—';
+    try {
+      const d = new Date(s.length === 10 ? s + 'T00:00:00' : s);
+      return String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+    } catch(e) { return s; }
+  },
+  diasParaTempo(dias) {
+    if (dias == null || dias === '') return '—';
+    const d = parseInt(dias);
+    if (isNaN(d) || d < 0) return '—';
+    const anos  = Math.floor(d / 365);
+    const meses = Math.floor((d % 365) / 30);
+    if (anos > 0)  return anos + 'a ' + meses + 'm';
+    if (meses > 0) return meses + ' meses';
+    return d + ' dias';
+  },
+  openWA(phone, nome) {
+    if (!phone) return;
+    const tel = '55' + String(phone).replace(/\D/g, '').replace(/^55/, '');
+    const msg = encodeURIComponent('Olá ' + nome + ', tudo bem? Sou da ANPARA e gostaríamos de verificar o status do seu boleto em aberto.');
+    window.open('https://wa.me/' + tel + '?text=' + msg, '_blank');
+  },
+  exportCSV(headers, rows, filename) {
+    const lines = [headers.join(';'), ...rows.map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(';'))];
+    const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+  rankBarHTML(label, val, max, total) {
+    const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0.0';
+    const w   = max > 0 ? (val / max * 100) : 0;
+    return `<div class="rank-item">
+      <div class="rank-item-header"><span class="rank-item-name">${label}</span><span class="rank-item-val">${val} (${pct}%)</span></div>
+      <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${w}%"></div></div>
+    </div>`;
+  }
+};
+
+/* ======= INIT ======= */
+document.addEventListener('DOMContentLoaded', () => {
+
+  // Nav buttons
+  document.querySelectorAll('.nav-btn[data-view]').forEach(btn => {
+    btn.addEventListener('click', () => App.loadView(btn.dataset.view));
+  });
+
+  // Refresh
+  document.getElementById('btnRefresh').addEventListener('click', () => App.loadView(App.currentView, true));
+
+  // Table header sort — p2 tables
+  ['inad','canc','reat'].forEach(id => {
+    const tbl = document.getElementById('tbl-' + id);
+    if (tbl) {
+      tbl.querySelectorAll('thead th.sortable').forEach(th => {
+        th.addEventListener('click', () => App.sortTbl(id, th.dataset.col, th));
+      });
+    }
+  });
+  // p3 table
+  const tblP3 = document.getElementById('tbl-p3');
+  if (tblP3) {
+    tblP3.querySelectorAll('thead th.sortable').forEach(th => {
+      th.addEventListener('click', () => App.sortTbl('p3', th.dataset.col, th));
+    });
+  }
+
+  // Tab switching (p2)
+  document.querySelectorAll('#p2-tabs .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#p2-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Search — inad
+  document.getElementById('srch-inad').addEventListener('input', e => App.filterTbl('inad', e.target.value));
+  document.getElementById('srch-canc').addEventListener('input', e => App.filterTbl('canc', e.target.value));
+  document.getElementById('srch-reat').addEventListener('input', e => App.filterTbl('reat', e.target.value));
+  document.getElementById('srch-p3').addEventListener('input', e => {
+    const reg = document.getElementById('fil-p3-reg').value;
+    App.filterTbl('p3', e.target.value, r => !reg || r.regional === reg);
+  });
+  document.getElementById('fil-p3-reg').addEventListener('change', e => {
+    const q = document.getElementById('srch-p3').value;
+    App.filterTbl('p3', q, r => !e.target.value || r.regional === e.target.value);
+  });
+
+  // Export CSV
+  document.getElementById('exp-inad').addEventListener('click', () => {
+    App.exportCSV(
+      ['Código','Nome','CPF','Telefone','Dia Vencimento','Dias Atraso','Dias para Churn','Status','Dias Associado'],
+      App.tables.inad.filtered.map(r => [r.codigo_associado,r.nome,r.cpf,r.telefone_celular,r.dia_vencimento,r.dias_atraso,r.dias_para_churn,r.status_churn,r.dias_associado]),
+      'inadimplentes.csv'
+    );
+  });
+  document.getElementById('exp-canc').addEventListener('click', () => {
+    App.exportCSV(
+      ['Código','Nome','Data','Operador'],
+      App.tables.canc.filtered.map(r => [r.codigo_associado,r.nome,r.data_alteracao,r.usuario_alteracao]),
+      'cancelamentos_solicitados.csv'
+    );
+  });
+  document.getElementById('exp-reat').addEventListener('click', () => {
+    App.exportCSV(
+      ['Código','Nome','Data Reativação','Dias Associado','Telefone'],
+      App.tables.reat.filtered.map(r => [r.codigo_associado,r.nome,r.data_reativacao,r.dias_associado,r.telefone_celular]),
+      'reativacoes.csv'
+    );
+  });
+  document.getElementById('exp-p3').addEventListener('click', () => {
+    App.exportCSV(
+      ['Código','Nome','Data Cancelamento','Dias de Casa','Regional','Operador'],
+      App.tables.p3.filtered.map(r => [r.codigo_associado,r.nome,r.data_cancelamento,r.dias_casa,r.regional,r.operadora]),
+      'cancelamentos_detalhados.csv'
+    );
+  });
+
+  // Timestamp updater
+  setInterval(() => App.updateTs(), 30000);
+
+  // Boot
+  App.loadView('p1');
+});
+</script>
+</body>
+</html>
