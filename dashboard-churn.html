@@ -147,6 +147,16 @@ td{padding:8px 10px;vertical-align:middle}
 .skeleton{background:linear-gradient(90deg,#eceae8 25%,#f5f4f2 50%,#eceae8 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
+/* FILTRO INTERATIVO */
+.rank-item-click{cursor:pointer;border-radius:6px;padding:3px 5px;margin:-3px -5px;border-left:2px solid transparent;transition:background .15s}
+.rank-item-click:hover{background:rgba(226,75,74,.07)}
+.rank-item-click.fi-active{background:rgba(226,75,74,.1);border-left-color:var(--red)}
+.kpi-clickable{cursor:pointer;transition:box-shadow .15s,border-color .15s}
+.kpi-clickable:hover{box-shadow:0 0 0 2px var(--border)}
+.kpi-clickable.fi-active{box-shadow:0 0 0 2px var(--red)}
+.filtro-status{display:none;align-items:center;gap:6px;padding:6px 10px;background:rgba(226,75,74,.07);border-radius:6px;font-size:11px;color:var(--muted);margin-bottom:8px}
+.filtro-status strong{color:var(--text)}
+
 /* STATES */
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;color:var(--muted);font-size:12px;gap:6px;text-align:center}
 .error-banner{background:var(--tag-red-bg);border:var(--bw) solid #f0b0b0;border-radius:var(--br);padding:12px 14px;color:var(--tag-red-text);font-size:12px;margin-bottom:12px}
@@ -343,7 +353,11 @@ td{padding:8px 10px;vertical-align:middle}
       </div>
       <div style="height:12px"></div>
       <div class="card-section">
-        <div class="card-section-header"><span class="card-section-title">Cancelamentos Detalhados</span></div>
+        <div class="card-section-header"><span class="card-section-title" id="p3-tabela-titulo">Cancelamentos Detalhados</span></div>
+        <div id="p3-filtro-status" class="filtro-status" style="margin:8px 14px 0">
+          <span></span>
+          <button onclick="App.toggleFiltroP3(App.filtroP3.tipo, App.filtroP3.valor)" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0 2px;line-height:1" title="Limpar filtro">×</button>
+        </div>
         <div class="toolbar">
           <input class="search-input" type="text" placeholder="Buscar por nome…" id="srch-p3">
           <select class="filter-select" id="fil-p3-reg"><option value="">Todas as regionais</option></select>
@@ -383,6 +397,7 @@ const App = {
     reat: { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 },
     p3:   { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 }
   },
+  filtroP3: { tipo: null, valor: null },
 
   async apiFetch(acao) {
     if (this.cache[acao]) return this.cache[acao];
@@ -558,9 +573,17 @@ const App = {
     const regs = (analise.por_regional || []).sort((a, b) => b.cancelamentos - a.cancelamentos);
     const totalReg = regs.reduce((s, r) => s + r.cancelamentos, 0);
     const maxReg   = regs[0] ? regs[0].cancelamentos : 1;
-    document.getElementById('p1-reg-wrap').innerHTML = `<div class="chart-title">Churn por Regional</div>` +
+    document.getElementById('p1-reg-wrap').innerHTML = `<div class="chart-title">Churn por Regional <span class="info-note" style="font-style:normal">(clique para detalhar)</span></div>` +
       (regs.length
-        ? `<div class="rank-list">${regs.map(r => this.rankBarHTML(r.regional, r.cancelamentos, maxReg, totalReg)).join('')}</div>`
+        ? `<div class="rank-list">${regs.map(r => {
+            const pct = totalReg > 0 ? ((r.cancelamentos / totalReg) * 100).toFixed(1) : '0.0';
+            const w = maxReg > 0 ? (r.cancelamentos / maxReg * 100) : 0;
+            const reg = r.regional.replace(/'/g,"&#39;");
+            return `<div class="rank-item rank-item-click" onclick="App.irParaP3ComFiltro('regional','${reg}')" title="Ver cancelamentos de ${reg} em detalhes">
+              <div class="rank-item-header"><span class="rank-item-name">${r.regional}</span><span class="rank-item-val">${r.cancelamentos} (${pct}%)</span></div>
+              <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${w}%"></div></div>
+            </div>`;
+          }).join('')}</div>`
         : '<div class="empty-state">Sem dados</div>');
   },
 
@@ -578,20 +601,20 @@ const App = {
         <div class="kpi-value red">${this.fmt(totalRisco)}</div>
         <div class="kpi-sub">inad. + canc. solicitados</div>
       </div>
-      <div class="card">
+      <div class="card kpi-clickable" onclick="App.switchTab('inadimplentes')" title="Ver lista de inadimplentes">
         <div class="kpi-label">⚠️ Inadimplentes</div>
         <div class="kpi-value">${this.fmt(totalInad)}</div>
-        <div class="kpi-sub">em atraso</div>
+        <div class="kpi-sub">clique para ver lista ↓</div>
       </div>
-      <div class="card">
+      <div class="card kpi-clickable" onclick="App.switchTab('cancelamentos')" title="Ver lista de cancelamentos solicitados">
         <div class="kpi-label">🚪 Canc. Solicitados</div>
         <div class="kpi-value">${this.fmt(totalCanc)}</div>
-        <div class="kpi-sub">aguardando</div>
+        <div class="kpi-sub">clique para ver lista ↓</div>
       </div>
-      <div class="card">
+      <div class="card kpi-clickable" onclick="App.switchTab('reativacoes')" title="Ver lista de reativações">
         <div class="kpi-label">🔄 Reativações Recentes</div>
         <div class="kpi-value" style="color:var(--purple)">${this.fmt(totalReat)}</div>
-        <div class="kpi-sub">últimos 30 dias</div>
+        <div class="kpi-sub">clique para ver lista ↓</div>
       </div>`;
 
     document.getElementById('p2-recovery').innerHTML =
@@ -649,7 +672,15 @@ const App = {
     const totalReg = regs.reduce((s, r) => s + r.cancelamentos, 0);
     const maxReg   = regs[0] ? regs[0].cancelamentos : 1;
     document.getElementById('p3-reg-list').innerHTML = regs.length
-      ? `<div class="rank-list">${regs.map(r => this.rankBarHTML(r.regional, r.cancelamentos, maxReg, totalReg)).join('')}</div>`
+      ? `<div class="rank-list">${regs.map(r => {
+          const pct = totalReg > 0 ? ((r.cancelamentos / totalReg) * 100).toFixed(1) : '0.0';
+          const w = maxReg > 0 ? (r.cancelamentos / maxReg * 100) : 0;
+          const reg = r.regional.replace(/'/g,"&#39;");
+          return `<div class="rank-item rank-item-click" data-filtro-tipo="regional" data-filtro-valor="${reg}" onclick="App.toggleFiltroP3('regional','${reg}')">
+            <div class="rank-item-header"><span class="rank-item-name">${r.regional}</span><span class="rank-item-val">${r.cancelamentos} (${pct}%)</span></div>
+            <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${w}%"></div></div>
+          </div>`;
+        }).join('')}</div>`
       : '<div class="empty-state">Sem dados</div>';
 
     // Tempo de casa
@@ -663,7 +694,9 @@ const App = {
           const isDom = dom && t.faixa === dom.faixa;
           const pct = totalD > 0 ? ((t.quantidade / totalD) * 100).toFixed(1) : '0.0';
           const bar = `<div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${(t.quantidade/maxD*100)}%;background:${isDom ? '#E24B4A' : '#E24B4A66'}"></div></div>`;
-          return `<div class="rank-item"><div class="rank-item-header"><span class="rank-item-name" style="${isDom ? 'color:var(--red);font-weight:700' : ''}">${faixaMap[t.faixa] || t.faixa}</span><span class="rank-item-val">${t.quantidade} (${pct}%)</span></div>${bar}</div>`;
+          return `<div class="rank-item rank-item-click" data-filtro-tipo="faixa" data-filtro-valor="${t.faixa}" onclick="App.toggleFiltroP3('faixa','${t.faixa}')">
+            <div class="rank-item-header"><span class="rank-item-name" style="${isDom ? 'color:var(--red);font-weight:700' : ''}">${faixaMap[t.faixa] || t.faixa}</span><span class="rank-item-val">${t.quantidade} (${pct}%)</span></div>${bar}
+          </div>`;
         }).join('')}</div>
         ${dom && totalD > 0 ? `<p class="insight-txt" style="color:var(--red)">${((dom.quantidade/totalD)*100).toFixed(1)}% cancela com ${faixaMap[dom.faixa] || dom.faixa} de associação</p>` : ''}`
       : '<div class="empty-state">Sem dados</div>';
@@ -674,18 +707,23 @@ const App = {
     document.getElementById('p3-op-list').innerHTML = ops.length
       ? `<div class="rank-list">${ops.map(op => {
           const bar = `<div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${(op.cancelamentos/maxOp*100)}%;background:#E24B4A88"></div></div>`;
-          return `<div class="rank-item"><div class="rank-item-header"><span class="rank-item-name">${op.operadora}</span><span class="rank-item-val">${op.cancelamentos}</span></div>${bar}</div>`;
+          const op_ = op.operadora.replace(/'/g,"&#39;");
+          return `<div class="rank-item rank-item-click" data-filtro-tipo="operadora" data-filtro-valor="${op_}" onclick="App.toggleFiltroP3('operadora','${op_}')">
+            <div class="rank-item-header"><span class="rank-item-name">${op.operadora}</span><span class="rank-item-val">${op.cancelamentos}</span></div>${bar}
+          </div>`;
         }).join('')}</div>`
       : '<div class="empty-state">Sem dados</div>';
 
     // Table
     this.tables.p3.data = analise.detalhes || [];
-    this.tables.p3.filtered = this.tables.p3.data.slice();
+    this.tables.p3.filtered = this.tables.p3.data.filter(r => this.matchFiltroP3(r));
     const regionais = [...new Set(this.tables.p3.data.map(d => d.regional).filter(Boolean))].sort();
     const sel = document.getElementById('fil-p3-reg');
     sel.innerHTML = '<option value="">Todas as regionais</option>';
     regionais.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o); });
     this.renderTbl('p3');
+    this.atualizarStatusFiltroP3();
+    this.atualizarVisualFiltroP3();
   },
 
   /* ======= TABLE RENDERER ======= */
@@ -853,6 +891,85 @@ const App = {
   }
 };
 
+/* ======= FILTRO INTERATIVO ======= */
+App.switchTab = function(tabName) {
+  document.querySelectorAll('#p2-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector(`#p2-tabs .tab-btn[data-tab="${tabName}"]`);
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  const tc = document.getElementById('tab-' + tabName);
+  if (tc) tc.classList.add('active');
+  tc && tc.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+};
+
+App.matchFiltroP3 = function(r) {
+  const { tipo, valor } = this.filtroP3;
+  if (!tipo || !valor) return true;
+  if (tipo === 'regional')  return r.regional === valor;
+  if (tipo === 'operadora') return r.operadora === valor;
+  if (tipo === 'faixa')     return this.diasInFaixa(r.dias_casa, valor);
+  return true;
+};
+
+App.diasInFaixa = function(dias, faixa) {
+  const d = parseInt(dias) || 0;
+  if (faixa === '730+') return d >= 730;
+  const parts = faixa.split('-').map(Number);
+  return parts.length === 2 && d >= parts[0] && d <= parts[1];
+};
+
+App.toggleFiltroP3 = function(tipo, valor) {
+  if (this.filtroP3.tipo === tipo && this.filtroP3.valor === valor) {
+    this.filtroP3 = { tipo: null, valor: null };
+  } else {
+    this.filtroP3 = { tipo, valor };
+  }
+  const q   = document.getElementById('srch-p3')?.value || '';
+  const reg = document.getElementById('fil-p3-reg')?.value || '';
+  this.filterTbl('p3', q, r => (!reg || r.regional === reg) && this.matchFiltroP3(r));
+  this.atualizarStatusFiltroP3();
+  this.atualizarVisualFiltroP3();
+  document.getElementById('p3-filtro-status')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+};
+
+App.irParaP3ComFiltro = function(tipo, valor) {
+  this.filtroP3 = { tipo, valor };
+  const wasLoaded = !!this.loadedViews['p3'];
+  this.loadView('p3');
+  if (wasLoaded) {
+    const q   = document.getElementById('srch-p3')?.value || '';
+    const reg = document.getElementById('fil-p3-reg')?.value || '';
+    this.filterTbl('p3', q, r => (!reg || r.regional === reg) && this.matchFiltroP3(r));
+    this.atualizarStatusFiltroP3();
+    this.atualizarVisualFiltroP3();
+  }
+};
+
+App.atualizarStatusFiltroP3 = function() {
+  const el = document.getElementById('p3-filtro-status');
+  if (!el) return;
+  const { tipo, valor } = this.filtroP3;
+  if (!tipo) {
+    el.style.display = 'none';
+    document.getElementById('p3-tabela-titulo').textContent = 'Cancelamentos Detalhados';
+    return;
+  }
+  const faixaMap = { '0-30':'0–30 dias','31-90':'31–90 dias','91-180':'91–180 dias','181-365':'181–365 dias','366-730':'1–2 anos','730+':'+2 anos' };
+  const tipoLabel = tipo === 'regional' ? 'Regional' : tipo === 'faixa' ? 'Tempo de casa' : 'Consultor';
+  const valorLabel = tipo === 'faixa' ? (faixaMap[valor] || valor) : valor;
+  el.style.display = 'flex';
+  el.querySelector('span').innerHTML = `${tipoLabel}: <strong>${valorLabel}</strong> — ${this.tables.p3.filtered.length} registro${this.tables.p3.filtered.length !== 1 ? 's' : ''}`;
+  document.getElementById('p3-tabela-titulo').textContent = `Cancelamentos Detalhados — ${valorLabel}`;
+};
+
+App.atualizarVisualFiltroP3 = function() {
+  document.querySelectorAll('[data-filtro-tipo]').forEach(el => {
+    const isActive = el.dataset.filtroTipo === this.filtroP3.tipo &&
+                     el.dataset.filtroValor === this.filtroP3.valor;
+    el.classList.toggle('fi-active', isActive);
+  });
+};
+
 /* ======= INIT ======= */
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -897,11 +1014,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('srch-reat').addEventListener('input', e => App.filterTbl('reat', e.target.value));
   document.getElementById('srch-p3').addEventListener('input', e => {
     const reg = document.getElementById('fil-p3-reg').value;
-    App.filterTbl('p3', e.target.value, r => !reg || r.regional === reg);
+    App.filterTbl('p3', e.target.value, r => (!reg || r.regional === reg) && App.matchFiltroP3(r));
   });
   document.getElementById('fil-p3-reg').addEventListener('change', e => {
     const q = document.getElementById('srch-p3').value;
-    App.filterTbl('p3', q, r => !e.target.value || r.regional === e.target.value);
+    App.filterTbl('p3', q, r => (!e.target.value || r.regional === e.target.value) && App.matchFiltroP3(r));
   });
 
   // Export CSV
