@@ -554,7 +554,7 @@ const App = {
       type: 'bar',
       data: { labels: barLabels, datasets: [
         { label:'Novos',         data: last12.map(m => m.novos                 || 0), backgroundColor:'#3B82F6', borderRadius:2 },
-        { label:'Reativações',   data: last12.map(m => m.reativacoes_veiculo   || 0), backgroundColor:'#1D9E75', borderRadius:2 },
+        { label:'Reativações',   data: last12.map(m => m.reativacoes           || 0), backgroundColor:'#1D9E75', borderRadius:2 },
         { label:'Cancelamentos', data: last12.map(m => m.cancelamentos_veiculo || 0), backgroundColor:'#E24B4A', borderRadius:2 }
       ]},
       plugins: [{
