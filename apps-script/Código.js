@@ -1075,37 +1075,53 @@ function getZonaChurn() {
     });
   }
 
-  // Busca placas e telefone via GET /associado/buscar/:codigo/codigo
-  var codsVistos = {};
-  reativacoesRecentes.forEach(function(r) {
-    var cod = String(r.codigo_associado || "");
-    if (!cod || codsVistos[cod]) return;
-    codsVistos[cod] = true;
-    try {
-      var resA = chamarAPI("/associado/buscar/" + cod + "/codigo", "get", null);
-      Logger.log("buscar associado " + cod + " → " + JSON.stringify(resA).substring(0, 200));
-      if (resA) {
-        var placas = [];
-        if (Array.isArray(resA.veiculos)) {
-          placas = resA.veiculos
-            .map(function(v) { return String(v.placa || "").trim(); })
-            .filter(function(p) { return p.length > 0; });
+  // Busca placas e telefone: carrega todos os veículos ativos e cruza por codigo_associado
+  // (evita chamadas por associado — usa endpoint já comprovado sem filtro por associado)
+  if (reativacoesRecentes.length > 0) {
+    var codsReat = {};
+    reativacoesRecentes.forEach(function(r) { codsReat[String(r.codigo_associado)] = true; });
+
+    var veicMap     = {};  // { codigo_associado: { placas: [], fone: '' } }
+    var paginaV     = 0;
+    var totalV      = 1;
+    var paginasLidas = 0;
+
+    while (paginaV < totalV && paginasLidas < 10) {
+      var resV = chamarAPI("/listar/veiculo", "post", {
+        "codigo_situacao":        1,
+        "inicio_paginacao":       paginaV,
+        "quantidade_por_pagina":  1000
+      });
+      if (!resV || !Array.isArray(resV.veiculos) || resV.veiculos.length === 0) break;
+      totalV = parseInt(resV.total_veiculos) || 0;
+
+      resV.veiculos.forEach(function(v) {
+        var cAssoc = String(v.codigo_associado || "");
+        if (!cAssoc || !codsReat[cAssoc]) return;
+        if (!veicMap[cAssoc]) {
+          var ddd  = String(v.ddd_celular || v.ddd || "").trim();
+          var tel  = String(v.telefone_celular || v.telefone || "").trim();
+          veicMap[cAssoc] = { placas: [], fone: ddd && tel ? "(" + ddd + ") " + tel : tel };
         }
-        var ddd  = String(resA.ddd_celular || resA.ddd || "").trim();
-        var tel  = String(resA.telefone_celular || resA.telefone_fixo || resA.telefone || "").trim();
-        var fone = ddd && tel ? "(" + ddd + ") " + tel : tel;
-        reativacoesRecentes.forEach(function(x) {
-          if (String(x.codigo_associado) === cod) {
-            x.placas           = placas;
-            x.telefone_celular = fone;
-          }
-        });
-      }
-    } catch(e) {
-      Logger.log("Erro ao buscar associado " + cod + ": " + e.message);
+        var placa = String(v.placa || "").trim();
+        if (placa) veicMap[cAssoc].placas.push(placa);
+      });
+
+      paginaV += 1000;
+      paginasLidas++;
+      if (paginaV < totalV) Utilities.sleep(300);
     }
-    Utilities.sleep(200);
-  });
+
+    Logger.log("veicMap após varredura: " + JSON.stringify(veicMap).substring(0, 500));
+
+    reativacoesRecentes.forEach(function(r) {
+      var entry = veicMap[String(r.codigo_associado)];
+      if (entry) {
+        r.placas           = entry.placas;
+        r.telefone_celular = entry.fone;
+      }
+    });
+  }
 
   inadimplentes.sort(function(a, b) { return a.dias_para_churn - b.dias_para_churn; });
 
