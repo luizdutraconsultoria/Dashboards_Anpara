@@ -56,6 +56,15 @@ function onOpen() {
 
 // ===================== AUTENTICAÇÃO =====================
 function autenticar() {
+  // Tenta reutilizar token salvo (a API Hinova garante que o token não expira)
+  var props = PropertiesService.getScriptProperties();
+  var tokenSalvo = props.getProperty('hinova_token_usuario');
+  if (tokenSalvo) {
+    TOKEN_USUARIO = tokenSalvo;
+    Logger.log("✅ Token carregado do PropertiesService.");
+    return TOKEN_USUARIO;
+  }
+
   var response = UrlFetchApp.fetch(BASE_URL + "/usuario/autenticar", {
     method: "post",
     headers: {
@@ -74,7 +83,9 @@ function autenticar() {
   }
 
   TOKEN_USUARIO = body.token_usuario;
-  Logger.log("✅ Autenticado com sucesso!");
+  // Persiste o token para não precisar re-autenticar (token Hinova não expira)
+  try { PropertiesService.getScriptProperties().setProperty('hinova_token_usuario', TOKEN_USUARIO); } catch(e) {}
+  Logger.log("✅ Autenticado com sucesso! Token salvo no PropertiesService.");
   return TOKEN_USUARIO;
 }
 
@@ -101,6 +112,9 @@ function chamarAPI(path, method, payload) {
   Logger.log((method || "get").toUpperCase() + " " + path + " → " + code);
 
   if (code === 401) {
+    // Token inválido — apaga do cache e força nova autenticação
+    try { PropertiesService.getScriptProperties().deleteProperty('hinova_token_usuario'); } catch(e) {}
+    TOKEN_USUARIO = null;
     autenticar();
     options.headers["Authorization"] = "Bearer " + TOKEN_USUARIO;
     response = UrlFetchApp.fetch(BASE_URL + path, options);
