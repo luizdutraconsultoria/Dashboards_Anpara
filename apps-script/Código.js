@@ -1037,9 +1037,9 @@ function getZonaChurn() {
     if (pagina < totalRegistros) Utilities.sleep(300);
   }
 
-  var trintaDiasAtras = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
-  var dataInicial     = Utilities.formatDate(trintaDiasAtras, "America/Sao_Paulo", "dd/MM/yyyy");
-  var dataFinal       = Utilities.formatDate(hoje,            "America/Sao_Paulo", "dd/MM/yyyy");
+  var inicioJanela = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+  var dataInicial  = Utilities.formatDate(inicioJanela, "America/Sao_Paulo", "dd/MM/yyyy");
+  var dataFinal    = Utilities.formatDate(hoje,         "America/Sao_Paulo", "dd/MM/yyyy");
 
   var alteracoesAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
     "data_inicial": dataInicial,
@@ -1067,11 +1067,38 @@ function getZonaChurn() {
           nome:              a.nome_associado || "",
           cpf:               a.cpf_associado  || "",
           data_reativacao:   a.data_alteracao,
-          usuario_alteracao: a.nome_usuario_alteracao || ""
+          usuario_alteracao: a.nome_usuario_alteracao || "",
+          placas:            []
         });
       }
     });
   }
+
+  // Busca placas de cada associado reativado via /listar/veiculo
+  var codsVistos = {};
+  reativacoesRecentes.forEach(function(r) {
+    var cod = String(r.codigo_associado || "");
+    if (!cod || codsVistos[cod]) return;
+    codsVistos[cod] = true;
+    try {
+      var resV = chamarAPI("/listar/veiculo", "post", {
+        "codigo_associado":      cod,
+        "inicio_paginacao":      0,
+        "quantidade_por_pagina": 50
+      });
+      if (resV && Array.isArray(resV.veiculos)) {
+        var placas = resV.veiculos
+          .map(function(v) { return String(v.placa || "").trim(); })
+          .filter(function(p) { return p.length > 0; });
+        reativacoesRecentes.forEach(function(x) {
+          if (String(x.codigo_associado) === cod) x.placas = placas;
+        });
+      }
+    } catch(e) {
+      Logger.log("Erro ao buscar placas do associado " + cod + ": " + e.message);
+    }
+    Utilities.sleep(200);
+  });
 
   inadimplentes.sort(function(a, b) { return a.dias_para_churn - b.dias_para_churn; });
 

@@ -119,6 +119,10 @@ td{padding:8px 10px;vertical-align:middle}
 
 /* TABS */
 .tabs{display:flex;border-bottom:var(--bw) solid var(--border);padding:0 14px;overflow-x:auto}
+.p2-period-bar{display:flex;gap:6px;padding:10px 14px;border-bottom:var(--bw) solid var(--border);flex-wrap:wrap}
+.p2-pill{font-size:11px;font-weight:500;padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;transition:all .15s}
+.p2-pill:hover{border-color:var(--text);color:var(--text)}
+.p2-pill.active{background:var(--text);color:#fff;border-color:var(--text)}
 .tab-btn{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--muted);background:transparent;border:none;border-bottom:2px solid transparent;padding:10px 12px 9px;cursor:pointer;white-space:nowrap;margin-bottom:-1px;font-family:inherit;transition:color .15s}
 .tab-btn:hover{color:var(--text)}
 .tab-btn.active{color:var(--text);border-bottom-color:var(--text)}
@@ -254,6 +258,11 @@ td{padding:8px 10px;vertical-align:middle}
         <div class="skeleton" style="height:10px;width:60%;margin-top:8px"></div>
       </div>
       <div class="card-section" id="p2-tabs-card">
+        <div class="p2-period-bar">
+          <button class="p2-pill active" data-p="month"  onclick="App.setPeriodoP2('month')">Mês Atual</button>
+          <button class="p2-pill"        data-p="prev"   onclick="App.setPeriodoP2('prev')">Mês Anterior</button>
+          <button class="p2-pill"        data-p="all"    onclick="App.setPeriodoP2('all')">Tudo</button>
+        </div>
         <div class="tabs" id="p2-tabs">
           <button class="tab-btn active" data-tab="inadimplentes">⚠️ Inadimplentes <span class="badge badge-red" id="cnt-inad">—</span></button>
           <button class="tab-btn" data-tab="cancelamentos">🚪 Cancelamentos <span class="badge badge-amber" id="cnt-canc">—</span></button>
@@ -313,10 +322,11 @@ td{padding:8px 10px;vertical-align:middle}
                 <th class="sortable" data-col="nome">Associado ↕</th>
                 <th class="sortable" data-col="data_reativacao">Data Reativação ↕</th>
                 <th class="sortable" data-col="dias_associado">Tempo ANPARA ↕</th>
+                <th>Placas</th>
                 <th>Telefone</th>
                 <th>Ação</th>
               </tr></thead>
-              <tbody id="body-reat"><tr><td colspan="5"><div class="empty-state">Carregando…</div></td></tr></tbody>
+              <tbody id="body-reat"><tr><td colspan="6"><div class="empty-state">Carregando…</div></td></tr></tbody>
             </table>
           </div>
           <div class="pagination" id="pag-reat"></div>
@@ -397,7 +407,8 @@ const App = {
     reat: { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 },
     p3:   { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 }
   },
-  filtroP3: { tipo: null, valor: null },
+  filtroP3:  { tipo: null, valor: null },
+  periodoP2: 'month',
 
   async apiFetch(acao) {
     if (this.cache[acao]) return this.cache[acao];
@@ -460,11 +471,12 @@ const App = {
     const prev3 = porMes.slice(-4, -1);
     const mediaNovos         = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.novos || 0), 0) / prev3.length) : 0;
     const mediaCancelamentos = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.cancelamentos_veiculo || 0), 0) / prev3.length) : 0;
-    const mediaReativacoes   = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.reativacoes_veiculo || 0), 0) / prev3.length) : 0;
-    const novosV         = mesAtual.novos                 || 0;
-    const cancelamentosV = mesAtual.cancelamentos_veiculo || 0;
-    const reaticacoesV   = mesAtual.reativacoes_veiculo   || 0;
-    const saldoLiquido   = novosV + reaticacoesV - cancelamentosV;
+    const mediaReativacoes   = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.reativacoes || 0), 0) / prev3.length) : 0;
+    const novosV           = mesAtual.novos                 || 0;
+    const cancelamentosV   = mesAtual.cancelamentos_veiculo || 0;
+    const reaticacoesV     = mesAtual.reativacoes_veiculo   || 0;
+    const reaticacoesAssoc = mesAtual.reativacoes           || 0;
+    const saldoLiquido     = novosV + reaticacoesAssoc - cancelamentosV;
     const snapshots = panorama.snapshots || [];
 
     const mesFiltro = mesAtual.mes || '';
@@ -485,9 +497,9 @@ const App = {
         <div class="kpi-delta ${cancelamentosV <= mediaCancelamentos ? 'pos' : 'neg'}">${cancelamentosV > mediaCancelamentos ? '+' : ''}${this.fmt(cancelamentosV - mediaCancelamentos)} vs média 3m</div>
       </div>
       <div class="card kpi-clickable" onclick="App.irParaP2ComTab('reativacoes')" title="Ver lista de reativações">
-        <div class="kpi-label">Reativações</div>
-        <div class="kpi-value green">${this.fmt(reaticacoesV)}</div>
-        <div class="kpi-delta ${reaticacoesV >= mediaReativacoes ? 'pos' : 'neg'}">${reaticacoesV >= mediaReativacoes ? '+' : ''}${this.fmt(reaticacoesV - mediaReativacoes)} vs média 3m</div>
+        <div class="kpi-label">Reativações <span style="font-weight:400;font-size:10px;color:var(--muted)">(assoc.)</span></div>
+        <div class="kpi-value green">${this.fmt(reaticacoesAssoc)}</div>
+        <div class="kpi-delta ${reaticacoesAssoc >= mediaReativacoes ? 'pos' : 'neg'}">${reaticacoesAssoc >= mediaReativacoes ? '+' : ''}${this.fmt(reaticacoesAssoc - mediaReativacoes)} vs média 3m</div>
       </div>
       <div class="card kpi-clickable" onclick="App.irParaP3ComFiltro('mes','${mesFiltro}')" title="Ver cancelamentos do mês">
         <div class="kpi-label">Saldo Líquido</div>
@@ -636,12 +648,9 @@ const App = {
     this.tables.canc.data = zona.cancelamentos_solicitados || [];
     this.tables.reat.data = zona.reativacoes_recentes || [];
     this.tables.inad.filtered = this.tables.inad.data.slice();
-    this.tables.canc.filtered = this.tables.canc.data.slice();
-    this.tables.reat.filtered = this.tables.reat.data.slice();
 
     this.renderTbl('inad');
-    this.renderTbl('canc');
-    this.renderTbl('reat');
+    this.applyPeriodoP2();
   },
 
   /* ======= VIEW 3 ======= */
@@ -773,16 +782,20 @@ const App = {
       ).join('') : `<tr><td colspan="4"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>`;
     } else if (id === 'reat') {
       tbody.innerHTML = rows.length ? rows.map(r => {
-        const nome = (r.nome || '').replace(/'/g, '&#39;');
-        const wa   = r.telefone_celular ? `<button class="btn-wa" onclick="App.openWA('${r.telefone_celular}','${nome}')">WhatsApp</button>` : '—';
+        const nome   = (r.nome || '').replace(/'/g, '&#39;');
+        const wa     = r.telefone_celular ? `<button class="btn-wa" onclick="App.openWA('${r.telefone_celular}','${nome}')">WhatsApp</button>` : '—';
+        const placas = Array.isArray(r.placas) && r.placas.length
+          ? r.placas.map(p => `<span class="badge badge-gray" style="font-family:monospace;letter-spacing:1px">${p}</span>`).join(' ')
+          : '<span class="td-sub">—</span>';
         return `<tr>
           <td><div class="td-name">${r.nome || '—'}</div><div class="td-sub">Cód. ${r.codigo_associado || '—'}</div></td>
           <td>${this.fmtDate(r.data_reativacao)}</td>
           <td>${this.diasParaTempo(r.dias_associado)}</td>
+          <td>${placas}</td>
           <td>${r.telefone_celular || '—'}</td>
           <td>${wa}</td>
         </tr>`;
-      }).join('') : `<tr><td colspan="5"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>`;
+      }).join('') : `<tr><td colspan="6"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>`;
     } else if (id === 'p3') {
       tbody.innerHTML = rows.length ? rows.map(r =>
         `<tr>
@@ -820,7 +833,24 @@ const App = {
     const s = this.tables[id];
     s.page = 1;
     const lq = (q || '').toLowerCase().trim();
-    s.filtered = s.data.filter(r => {
+
+    // Para canc e reat, a base já é filtrada por período
+    let base = s.data;
+    if (id === 'canc' || id === 'reat') {
+      const field = id === 'reat' ? 'data_reativacao' : 'data_alteracao';
+      const { from, to } = this.getPeriodoRange(this.periodoP2);
+      if (from || to) {
+        base = s.data.filter(r => {
+          const d = new Date(r[field]);
+          if (isNaN(d)) return false;
+          if (from && d < from) return false;
+          if (to   && d > to)   return false;
+          return true;
+        });
+      }
+    }
+
+    s.filtered = base.filter(r => {
       const matchQ = !lq || Object.values(r).some(v => String(v || '').toLowerCase().includes(lq));
       return matchQ && (!extra || extra(r));
     });
@@ -851,6 +881,50 @@ const App = {
       });
     }
     this.renderTbl(id);
+  },
+
+  /* ======= PERÍODO P2 ======= */
+  getPeriodoRange(p) {
+    const now = new Date();
+    if (p === 'month') return {
+      from: new Date(now.getFullYear(), now.getMonth(), 1),
+      to:   new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+    };
+    if (p === 'prev') return {
+      from: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+      to:   new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+    };
+    return { from: null, to: null };
+  },
+
+  setPeriodoP2(p) {
+    this.periodoP2 = p;
+    document.querySelectorAll('.p2-pill').forEach(b => b.classList.toggle('active', b.dataset.p === p));
+    this.applyPeriodoP2();
+  },
+
+  applyPeriodoP2() {
+    const { from, to } = this.getPeriodoRange(this.periodoP2);
+    const byDate = (items, field) => {
+      if (!from && !to) return items.slice();
+      return items.filter(r => {
+        const d = new Date(r[field]);
+        if (isNaN(d)) return false;
+        if (from && d < from) return false;
+        if (to   && d > to)   return false;
+        return true;
+      });
+    };
+    this.tables.canc.filtered = byDate(this.tables.canc.data, 'data_alteracao');
+    this.tables.reat.filtered = byDate(this.tables.reat.data, 'data_reativacao');
+    this.tables.canc.page = 1;
+    this.tables.reat.page = 1;
+    const cntCanc = document.getElementById('cnt-canc');
+    const cntReat = document.getElementById('cnt-reat');
+    if (cntCanc) cntCanc.textContent = this.tables.canc.filtered.length;
+    if (cntReat) cntReat.textContent = this.tables.reat.filtered.length;
+    this.renderTbl('canc');
+    this.renderTbl('reat');
   },
 
   /* ======= UTILS ======= */
@@ -1068,8 +1142,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('exp-reat').addEventListener('click', () => {
     App.exportCSV(
-      ['Código','Nome','Data Reativação','Dias Associado','Telefone'],
-      App.tables.reat.filtered.map(r => [r.codigo_associado,r.nome,r.data_reativacao,r.dias_associado,r.telefone_celular]),
+      ['Código','Nome','Data Reativação','Dias Associado','Telefone','Placas'],
+      App.tables.reat.filtered.map(r => [r.codigo_associado,r.nome,r.data_reativacao,r.dias_associado,r.telefone_celular,(r.placas||[]).join(', ')]),
       'reativacoes.csv'
     );
   });
