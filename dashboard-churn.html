@@ -218,6 +218,21 @@ td{padding:8px 10px;vertical-align:middle}
 
     <!-- VIEW 1: SAÚDE DA BASE -->
     <div class="view active" id="view-p1">
+      <!-- FILTRO DE PERÍODO -->
+      <div class="card-section" style="margin-bottom:12px">
+        <div style="padding:10px 14px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:11px;font-weight:600;color:var(--muted);margin-right:4px">Período</span>
+          <button class="p2-pill active" data-p1p="all"   onclick="App.setPeriodoP1('all')">Tudo</button>
+          <button class="p2-pill"        data-p1p="month" onclick="App.setPeriodoP1('month')">Mês Atual</button>
+          <button class="p2-pill"        data-p1p="prev"  onclick="App.setPeriodoP1('prev')">Mês Anterior</button>
+          <button class="p2-pill"        data-p1p="3m"    onclick="App.setPeriodoP1('3m')">Últimos 3m</button>
+          <button class="p2-pill"        data-p1p="year"  onclick="App.setPeriodoP1('year')">Este Ano</button>
+          <span style="font-size:11px;color:var(--muted);margin-left:8px">De</span>
+          <input type="date" class="search-input" id="p1-de"  style="width:130px;flex:none" onchange="App.setPeriodoP1Custom()">
+          <span style="font-size:11px;color:var(--muted)">Até</span>
+          <input type="date" class="search-input" id="p1-ate" style="width:130px;flex:none" onchange="App.setPeriodoP1Custom()">
+        </div>
+      </div>
       <!-- KPIs -->
       <div class="kpi-grid" id="p1-kpis">
         <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
@@ -247,19 +262,8 @@ td{padding:8px 10px;vertical-align:middle}
       <!-- REGISTROS: aparece ao clicar em um card KPI -->
       <div id="p1-records-section" style="display:none;margin-top:12px">
         <div class="card-section">
-          <div class="card-section-header" style="flex-wrap:wrap;gap:8px">
+          <div class="card-section-header">
             <span class="card-section-title" id="p1-records-titulo">Registros</span>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1">
-              <button class="p2-pill active" data-p1p="all"   onclick="App.setPeriodoP1('all')">Tudo</button>
-              <button class="p2-pill"        data-p1p="month" onclick="App.setPeriodoP1('month')">Mês Atual</button>
-              <button class="p2-pill"        data-p1p="prev"  onclick="App.setPeriodoP1('prev')">Mês Anterior</button>
-              <button class="p2-pill"        data-p1p="3m"    onclick="App.setPeriodoP1('3m')">Últimos 3m</button>
-              <button class="p2-pill"        data-p1p="year"  onclick="App.setPeriodoP1('year')">Este Ano</button>
-              <span style="font-size:11px;color:var(--muted);margin-left:4px">De</span>
-              <input type="date" class="search-input" id="p1-de"  style="width:130px;flex:none" onchange="App.setPeriodoP1Custom()">
-              <span style="font-size:11px;color:var(--muted)">Até</span>
-              <input type="date" class="search-input" id="p1-ate" style="width:130px;flex:none" onchange="App.setPeriodoP1Custom()">
-            </div>
             <button onclick="App.fecharTabP1()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:0 2px" title="Fechar">×</button>
           </div>
           <div class="toolbar">
@@ -1115,12 +1119,8 @@ App.loadP1Records = async function() {
       const params = {};
       if (fromStr) params.de  = fromStr;
       if (toStr)   params.ate = toStr;
-      // Novos não usa cache do período anterior, limpa a entrada específica
-      const cacheKey = 'novos_contratos' + JSON.stringify(params);
-      if (this._novosLastParams !== cacheKey) {
-        delete this.cache['novos_contratos' + (this._novosLastParams || '{}')];
-        this._novosLastParams = cacheKey;
-      }
+      // Sempre limpa cache client-side de novos para pegar o período correto
+      Object.keys(this.cache).filter(k => k.startsWith('novos_contratos')).forEach(k => delete this.cache[k]);
       const data = await this.apiFetch('novos_contratos', params);
       s.data = data.novos || [];
       this.filterP1Tbl();
