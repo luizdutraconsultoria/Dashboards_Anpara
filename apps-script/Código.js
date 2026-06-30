@@ -1058,7 +1058,9 @@ function getZonaChurn() {
           data_alteracao:    a.data_alteracao,
           usuario_alteracao: a.nome_usuario_alteracao || "",
           status_anterior:   SITUACOES_MAP[String(a.valor_anterior)]  || a.valor_anterior,
-          status_novo:       SITUACOES_MAP[String(a.valor_posterior)] || a.valor_posterior
+          status_novo:       SITUACOES_MAP[String(a.valor_posterior)] || a.valor_posterior,
+          telefone_celular:  "",
+          placas:            []
         });
       }
       if (String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1") {
@@ -1075,52 +1077,61 @@ function getZonaChurn() {
     });
   }
 
-  // Busca placas e telefone: carrega todos os veículos ativos e cruza por codigo_associado
-  // (evita chamadas por associado — usa endpoint já comprovado sem filtro por associado)
-  if (reativacoesRecentes.length > 0) {
-    var codsReat = {};
-    reativacoesRecentes.forEach(function(r) { codsReat[String(r.codigo_associado)] = true; });
+  // Busca placas e telefone via varredura paginada de veículos ativos
+  // Cobre reativacoes E cancelamentos. Nunca bloqueia o retorno principal.
+  try {
+    var codsAlvo = {};
+    reativacoesRecentes.forEach(function(r)       { codsAlvo[String(r.codigo_associado)] = true; });
+    cancelamentosSolicitados.forEach(function(c)  { codsAlvo[String(c.codigo_associado)] = true; });
+    var numAlvo = Object.keys(codsAlvo).length;
 
-    var veicMap     = {};  // { codigo_associado: { placas: [], fone: '' } }
-    var paginaV     = 0;
-    var totalV      = 1;
-    var paginasLidas = 0;
+    if (numAlvo > 0) {
+      var veicMap      = {};
+      var paginaV      = 0;
+      var totalV       = 1;
+      var paginasLidas = 0;
+      var encontrados  = 0;
 
-    while (paginaV < totalV && paginasLidas < 10) {
-      var resV = chamarAPI("/listar/veiculo", "post", {
-        "codigo_situacao":        1,
-        "inicio_paginacao":       paginaV,
-        "quantidade_por_pagina":  1000
-      });
-      if (!resV || !Array.isArray(resV.veiculos) || resV.veiculos.length === 0) break;
-      totalV = parseInt(resV.total_veiculos) || 0;
+      while (paginaV < totalV && paginasLidas < 8 && encontrados < numAlvo) {
+        var resV = chamarAPI("/listar/veiculo", "post", {
+          "codigo_situacao":       1,
+          "inicio_paginacao":      paginaV,
+          "quantidade_por_pagina": 1000
+        });
+        if (!resV || !Array.isArray(resV.veiculos) || resV.veiculos.length === 0) break;
+        if (paginaV === 0) totalV = parseInt(resV.total_veiculos) || 0;
 
-      resV.veiculos.forEach(function(v) {
-        var cAssoc = String(v.codigo_associado || "");
-        if (!cAssoc || !codsReat[cAssoc]) return;
-        if (!veicMap[cAssoc]) {
-          var ddd  = String(v.ddd_celular || v.ddd || "").trim();
-          var tel  = String(v.telefone_celular || v.telefone || "").trim();
-          veicMap[cAssoc] = { placas: [], fone: ddd && tel ? "(" + ddd + ") " + tel : tel };
-        }
-        var placa = String(v.placa || "").trim();
-        if (placa) veicMap[cAssoc].placas.push(placa);
-      });
+        resV.veiculos.forEach(function(v) {
+          var cAssoc = String(v.codigo_associado || "");
+          if (!cAssoc || !codsAlvo[cAssoc]) return;
+          if (!veicMap[cAssoc]) {
+            var ddd  = String(v.ddd_celular || v.ddd || "").trim();
+            var tel  = String(v.telefone_celular || v.telefone || "").trim();
+            veicMap[cAssoc] = { placas: [], fone: ddd && tel ? "(" + ddd + ") " + tel : tel };
+            encontrados++;
+          }
+          var placa = String(v.placa || "").trim();
+          if (placa) veicMap[cAssoc].placas.push(placa);
+        });
 
-      paginaV += 1000;
-      paginasLidas++;
-      if (paginaV < totalV) Utilities.sleep(300);
-    }
-
-    Logger.log("veicMap após varredura: " + JSON.stringify(veicMap).substring(0, 500));
-
-    reativacoesRecentes.forEach(function(r) {
-      var entry = veicMap[String(r.codigo_associado)];
-      if (entry) {
-        r.placas           = entry.placas;
-        r.telefone_celular = entry.fone;
+        paginaV += 1000;
+        paginasLidas++;
+        if (paginaV < totalV && encontrados < numAlvo) Utilities.sleep(150);
       }
-    });
+
+      Logger.log("veicMap: " + encontrados + "/" + numAlvo + " associados encontrados em " + paginasLidas + " páginas");
+
+      reativacoesRecentes.forEach(function(r) {
+        var e = veicMap[String(r.codigo_associado)];
+        if (e) { r.placas = e.placas; r.telefone_celular = e.fone; }
+      });
+      cancelamentosSolicitados.forEach(function(c) {
+        var e = veicMap[String(c.codigo_associado)];
+        if (e) { c.placas = e.placas; c.telefone_celular = e.fone; }
+      });
+    }
+  } catch(errVeic) {
+    Logger.log("Aviso: falha no scan de veículos (non-fatal): " + errVeic.message);
   }
 
   inadimplentes.sort(function(a, b) { return a.dias_para_churn - b.dias_para_churn; });

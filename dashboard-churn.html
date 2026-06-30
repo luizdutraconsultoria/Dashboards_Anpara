@@ -303,9 +303,10 @@ td{padding:8px 10px;vertical-align:middle}
                 <th class="sortable" data-col="nome">Associado ↕</th>
                 <th class="sortable" data-col="data_alteracao">Data ↕</th>
                 <th class="sortable" data-col="usuario_alteracao">Operador ↕</th>
+                <th>Placas</th>
                 <th>Ação</th>
               </tr></thead>
-              <tbody id="body-canc"><tr><td colspan="4"><div class="empty-state">Carregando…</div></td></tr></tbody>
+              <tbody id="body-canc"><tr><td colspan="5"><div class="empty-state">Carregando…</div></td></tr></tbody>
             </table>
           </div>
           <div class="pagination" id="pag-canc"></div>
@@ -772,14 +773,18 @@ const App = {
         </tr>`;
       }).join('') : `<tr><td colspan="8"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>`;
     } else if (id === 'canc') {
-      tbody.innerHTML = rows.length ? rows.map(r =>
-        `<tr>
+      tbody.innerHTML = rows.length ? rows.map(r => {
+        const placas = Array.isArray(r.placas) && r.placas.length
+          ? r.placas.map(p => `<span class="badge badge-gray" style="font-family:monospace;letter-spacing:1px">${p}</span>`).join(' ')
+          : '—';
+        return `<tr>
           <td><div class="td-name">${r.nome || '—'}</div><div class="td-sub">Cód. ${r.codigo_associado || '—'}</div></td>
           <td>${this.fmtDate(r.data_alteracao)}</td>
           <td>${r.usuario_alteracao || '—'}</td>
+          <td>${placas}</td>
           <td><a href="https://sga.hinova.com.br" target="_blank" class="btn-sga">Ver no SGA ↗</a></td>
-        </tr>`
-      ).join('') : `<tr><td colspan="4"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>`;
+        </tr>`;
+      }).join('') : `<tr><td colspan="5"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>`;
     } else if (id === 'reat') {
       tbody.innerHTML = rows.length ? rows.map(r => {
         const nome   = (r.nome || '').replace(/'/g, '&#39;');
@@ -1135,8 +1140,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('exp-canc').addEventListener('click', () => {
     App.exportCSV(
-      ['Código','Nome','Data','Operador'],
-      App.tables.canc.filtered.map(r => [r.codigo_associado,r.nome,r.data_alteracao,r.usuario_alteracao]),
+      ['Código','Nome','Data','Operador','Placas'],
+      App.tables.canc.filtered.map(r => [r.codigo_associado,r.nome,r.data_alteracao,r.usuario_alteracao,(r.placas||[]).join(', ')]),
       'cancelamentos_solicitados.csv'
     );
   });
