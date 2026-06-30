@@ -218,7 +218,7 @@ td{padding:8px 10px;vertical-align:middle}
 
     <!-- VIEW 1: SAÚDE DA BASE -->
     <div class="view active" id="view-p1">
-      <!-- FILTRO DE PERÍODO -->
+      <!-- FILTROS: PERÍODO + TIPO + REGIONAL + OPERADOR -->
       <div class="card-section" style="margin-bottom:12px">
         <div style="padding:10px 14px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <span style="font-size:11px;font-weight:600;color:var(--muted);margin-right:4px">Período</span>
@@ -232,6 +232,17 @@ td{padding:8px 10px;vertical-align:middle}
           <span style="font-size:11px;color:var(--muted)">Até</span>
           <input type="date" class="search-input" id="p1-ate" style="width:130px;flex:none" onchange="App.setPeriodoP1Custom()">
         </div>
+        <div style="padding:6px 14px 10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-top:var(--bw) solid var(--border)">
+          <span style="font-size:11px;font-weight:600;color:var(--muted);margin-right:4px">Tipo</span>
+          <button class="p2-pill active" data-p1t="todos"        onclick="App.setTipoP1('todos')">Todos</button>
+          <button class="p2-pill"        data-p1t="cancelamento" onclick="App.setTipoP1('cancelamento')">Cancelamentos</button>
+          <button class="p2-pill"        data-p1t="reativacao"   onclick="App.setTipoP1('reativacao')">Reativações</button>
+          <button class="p2-pill"        data-p1t="novo"         onclick="App.setTipoP1('novo')">Novos</button>
+          <span style="font-size:11px;color:var(--muted);margin-left:8px">Regional</span>
+          <select class="filter-select" id="p1-fil-reg" onchange="App.aplicarFiltrosP1()"><option value="">Todas</option></select>
+          <span style="font-size:11px;color:var(--muted)">Operador</span>
+          <select class="filter-select" id="p1-fil-op" onchange="App.aplicarFiltrosP1()"><option value="">Todos</option></select>
+        </div>
       </div>
       <!-- KPIs -->
       <div class="kpi-grid" id="p1-kpis">
@@ -240,11 +251,6 @@ td{padding:8px 10px;vertical-align:middle}
         <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
         <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
         <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
-      </div>
-      <!-- Evolution -->
-      <div id="p1-evolution-wrap" class="chart-card">
-        <div class="chart-title">Evolução da Base Ativa (Placas)</div>
-        <div class="skeleton" style="height:180px;border-radius:4px"></div>
       </div>
       <!-- Row 3 -->
       <div class="row-2fr1fr">
@@ -259,20 +265,19 @@ td{padding:8px 10px;vertical-align:middle}
         </div>
       </div>
 
-      <!-- REGISTROS: aparece ao clicar em um card KPI -->
-      <div id="p1-records-section" style="display:none;margin-top:12px">
+      <!-- TABELA BI — sempre visível, reage a todos os filtros -->
+      <div id="p1-bi-section" style="margin-top:12px">
         <div class="card-section">
           <div class="card-section-header">
-            <span class="card-section-title" id="p1-records-titulo">Registros</span>
-            <button onclick="App.fecharTabP1()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:0 2px" title="Fechar">×</button>
+            <span class="card-section-title" id="p1-tbl-titulo">Registros</span>
+            <button class="btn-export" id="exp-p1">↓ CSV</button>
           </div>
           <div class="toolbar">
-            <input class="search-input" type="text" placeholder="Buscar…" id="srch-p1">
-            <button class="btn-export" id="exp-p1">↓ CSV</button>
+            <input class="search-input" type="text" placeholder="Buscar por nome, código…" id="srch-p1">
           </div>
           <div class="table-wrap">
             <table id="tbl-p1">
-              <thead id="thead-p1"><tr><th colspan="5" style="text-align:center;color:var(--muted)">Selecione um cartão acima</th></tr></thead>
+              <thead id="thead-p1"><tr><th colspan="5" style="text-align:center;color:var(--muted)">Carregando…</th></tr></thead>
               <tbody id="body-p1"></tbody>
             </table>
           </div>
@@ -446,9 +451,10 @@ const App = {
     p3:   { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 },
     p1:   { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 }
   },
-  p1Data:      { cancelamentos: [], reativacoes: [] },
-  periodoP1:   'all',
-  cardAtivoP1: null,
+  p1Eventos:    [],
+  p1FiltroTipo: 'todos',
+  p1Panorama:   null,
+  periodoP1:    'all',
   filtroP3:  { tipo: null, valor: null },
   periodoP2: 'all',
 
@@ -505,85 +511,32 @@ const App = {
 
   /* ======= VIEW 1 ======= */
   async renderP1() {
-    const [panorama, historico, analise] = await Promise.all([
+    const [panorama, historico, analise, eventosData] = await Promise.all([
       this.apiFetch('panorama'),
       this.apiFetch('historico_mensal'),
-      this.apiFetch('analise_churn')
+      this.apiFetch('analise_churn'),
+      this.apiFetch('eventos_churn')
     ]);
-    this.p1Data.cancelamentos = analise.detalhes || [];
-    this.p1Data.reativacoes   = analise.reativacoes || [];
 
-    const porMes = (historico.por_mes || []);
-    const mesAtual = porMes[porMes.length - 1] || {};
-    const prev3 = porMes.slice(-4, -1);
-    const mediaNovos         = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.novos || 0), 0) / prev3.length) : 0;
-    const mediaCancelamentos = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.cancelamentos_veiculo || 0), 0) / prev3.length) : 0;
-    const mediaReativacoes   = prev3.length ? Math.round(prev3.reduce((s, m) => s + (m.reativacoes || 0), 0) / prev3.length) : 0;
-    const novosV           = mesAtual.novos                 || 0;
-    const cancelamentosV   = mesAtual.cancelamentos_veiculo || 0;
-    const reaticacoesV     = mesAtual.reativacoes_veiculo   || 0;
-    const reaticacoesAssoc = mesAtual.reativacoes           || 0;
-    const saldoLiquido     = novosV + reaticacoesAssoc - cancelamentosV;
-    const snapshots = panorama.snapshots || [];
+    this.p1Panorama = panorama;
+    this.p1Eventos  = eventosData.eventos || [];
 
-    const mesFiltro = mesAtual.mes || '';
-    document.getElementById('p1-kpis').innerHTML =
-      `<div class="card">
-        <div class="kpi-label">Placas Ativas</div>
-        <div class="kpi-value">${this.fmt(panorama.veiculos_ativos)}</div>
-        <div class="kpi-sub">${this.fmt(panorama.base_ativa)} associados</div>
-      </div>
-      <div class="card kpi-clickable" data-p1-card="novos" onclick="App.irParaTabP1('novos')" title="Ver novos contratos">
-        <div class="kpi-label">Novos no Mês</div>
-        <div class="kpi-value">${this.fmt(novosV)}</div>
-        <div class="kpi-delta ${novosV >= mediaNovos ? 'pos' : 'neg'}">${novosV >= mediaNovos ? '+' : ''}${this.fmt(novosV - mediaNovos)} vs média 3m</div>
-      </div>
-      <div class="card kpi-clickable" data-p1-card="cancelamentos" onclick="App.irParaTabP1('cancelamentos')" title="Ver cancelamentos">
-        <div class="kpi-label">Cancelamentos</div>
-        <div class="kpi-value ${cancelamentosV > mediaCancelamentos ? 'red' : ''}">${this.fmt(cancelamentosV)}</div>
-        <div class="kpi-delta ${cancelamentosV <= mediaCancelamentos ? 'pos' : 'neg'}">${cancelamentosV > mediaCancelamentos ? '+' : ''}${this.fmt(cancelamentosV - mediaCancelamentos)} vs média 3m</div>
-      </div>
-      <div class="card kpi-clickable" data-p1-card="reativacoes" onclick="App.irParaTabP1('reativacoes')" title="Ver reativações">
-        <div class="kpi-label">Reativações <span style="font-weight:400;font-size:10px;color:var(--muted)">(assoc.)</span></div>
-        <div class="kpi-value green">${this.fmt(reaticacoesAssoc)}</div>
-        <div class="kpi-delta ${reaticacoesAssoc >= mediaReativacoes ? 'pos' : 'neg'}">${reaticacoesAssoc >= mediaReativacoes ? '+' : ''}${this.fmt(reaticacoesAssoc - mediaReativacoes)} vs média 3m</div>
-      </div>
-      <div class="card">
-        <div class="kpi-label">Saldo Líquido</div>
-        <div class="kpi-value ${saldoLiquido < 0 ? 'red' : 'green'}">${saldoLiquido >= 0 ? '+' : ''}${this.fmt(saldoLiquido)}</div>
-        <div class="kpi-sub" style="font-size:10px">novos + reat. − cancelamentos</div>
-      </div>
-      `;
-
-    // Evolution chart
-    const evolEl = document.getElementById('p1-evolution-wrap');
-    if (snapshots.length === 0) {
-      evolEl.innerHTML = '<div class="chart-title">Evolução da Base Ativa (Placas)</div><div class="empty-state">Execute "Preencher Histórico" no menu do Apps Script para ver a evolução da base</div>';
-    } else {
-      const snapLabels = snapshots.map(s => this.fmtDateShort(s['Data'] || s['data']));
-      const snapVals   = snapshots.map(s => s['Veículos Ativos'] || 0);
-      snapLabels.push('Hoje');
-      snapVals.push(panorama.veiculos_ativos || 0);
-
-      evolEl.innerHTML = `<div class="chart-title">Evolução da Base Ativa (Placas)</div>
-        <div class="chart-canvas-wrap" style="height:180px"><canvas id="chart-evol"></canvas></div>`;
-
-      if (this.charts.evol) this.charts.evol.destroy();
-      this.charts.evol = new Chart(document.getElementById('chart-evol'), {
-        type: 'line',
-        data: { labels: snapLabels, datasets: [{ data: snapVals, borderColor:'#1D9E75', backgroundColor:'transparent',
-          pointBackgroundColor:'#1D9E75', pointRadius:3, borderWidth:2, tension:0.3 }] },
-        options: { responsive:true, maintainAspectRatio:false,
-          plugins: { legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => this.fmt(ctx.parsed.y) + ' placas' } } },
-          scales: {
-            x:{ grid:{ color:'#F1EFE8' }, ticks:{ font:{ size:10 }, color:'#6B6B67', maxTicksLimit:12 } },
-            y:{ grid:{ color:'#F1EFE8' }, ticks:{ font:{ size:10 }, color:'#6B6B67', callback: v => this.fmt(v) } }
-          }
-        }
-      });
+    // Popula dropdowns com valores dinâmicos dos eventos carregados
+    const regsList = [...new Set(this.p1Eventos.map(e => e.regional).filter(Boolean))].sort();
+    const opsList  = [...new Set(this.p1Eventos.map(e => e.operadora).filter(Boolean))].sort();
+    const regSel = document.getElementById('p1-fil-reg');
+    if (regSel) {
+      regSel.innerHTML = '<option value="">Todas</option>';
+      regsList.forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; regSel.appendChild(o); });
+    }
+    const opSel = document.getElementById('p1-fil-op');
+    if (opSel) {
+      opSel.innerHTML = '<option value="">Todos</option>';
+      opsList.forEach(op => { const o = document.createElement('option'); o.value = op; o.textContent = op; opSel.appendChild(o); });
     }
 
-    // Entradas x Saídas
+    // Gráfico de barras — Novos/Reativações/Cancelamentos (usa historico_mensal, fonte confiável para série temporal)
+    const porMes = (historico.por_mes || []);
     const last12 = porMes.slice(-12);
     const barLabels = last12.map(m => { const [y, mo] = m.mes.split('-'); return mo + '/' + y.slice(2); });
     const esEl = document.getElementById('p1-es-wrap');
@@ -634,7 +587,7 @@ const App = {
       }
     });
 
-    // Regional
+    // Regional — usa analise_churn (todos os 365 dias, sem filtro de período)
     const regs = (analise.por_regional || []).sort((a, b) => b.cancelamentos - a.cancelamentos);
     const totalReg = regs.reduce((s, r) => s + r.cancelamentos, 0);
     const maxReg   = regs[0] ? regs[0].cancelamentos : 1;
@@ -650,6 +603,9 @@ const App = {
             </div>`;
           }).join('')}</div>`
         : '<div class="empty-state">Sem dados</div>');
+
+    // Aplica filtros iniciais → renderiza KPIs + tabela BI
+    this.aplicarFiltrosP1();
   },
 
   /* ======= VIEW 2 ======= */
@@ -1031,26 +987,7 @@ const App = {
   }
 };
 
-/* ======= P1 RECORDS ======= */
-App.irParaTabP1 = async function(tipo) {
-  if (this.cardAtivoP1 === tipo) { this.fecharTabP1(); return; }
-  this.cardAtivoP1 = tipo;
-  document.querySelectorAll('[data-p1-card]').forEach(c => c.classList.remove('fi-active'));
-  const card = document.querySelector(`[data-p1-card="${tipo}"]`);
-  if (card) card.classList.add('fi-active');
-  document.getElementById('p1-records-section').style.display = 'block';
-  const titles = { cancelamentos: 'Cancelamentos', reativacoes: 'Reativações', novos: 'Novos Contratos' };
-  document.getElementById('p1-records-titulo').textContent = titles[tipo] || tipo;
-  await this.loadP1Records();
-  setTimeout(() => document.getElementById('p1-records-section')?.scrollIntoView({ behavior:'smooth', block:'start' }), 80);
-};
-
-App.fecharTabP1 = function() {
-  this.cardAtivoP1 = null;
-  document.querySelectorAll('[data-p1-card]').forEach(c => c.classList.remove('fi-active'));
-  document.getElementById('p1-records-section').style.display = 'none';
-};
-
+/* ======= P1 — MINI-BI ======= */
 App.getP1PeriodoRange = function() {
   const now = new Date();
   const pad = n => String(n).padStart(2, '0');
@@ -1058,123 +995,149 @@ App.getP1PeriodoRange = function() {
   if (this.periodoP1 === 'month') {
     const f = new Date(now.getFullYear(), now.getMonth(), 1);
     const t = new Date(now.getFullYear(), now.getMonth()+1, 0, 23, 59, 59);
-    return { from: f, to: t, fromStr: fmtD(f), toStr: fmtD(t) };
+    return { from: f, to: t };
   }
   if (this.periodoP1 === 'prev') {
     const f = new Date(now.getFullYear(), now.getMonth()-1, 1);
     const t = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-    return { from: f, to: t, fromStr: fmtD(f), toStr: fmtD(t) };
+    return { from: f, to: t };
   }
   if (this.periodoP1 === '3m') {
     const f = new Date(now.getFullYear(), now.getMonth()-2, 1);
     const t = new Date(now.getFullYear(), now.getMonth()+1, 0, 23, 59, 59);
-    return { from: f, to: t, fromStr: fmtD(f), toStr: fmtD(t) };
+    return { from: f, to: t };
   }
   if (this.periodoP1 === 'year') {
     const f = new Date(now.getFullYear(), 0, 1);
     const t = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-    return { from: f, to: t, fromStr: fmtD(f), toStr: fmtD(t) };
+    return { from: f, to: t };
   }
   if (this.periodoP1 === 'custom') {
     const de  = document.getElementById('p1-de')?.value;
     const ate = document.getElementById('p1-ate')?.value;
-    if (de && ate) return { from: new Date(de+'T00:00:00'), to: new Date(ate+'T23:59:59'), fromStr: de, toStr: ate };
+    if (de && ate) return { from: new Date(de+'T00:00:00'), to: new Date(ate+'T23:59:59') };
   }
-  // 'all' — sem filtro client-side; para novos usa últimos 365 dias
-  const ago = new Date(now.getTime() - 365*24*60*60*1000);
-  return { from: null, to: null, fromStr: fmtD(ago), toStr: fmtD(now) };
+  return { from: null, to: null };
 };
 
 App.setPeriodoP1 = function(p) {
   this.periodoP1 = p;
   document.querySelectorAll('[data-p1p]').forEach(b => b.classList.toggle('active', b.dataset.p1p === p));
-  if (this.cardAtivoP1) this.loadP1Records();
+  this.aplicarFiltrosP1();
 };
 
 App.setPeriodoP1Custom = function() {
   this.periodoP1 = 'custom';
   document.querySelectorAll('[data-p1p]').forEach(b => b.classList.remove('active'));
-  if (this.cardAtivoP1) this.loadP1Records();
+  this.aplicarFiltrosP1();
 };
 
-App.loadP1Records = async function() {
-  const tipo = this.cardAtivoP1;
-  if (!tipo) return;
-  const s = this.tables.p1;
-  if (tipo === 'cancelamentos') {
-    s.data = this.p1Data.cancelamentos;
-    this.filterP1Tbl();
-  } else if (tipo === 'reativacoes') {
-    s.data = this.p1Data.reativacoes;
-    this.filterP1Tbl();
-  } else if (tipo === 'novos') {
-    document.getElementById('body-p1').innerHTML = '<tr><td colspan="4"><div class="empty-state">Carregando…</div></td></tr>';
-    try {
-      const { fromStr, toStr } = this.getP1PeriodoRange();
-      const params = {};
-      if (fromStr) params.de  = fromStr;
-      if (toStr)   params.ate = toStr;
-      // Sempre limpa cache client-side de novos para pegar o período correto
-      Object.keys(this.cache).filter(k => k.startsWith('novos_contratos')).forEach(k => delete this.cache[k]);
-      const data = await this.apiFetch('novos_contratos', params);
-      s.data = data.novos || [];
-      this.filterP1Tbl();
-    } catch(e) {
-      document.getElementById('body-p1').innerHTML = `<tr><td colspan="4"><div class="empty-state">Erro: ${e.message}</div></td></tr>`;
-    }
-  }
+App.setTipoP1 = function(tipo) {
+  this.p1FiltroTipo = tipo;
+  document.querySelectorAll('[data-p1t]').forEach(b => b.classList.toggle('active', b.dataset.p1t === tipo));
+  this.aplicarFiltrosP1();
 };
 
-App.filterP1Tbl = function() {
-  const tipo = this.cardAtivoP1;
-  const s = this.tables.p1;
-  s.page = 1;
+App.aplicarFiltrosP1 = function() {
+  if (!this.p1Panorama) return;
+  const { from, to } = this.getP1PeriodoRange();
+  const regional = document.getElementById('p1-fil-reg')?.value || '';
+  const operador = document.getElementById('p1-fil-op')?.value || '';
   const q = (document.getElementById('srch-p1')?.value || '').toLowerCase().trim();
-  let base = s.data;
-  if (tipo !== 'novos') {
-    const { from, to } = this.getP1PeriodoRange();
-    const field = tipo === 'cancelamentos' ? 'data_cancelamento' : 'data_reativacao';
-    if (from || to) {
-      base = s.data.filter(r => {
-        const d = new Date(r[field]);
-        if (isNaN(d)) return false;
-        if (from && d < from) return false;
-        if (to   && d > to)   return false;
-        return true;
-      });
-    }
-  }
-  s.filtered = base.filter(r => !q || Object.values(r).some(v => String(v||'').toLowerCase().includes(q)));
+
+  let base = this.p1Eventos;
+  if (this.p1FiltroTipo !== 'todos') base = base.filter(e => e.tipo === this.p1FiltroTipo);
+  if (from || to) base = base.filter(e => {
+    const d = new Date(e.data_evento + 'T00:00:00');
+    if (isNaN(d)) return false;
+    if (from && d < from) return false;
+    if (to   && d > to)   return false;
+    return true;
+  });
+  if (regional) base = base.filter(e => e.regional === regional);
+  if (operador) base = base.filter(e => e.operadora === operador);
+  if (q) base = base.filter(e => Object.values(e).some(v => String(v||'').toLowerCase().includes(q)));
+
+  const cancelCount = base.filter(e => e.tipo === 'cancelamento').length;
+  const reatCount   = base.filter(e => e.tipo === 'reativacao').length;
+  const novoCount   = base.filter(e => e.tipo === 'novo').length;
+  const saldo       = novoCount + reatCount - cancelCount;
+  const pan         = this.p1Panorama;
+  const tipoAtivo   = this.p1FiltroTipo;
+
+  document.getElementById('p1-kpis').innerHTML =
+    `<div class="card">
+      <div class="kpi-label">Placas Ativas</div>
+      <div class="kpi-value">${this.fmt(pan.veiculos_ativos)}</div>
+      <div class="kpi-sub">${this.fmt(pan.base_ativa)} associados</div>
+    </div>
+    <div class="card kpi-clickable${tipoAtivo === 'novo' ? ' fi-active' : ''}" onclick="App.setTipoP1('novo')" title="Filtrar: Novos">
+      <div class="kpi-label">Novos</div>
+      <div class="kpi-value">${this.fmt(novoCount)}</div>
+      <div class="kpi-sub">no período selecionado</div>
+    </div>
+    <div class="card kpi-clickable${tipoAtivo === 'cancelamento' ? ' fi-active' : ''}" onclick="App.setTipoP1('cancelamento')" title="Filtrar: Cancelamentos">
+      <div class="kpi-label">Cancelamentos</div>
+      <div class="kpi-value${cancelCount > 0 ? ' red' : ''}">${this.fmt(cancelCount)}</div>
+      <div class="kpi-sub">no período selecionado</div>
+    </div>
+    <div class="card kpi-clickable${tipoAtivo === 'reativacao' ? ' fi-active' : ''}" onclick="App.setTipoP1('reativacao')" title="Filtrar: Reativações">
+      <div class="kpi-label">Reativações</div>
+      <div class="kpi-value green">${this.fmt(reatCount)}</div>
+      <div class="kpi-sub">no período selecionado</div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">Saldo Líquido</div>
+      <div class="kpi-value${saldo < 0 ? ' red' : ' green'}">${saldo >= 0 ? '+' : ''}${this.fmt(saldo)}</div>
+      <div class="kpi-sub" style="font-size:10px">novos + reat. − cancelamentos</div>
+    </div>`;
+
+  const tituloEl = document.getElementById('p1-tbl-titulo');
+  if (tituloEl) tituloEl.textContent = 'Registros — ' + base.length + ' eventos';
+
+  this.tables.p1.filtered = base.slice();
+  this.tables.p1.page = 1;
   this.renderP1Tbl();
 };
 
 App.renderP1Tbl = function() {
-  const tipo  = this.cardAtivoP1;
   const s     = this.tables.p1;
-  const start = (s.page-1) * s.perPage;
+  const start = (s.page - 1) * s.perPage;
   const rows  = s.filtered.slice(start, start + s.perPage);
   const tbody = document.getElementById('body-p1');
   const thead = document.getElementById('thead-p1');
-  if (tipo === 'cancelamentos') {
-    thead.innerHTML = '<tr><th class="sortable" data-col="nome">Associado ↕</th><th class="sortable" data-col="data_cancelamento">Data ↕</th><th class="sortable" data-col="dias_casa">Tempo de Casa ↕</th><th class="sortable" data-col="regional">Regional ↕</th><th class="sortable" data-col="operadora">Operador ↕</th></tr>';
-    tbody.innerHTML = rows.length ? rows.map(r =>
-      `<tr><td><div class="td-name">${r.nome||'—'}</div></td><td>${this.fmtDate(r.data_cancelamento)}</td><td>${this.diasParaTempo(r.dias_casa)}</td><td>${r.regional||'—'}</td><td>${r.operadora||'—'}</td></tr>`
-    ).join('') : '<tr><td colspan="5"><div class="empty-state">Nenhum resultado</div></td></tr>';
-  } else if (tipo === 'reativacoes') {
-    thead.innerHTML = '<tr><th class="sortable" data-col="nome">Associado ↕</th><th class="sortable" data-col="data_reativacao">Data Reativação ↕</th><th class="sortable" data-col="usuario_alteracao">Operador ↕</th></tr>';
-    tbody.innerHTML = rows.length ? rows.map(r =>
-      `<tr><td><div class="td-name">${r.nome||'—'}</div><div class="td-sub">Cód. ${r.codigo_associado||'—'}</div></td><td>${this.fmtDate(r.data_reativacao)}</td><td>${r.usuario_alteracao||'—'}</td></tr>`
-    ).join('') : '<tr><td colspan="3"><div class="empty-state">Nenhum resultado</div></td></tr>';
-  } else if (tipo === 'novos') {
-    thead.innerHTML = '<tr><th class="sortable" data-col="nome">Associado ↕</th><th class="sortable" data-col="placa">Placa ↕</th><th class="sortable" data-col="vendedor">Vendedor ↕</th><th class="sortable" data-col="data_venda">Data Venda ↕</th></tr>';
-    tbody.innerHTML = rows.length ? rows.map(r =>
-      `<tr><td><div class="td-name">${r.nome||'—'}</div></td><td>${r.placa?`<span class="badge badge-gray" style="font-family:monospace;letter-spacing:1px">${r.placa}</span>`:'—'}</td><td>${r.vendedor||'—'}</td><td>${this.fmtDate(r.data_venda)}</td></tr>`
-    ).join('') : '<tr><td colspan="4"><div class="empty-state">Nenhum resultado</div></td></tr>';
-  }
+
+  thead.innerHTML = `<tr>
+    <th class="sortable" data-col="tipo">Tipo ↕</th>
+    <th class="sortable" data-col="nome">Associado ↕</th>
+    <th class="sortable" data-col="data_evento">Data ↕</th>
+    <th class="sortable" data-col="regional">Regional ↕</th>
+    <th class="sortable" data-col="operadora">Operador ↕</th>
+  </tr>`;
+
+  const tipoBadge = t => {
+    if (t === 'cancelamento') return '<span class="badge badge-red">Cancelamento</span>';
+    if (t === 'reativacao')   return '<span class="badge badge-green">Reativação</span>';
+    if (t === 'novo')         return '<span class="badge badge-purple">Novo</span>';
+    return t || '—';
+  };
+
+  tbody.innerHTML = rows.length
+    ? rows.map(r =>
+        `<tr>
+          <td>${tipoBadge(r.tipo)}</td>
+          <td><div class="td-name">${r.nome || '—'}</div><div class="td-sub">Cód. ${r.codigo_associado || '—'}</div></td>
+          <td>${this.fmtDate(r.data_evento)}</td>
+          <td>${r.regional || '—'}</td>
+          <td>${r.operadora || '—'}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="5"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>';
+
   thead.querySelectorAll('th.sortable').forEach(th => {
     th.style.cursor = 'pointer';
     th.addEventListener('click', () => App.sortP1Tbl(th.dataset.col));
   });
+
   this.renderPag('p1');
 };
 
@@ -1373,31 +1336,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // P1 search
-  document.getElementById('srch-p1').addEventListener('input', () => App.filterP1Tbl());
+  document.getElementById('srch-p1').addEventListener('input', () => App.aplicarFiltrosP1());
 
   // P1 export
   document.getElementById('exp-p1').addEventListener('click', () => {
-    const tipo = App.cardAtivoP1;
-    if (!tipo) return;
-    if (tipo === 'cancelamentos') {
-      App.exportCSV(
-        ['Código','Nome','Data Cancelamento','Tempo de Casa (dias)','Regional','Operador'],
-        App.tables.p1.filtered.map(r => [r.codigo_associado,r.nome,r.data_cancelamento,r.dias_casa,r.regional,r.operadora]),
-        'cancelamentos.csv'
-      );
-    } else if (tipo === 'reativacoes') {
-      App.exportCSV(
-        ['Código','Nome','Data Reativação','Operador'],
-        App.tables.p1.filtered.map(r => [r.codigo_associado,r.nome,r.data_reativacao,r.usuario_alteracao]),
-        'reativacoes.csv'
-      );
-    } else if (tipo === 'novos') {
-      App.exportCSV(
-        ['Nome','Placa','Vendedor','Data Venda'],
-        App.tables.p1.filtered.map(r => [r.nome,r.placa,r.vendedor,r.data_venda]),
-        'novos_contratos.csv'
-      );
-    }
+    App.exportCSV(
+      ['Tipo','Código','Associado','Data','Regional','Operador'],
+      App.tables.p1.filtered.map(r => [r.tipo, r.codigo_associado, r.nome, r.data_evento, r.regional, r.operadora]),
+      'eventos_churn.csv'
+    );
   });
 
   // Timestamp updater

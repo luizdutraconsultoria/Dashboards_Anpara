@@ -890,6 +890,7 @@ function doGet(e) {
       case "analise_churn":         resultado = getAnaliseChurn();          break;
       case "novos_contratos":       resultado = getNovosContratosMes(e.parameter.de, e.parameter.ate); break;
       case "reativacoes":           resultado = getReativacoesDetalhadas(); break;
+      case "eventos_churn":         resultado = getEventosChurn();          break;
       default: resultado = { erro: "Acao nao reconhecida: " + acao };
     }
   } catch(err) {
@@ -1772,15 +1773,111 @@ function getAnaliseChurn() {
     reativacoes: assocList.filter(function(a) {
       return String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1";
     }).map(function(a) {
+      var cod     = String(a.codigo_associado || "");
+      var info    = contratosMap[cod] || {};
+      var codReg  = info.regional || "";
+      var regNome = REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional");
       return {
         codigo_associado:  a.codigo_associado,
         nome:              a.nome_associado         || "",
-        cpf:               a.cpf_associado          || "",
         data_reativacao:   String(a.data_alteracao  || "").substring(0, 10),
+        regional:          regNome,
         usuario_alteracao: a.nome_usuario_alteracao || ""
       };
     }).sort(function(a, b) { return b.data_reativacao.localeCompare(a.data_reativacao); })
   };
+}
+
+// ===================== EVENTOS CHURN — LISTA NORMALIZADA PARA MINI-BI =====================
+function getEventosChurn() {
+  var cache = CacheService.getScriptCache();
+
+  var nChunks = cache.get('eventos_churn_chunks');
+  if (nChunks) {
+    try {
+      var json = '';
+      for (var c = 0; c < parseInt(nChunks); c++) { json += cache.get('eventos_churn_chunk_' + c) || ''; }
+      if (json) return JSON.parse(json);
+    } catch(e) {}
+  } else {
+    var cached = cache.get('eventos_churn_completo');
+    if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+  }
+
+  var alteracoes = getAlteracoes();
+  var assocList  = alteracoes.associados || [];
+
+  // Mesmo lookup de regional que getAnaliseChurn() — via aba "Associados Inativos"
+  var contratosMap = {};
+  try {
+    var ss        = SpreadsheetApp.getActiveSpreadsheet();
+    var abaInativ = ss.getSheetByName("Associados Inativos");
+    if (abaInativ && abaInativ.getLastRow() >= 2) {
+      var header   = abaInativ.getRange(1, 1, 1, abaInativ.getLastColumn()).getValues()[0];
+      var iCod     = header.indexOf("codigo_associado");
+      var iReg     = header.indexOf("codigo_regional");
+      var linhas   = abaInativ.getRange(2, 1, abaInativ.getLastRow() - 1, abaInativ.getLastColumn()).getValues();
+      linhas.forEach(function(row) {
+        var cod = String(row[iCod] || "").trim();
+        if (!cod) return;
+        contratosMap[cod] = { regional: iReg !== -1 ? String(row[iReg] || "") : "" };
+      });
+    }
+  } catch(e) {
+    Logger.log("Aviso: não foi possível ler Associados Inativos — " + e.message);
+  }
+
+  var REGIONAL_NAMES = { "1": "Ipatinga", "2": "Betim" };
+
+  var eventos = [];
+  assocList.forEach(function(a) {
+    var de   = String(a.valor_anterior  || "").trim();
+    var para = String(a.valor_posterior || "").trim();
+    var tipo = null;
+    if (de === "1" && para === "2")       tipo = "cancelamento";
+    else if (de === "2" && para === "1")  tipo = "reativacao";
+    else if (!de         && para === "1") tipo = "novo";
+    if (!tipo) return;
+
+    var cod      = String(a.codigo_associado || "");
+    var info     = contratosMap[cod] || {};
+    var codReg   = info.regional || "";
+    var regNome  = REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional");
+    var operadora = String(a.nome_usuario_alteracao || "").trim() || "Sem Operadora";
+
+    eventos.push({
+      tipo:             tipo,
+      codigo_associado: a.codigo_associado,
+      nome:             a.nome_associado || "",
+      data_evento:      String(a.data_alteracao || "").substring(0, 10),
+      regional:         regNome,
+      operadora:        operadora
+    });
+  });
+
+  eventos.sort(function(a, b) { return b.data_evento.localeCompare(a.data_evento); });
+
+  var resultado = { timestamp: new Date().toISOString(), total: eventos.length, eventos: eventos };
+
+  try {
+    var payload    = JSON.stringify(resultado);
+    var CHUNK_SIZE = 90000;
+    if (payload.length <= CHUNK_SIZE) {
+      cache.put('eventos_churn_completo', payload, 3600);
+      cache.remove('eventos_churn_chunks');
+    } else {
+      var totalChunks = Math.ceil(payload.length / CHUNK_SIZE);
+      for (var k = 0; k < totalChunks; k++) {
+        cache.put('eventos_churn_chunk_' + k, payload.substring(k * CHUNK_SIZE, (k + 1) * CHUNK_SIZE), 3600);
+      }
+      cache.put('eventos_churn_chunks', String(totalChunks), 3600);
+      cache.remove('eventos_churn_completo');
+    }
+  } catch(e) {
+    Logger.log('Cache eventos_churn write error: ' + e.message);
+  }
+
+  return resultado;
 }
 
 // ===================== RECONSTRUIR HISTÓRICO =====================
@@ -1960,7 +2057,7 @@ function analisarCancelamentos60e90() {
 function testarDoGet() {
   var ui         = getUI();
   var resultados = {};
-  ["resumo", "panorama", "zona_churn", "snapshots"].forEach(function(acao) {
+  ["resumo", "panorama", "zona_churn", "snapshots", "eventos_churn"].forEach(function(acao) {
     try {
       var e        = { parameter: { acao: acao } };
       var response = doGet(e);
