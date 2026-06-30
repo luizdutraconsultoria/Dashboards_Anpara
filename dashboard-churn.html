@@ -501,14 +501,18 @@ const App = {
 
   /* ======= VIEW 1 ======= */
   async renderP1() {
-    const [panorama, historico, analise, reatData] = await Promise.all([
+    const [panorama, historico, analise] = await Promise.all([
       this.apiFetch('panorama'),
       this.apiFetch('historico_mensal'),
-      this.apiFetch('analise_churn'),
-      this.apiFetch('reativacoes')
+      this.apiFetch('analise_churn')
     ]);
-    this.p1Data.cancelamentos = analise.detalhes          || [];
-    this.p1Data.reativacoes   = reatData.reativacoes      || [];
+    this.p1Data.cancelamentos = analise.detalhes || [];
+    try {
+      const reatData = await this.apiFetch('reativacoes');
+      this.p1Data.reativacoes = reatData.reativacoes || [];
+    } catch(e) {
+      this.p1Data.reativacoes = [];
+    }
 
     const porMes = (historico.por_mes || []);
     const mesAtual = porMes[porMes.length - 1] || {};
