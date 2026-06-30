@@ -888,7 +888,8 @@ function doGet(e) {
       case "analise_cancelamentos": resultado = getAnaliseCancelamentos();  break;
       case "historico_mensal":      resultado = getHistoricoMensal();       break;
       case "analise_churn":         resultado = getAnaliseChurn();          break;
-      case "novos_contratos":       resultado = getNovosContratosMes();     break;
+      case "novos_contratos":       resultado = getNovosContratosMes(e.parameter.de, e.parameter.ate); break;
+      case "reativacoes":           resultado = getReativacoesDetalhadas(); break;
       default: resultado = { erro: "Acao nao reconhecida: " + acao };
     }
   } catch(err) {
@@ -1508,17 +1509,25 @@ function getNovosContratosPorMes() {
   return porMes;
 }
 
-// ===================== NOVOS CONTRATOS DO MÊS — REGISTROS INDIVIDUAIS =====================
-function getNovosContratosMes() {
+// ===================== NOVOS CONTRATOS — REGISTROS INDIVIDUAIS (aceita de/ate) =====================
+function getNovosContratosMes(de, ate) {
   var hoje   = new Date();
-  var mesNum = hoje.getMonth() + 1;
-  var mesStr = hoje.getFullYear() + '-' + (mesNum < 10 ? '0' + mesNum : mesNum);
-  var from   = mesStr + '-01';
-  var to     = Utilities.formatDate(hoje, 'America/Sao_Paulo', 'yyyy-MM-dd');
+  var from, to, cacheKey;
 
-  var cache    = CacheService.getScriptCache();
-  var cacheKey = 'novos_contratos_mes_' + mesStr;
-  var cached   = cache.get(cacheKey);
+  if (de && ate) {
+    from     = de;
+    to       = ate;
+    cacheKey = 'novos_contratos_' + de + '_' + ate;
+  } else {
+    var mesNum = hoje.getMonth() + 1;
+    var mesStr = hoje.getFullYear() + '-' + (mesNum < 10 ? '0' + mesNum : mesNum);
+    from     = mesStr + '-01';
+    to       = Utilities.formatDate(hoje, 'America/Sao_Paulo', 'yyyy-MM-dd');
+    cacheKey = 'novos_contratos_mes_' + mesStr;
+  }
+
+  var cache  = CacheService.getScriptCache();
+  var cached = cache.get(cacheKey);
   if (cached) { try { return JSON.parse(cached); } catch(e) {} }
 
   try {
@@ -1534,7 +1543,7 @@ function getNovosContratosMes() {
     });
 
     if (resp.getResponseCode() !== 200) {
-      return { erro: 'PowerCRM HTTP ' + resp.getResponseCode(), mes: mesStr, novos: [] };
+      return { erro: 'PowerCRM HTTP ' + resp.getResponseCode(), de: from, ate: to, novos: [] };
     }
 
     var data  = JSON.parse(resp.getContentText());
@@ -1550,21 +1559,44 @@ function getNovosContratosMes() {
       })
       .map(function(row) {
         return {
-          card_id:    String(row.cardId       || row.id          || ''),
-          nome:       String(row.clientName   || row.name        || ''),
-          placa:      String(row.vehiclePlates || row.plate      || ''),
-          vendedor:   String(row.sellerName   || row.seller      || ''),
-          data_venda: String(row.dtVenda      || row.closingDate || '')
+          card_id:    String(row.cardId        || row.id          || ''),
+          nome:       String(row.clientName    || row.name        || ''),
+          placa:      String(row.vehiclePlates || row.plate       || ''),
+          vendedor:   String(row.sellerName    || row.seller      || ''),
+          data_venda: String(row.dtVenda       || row.closingDate || '')
         };
       });
 
-    var resultado = { mes: mesStr, total: novos.length, novos: novos };
+    var resultado = { de: from, ate: to, total: novos.length, novos: novos };
     try { cache.put(cacheKey, JSON.stringify(resultado), 1800); } catch(e) {}
     return resultado;
 
   } catch(e) {
-    return { erro: e.message, mes: mesStr, novos: [] };
+    return { erro: e.message, de: from, ate: to, novos: [] };
   }
+}
+
+// ===================== REATIVAÇÕES DETALHADAS (últimos 365 dias) =====================
+function getReativacoesDetalhadas() {
+  var alteracoes = getAlteracoes();
+  var assocList  = alteracoes.associados || [];
+  var reativacoes = [];
+
+  assocList.forEach(function(a) {
+    if (String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1") {
+      reativacoes.push({
+        codigo_associado:  a.codigo_associado,
+        nome:              a.nome_associado         || "",
+        cpf:               a.cpf_associado          || "",
+        data_reativacao:   String(a.data_alteracao  || "").substring(0, 10),
+        usuario_alteracao: a.nome_usuario_alteracao || ""
+      });
+    }
+  });
+
+  reativacoes.sort(function(a, b) { return b.data_reativacao.localeCompare(a.data_reativacao); });
+
+  return { total: reativacoes.length, reativacoes: reativacoes };
 }
 
 function invalidarCachePowerCRM() {

@@ -14,7 +14,12 @@ export default {
     }
 
     const acao = url.searchParams.get('acao') || 'panorama';
-    const target = `https://script.google.com/macros/s/AKfycbyx3BlhOM2eIR2swdb_Y9lacBWyTOmFBG636qKRv902sUSTqJYztMSJvRAKEwcfFA5e/exec?acao=${acao}&_t=${Date.now()}`;
+    const de   = url.searchParams.get('de')   || '';
+    const ate  = url.searchParams.get('ate')  || '';
+
+    let target = `https://script.google.com/macros/s/AKfycbyx3BlhOM2eIR2swdb_Y9lacBWyTOmFBG636qKRv902sUSTqJYztMSJvRAKEwcfFA5e/exec?acao=${acao}&_t=${Date.now()}`;
+    if (de)  target += `&de=${encodeURIComponent(de)}`;
+    if (ate) target += `&ate=${encodeURIComponent(ate)}`;
 
     try {
       const resp = await fetch(target, { redirect: 'follow' });

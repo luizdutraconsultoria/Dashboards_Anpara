@@ -180,15 +180,16 @@ td{padding:8px 10px;vertical-align:middle}
     <span class="tip">Saúde da Base</span>
   </button>
 
+  <!-- VIEW P2 e P3 arquivadas — descomentar para reativar
   <button class="nav-btn" data-view="p2">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     <span class="tip">Zona de Risco</span>
   </button>
-
   <button class="nav-btn" data-view="p3">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     <span class="tip">Por que Cancela</span>
   </button>
+  -->
 
   <div class="nav-divider"></div>
 
@@ -240,6 +241,38 @@ td{padding:8px 10px;vertical-align:middle}
           <div class="skeleton" style="height:12px;margin-bottom:8px"></div>
           <div class="skeleton" style="height:12px;margin-bottom:8px"></div>
           <div class="skeleton" style="height:12px"></div>
+        </div>
+      </div>
+
+      <!-- REGISTROS: aparece ao clicar em um card KPI -->
+      <div id="p1-records-section" style="display:none;margin-top:12px">
+        <div class="card-section">
+          <div class="card-section-header" style="flex-wrap:wrap;gap:8px">
+            <span class="card-section-title" id="p1-records-titulo">Registros</span>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1">
+              <button class="p2-pill active" data-p1p="all"   onclick="App.setPeriodoP1('all')">Tudo</button>
+              <button class="p2-pill"        data-p1p="month" onclick="App.setPeriodoP1('month')">Mês Atual</button>
+              <button class="p2-pill"        data-p1p="prev"  onclick="App.setPeriodoP1('prev')">Mês Anterior</button>
+              <button class="p2-pill"        data-p1p="3m"    onclick="App.setPeriodoP1('3m')">Últimos 3m</button>
+              <button class="p2-pill"        data-p1p="year"  onclick="App.setPeriodoP1('year')">Este Ano</button>
+              <span style="font-size:11px;color:var(--muted);margin-left:4px">De</span>
+              <input type="date" class="search-input" id="p1-de"  style="width:130px;flex:none" onchange="App.setPeriodoP1Custom()">
+              <span style="font-size:11px;color:var(--muted)">Até</span>
+              <input type="date" class="search-input" id="p1-ate" style="width:130px;flex:none" onchange="App.setPeriodoP1Custom()">
+            </div>
+            <button onclick="App.fecharTabP1()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:0 2px" title="Fechar">×</button>
+          </div>
+          <div class="toolbar">
+            <input class="search-input" type="text" placeholder="Buscar…" id="srch-p1">
+            <button class="btn-export" id="exp-p1">↓ CSV</button>
+          </div>
+          <div class="table-wrap">
+            <table id="tbl-p1">
+              <thead id="thead-p1"><tr><th colspan="5" style="text-align:center;color:var(--muted)">Selecione um cartão acima</th></tr></thead>
+              <tbody id="body-p1"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="pag-p1"></div>
         </div>
       </div>
     </div>
@@ -406,18 +439,25 @@ const App = {
     inad: { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 },
     canc: { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 },
     reat: { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 },
-    p3:   { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 }
+    p3:   { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 },
+    p1:   { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 }
   },
+  p1Data:      { cancelamentos: [], reativacoes: [] },
+  periodoP1:   'all',
+  cardAtivoP1: null,
   filtroP3:  { tipo: null, valor: null },
   periodoP2: 'all',
 
-  async apiFetch(acao) {
-    if (this.cache[acao]) return this.cache[acao];
-    const res = await fetch(`${this.API_URL}?acao=${acao}`);
+  async apiFetch(acao, params) {
+    const cacheKey = acao + (params ? JSON.stringify(params) : '');
+    if (this.cache[cacheKey]) return this.cache[cacheKey];
+    let qs = `${this.API_URL}?acao=${acao}`;
+    if (params) Object.keys(params).forEach(k => { qs += `&${k}=${encodeURIComponent(params[k])}`; });
+    const res = await fetch(qs);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data && data.erro) throw new Error(data.erro);
-    this.cache[acao] = data;
+    this.cache[cacheKey] = data;
     return data;
   },
 
@@ -461,11 +501,14 @@ const App = {
 
   /* ======= VIEW 1 ======= */
   async renderP1() {
-    const [panorama, historico, analise] = await Promise.all([
+    const [panorama, historico, analise, reatData] = await Promise.all([
       this.apiFetch('panorama'),
       this.apiFetch('historico_mensal'),
-      this.apiFetch('analise_churn')
+      this.apiFetch('analise_churn'),
+      this.apiFetch('reativacoes')
     ]);
+    this.p1Data.cancelamentos = analise.detalhes          || [];
+    this.p1Data.reativacoes   = reatData.reativacoes      || [];
 
     const porMes = (historico.por_mes || []);
     const mesAtual = porMes[porMes.length - 1] || {};
@@ -487,22 +530,22 @@ const App = {
         <div class="kpi-value">${this.fmt(panorama.veiculos_ativos)}</div>
         <div class="kpi-sub">${this.fmt(panorama.base_ativa)} associados</div>
       </div>
-      <div class="card kpi-clickable" onclick="App.loadView('p2')" title="Ver zona de risco">
+      <div class="card kpi-clickable" data-p1-card="novos" onclick="App.irParaTabP1('novos')" title="Ver novos contratos">
         <div class="kpi-label">Novos no Mês</div>
         <div class="kpi-value">${this.fmt(novosV)}</div>
         <div class="kpi-delta ${novosV >= mediaNovos ? 'pos' : 'neg'}">${novosV >= mediaNovos ? '+' : ''}${this.fmt(novosV - mediaNovos)} vs média 3m</div>
       </div>
-      <div class="card kpi-clickable" onclick="App.irParaP3ComFiltro('mes','${mesFiltro}')" title="Ver cancelamentos do mês">
+      <div class="card kpi-clickable" data-p1-card="cancelamentos" onclick="App.irParaTabP1('cancelamentos')" title="Ver cancelamentos">
         <div class="kpi-label">Cancelamentos</div>
         <div class="kpi-value ${cancelamentosV > mediaCancelamentos ? 'red' : ''}">${this.fmt(cancelamentosV)}</div>
         <div class="kpi-delta ${cancelamentosV <= mediaCancelamentos ? 'pos' : 'neg'}">${cancelamentosV > mediaCancelamentos ? '+' : ''}${this.fmt(cancelamentosV - mediaCancelamentos)} vs média 3m</div>
       </div>
-      <div class="card kpi-clickable" onclick="App.irParaP2ComTab('reativacoes')" title="Ver lista de reativações">
+      <div class="card kpi-clickable" data-p1-card="reativacoes" onclick="App.irParaTabP1('reativacoes')" title="Ver reativações">
         <div class="kpi-label">Reativações <span style="font-weight:400;font-size:10px;color:var(--muted)">(assoc.)</span></div>
         <div class="kpi-value green">${this.fmt(reaticacoesAssoc)}</div>
         <div class="kpi-delta ${reaticacoesAssoc >= mediaReativacoes ? 'pos' : 'neg'}">${reaticacoesAssoc >= mediaReativacoes ? '+' : ''}${this.fmt(reaticacoesAssoc - mediaReativacoes)} vs média 3m</div>
       </div>
-      <div class="card kpi-clickable" onclick="App.irParaP3ComFiltro('mes','${mesFiltro}')" title="Ver cancelamentos do mês">
+      <div class="card">
         <div class="kpi-label">Saldo Líquido</div>
         <div class="kpi-value ${saldoLiquido < 0 ? 'red' : 'green'}">${saldoLiquido >= 0 ? '+' : ''}${this.fmt(saldoLiquido)}</div>
         <div class="kpi-sub" style="font-size:10px">novos + reat. − cancelamentos</div>
@@ -985,6 +1028,173 @@ const App = {
   }
 };
 
+/* ======= P1 RECORDS ======= */
+App.irParaTabP1 = async function(tipo) {
+  if (this.cardAtivoP1 === tipo) { this.fecharTabP1(); return; }
+  this.cardAtivoP1 = tipo;
+  document.querySelectorAll('[data-p1-card]').forEach(c => c.classList.remove('fi-active'));
+  const card = document.querySelector(`[data-p1-card="${tipo}"]`);
+  if (card) card.classList.add('fi-active');
+  document.getElementById('p1-records-section').style.display = 'block';
+  const titles = { cancelamentos: 'Cancelamentos', reativacoes: 'Reativações', novos: 'Novos Contratos' };
+  document.getElementById('p1-records-titulo').textContent = titles[tipo] || tipo;
+  await this.loadP1Records();
+  setTimeout(() => document.getElementById('p1-records-section')?.scrollIntoView({ behavior:'smooth', block:'start' }), 80);
+};
+
+App.fecharTabP1 = function() {
+  this.cardAtivoP1 = null;
+  document.querySelectorAll('[data-p1-card]').forEach(c => c.classList.remove('fi-active'));
+  document.getElementById('p1-records-section').style.display = 'none';
+};
+
+App.getP1PeriodoRange = function() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const fmtD = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  if (this.periodoP1 === 'month') {
+    const f = new Date(now.getFullYear(), now.getMonth(), 1);
+    const t = new Date(now.getFullYear(), now.getMonth()+1, 0, 23, 59, 59);
+    return { from: f, to: t, fromStr: fmtD(f), toStr: fmtD(t) };
+  }
+  if (this.periodoP1 === 'prev') {
+    const f = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    const t = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    return { from: f, to: t, fromStr: fmtD(f), toStr: fmtD(t) };
+  }
+  if (this.periodoP1 === '3m') {
+    const f = new Date(now.getFullYear(), now.getMonth()-2, 1);
+    const t = new Date(now.getFullYear(), now.getMonth()+1, 0, 23, 59, 59);
+    return { from: f, to: t, fromStr: fmtD(f), toStr: fmtD(t) };
+  }
+  if (this.periodoP1 === 'year') {
+    const f = new Date(now.getFullYear(), 0, 1);
+    const t = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+    return { from: f, to: t, fromStr: fmtD(f), toStr: fmtD(t) };
+  }
+  if (this.periodoP1 === 'custom') {
+    const de  = document.getElementById('p1-de')?.value;
+    const ate = document.getElementById('p1-ate')?.value;
+    if (de && ate) return { from: new Date(de+'T00:00:00'), to: new Date(ate+'T23:59:59'), fromStr: de, toStr: ate };
+  }
+  // 'all' — sem filtro client-side; para novos usa últimos 365 dias
+  const ago = new Date(now.getTime() - 365*24*60*60*1000);
+  return { from: null, to: null, fromStr: fmtD(ago), toStr: fmtD(now) };
+};
+
+App.setPeriodoP1 = function(p) {
+  this.periodoP1 = p;
+  document.querySelectorAll('[data-p1p]').forEach(b => b.classList.toggle('active', b.dataset.p1p === p));
+  if (this.cardAtivoP1) this.loadP1Records();
+};
+
+App.setPeriodoP1Custom = function() {
+  this.periodoP1 = 'custom';
+  document.querySelectorAll('[data-p1p]').forEach(b => b.classList.remove('active'));
+  if (this.cardAtivoP1) this.loadP1Records();
+};
+
+App.loadP1Records = async function() {
+  const tipo = this.cardAtivoP1;
+  if (!tipo) return;
+  const s = this.tables.p1;
+  if (tipo === 'cancelamentos') {
+    s.data = this.p1Data.cancelamentos;
+    this.filterP1Tbl();
+  } else if (tipo === 'reativacoes') {
+    s.data = this.p1Data.reativacoes;
+    this.filterP1Tbl();
+  } else if (tipo === 'novos') {
+    document.getElementById('body-p1').innerHTML = '<tr><td colspan="4"><div class="empty-state">Carregando…</div></td></tr>';
+    try {
+      const { fromStr, toStr } = this.getP1PeriodoRange();
+      const params = {};
+      if (fromStr) params.de  = fromStr;
+      if (toStr)   params.ate = toStr;
+      // Novos não usa cache do período anterior, limpa a entrada específica
+      const cacheKey = 'novos_contratos' + JSON.stringify(params);
+      if (this._novosLastParams !== cacheKey) {
+        delete this.cache['novos_contratos' + (this._novosLastParams || '{}')];
+        this._novosLastParams = cacheKey;
+      }
+      const data = await this.apiFetch('novos_contratos', params);
+      s.data = data.novos || [];
+      this.filterP1Tbl();
+    } catch(e) {
+      document.getElementById('body-p1').innerHTML = `<tr><td colspan="4"><div class="empty-state">Erro: ${e.message}</div></td></tr>`;
+    }
+  }
+};
+
+App.filterP1Tbl = function() {
+  const tipo = this.cardAtivoP1;
+  const s = this.tables.p1;
+  s.page = 1;
+  const q = (document.getElementById('srch-p1')?.value || '').toLowerCase().trim();
+  let base = s.data;
+  if (tipo !== 'novos') {
+    const { from, to } = this.getP1PeriodoRange();
+    const field = tipo === 'cancelamentos' ? 'data_cancelamento' : 'data_reativacao';
+    if (from || to) {
+      base = s.data.filter(r => {
+        const d = new Date(r[field]);
+        if (isNaN(d)) return false;
+        if (from && d < from) return false;
+        if (to   && d > to)   return false;
+        return true;
+      });
+    }
+  }
+  s.filtered = base.filter(r => !q || Object.values(r).some(v => String(v||'').toLowerCase().includes(q)));
+  this.renderP1Tbl();
+};
+
+App.renderP1Tbl = function() {
+  const tipo  = this.cardAtivoP1;
+  const s     = this.tables.p1;
+  const start = (s.page-1) * s.perPage;
+  const rows  = s.filtered.slice(start, start + s.perPage);
+  const tbody = document.getElementById('body-p1');
+  const thead = document.getElementById('thead-p1');
+  if (tipo === 'cancelamentos') {
+    thead.innerHTML = '<tr><th class="sortable" data-col="nome">Associado ↕</th><th class="sortable" data-col="data_cancelamento">Data ↕</th><th class="sortable" data-col="dias_casa">Tempo de Casa ↕</th><th class="sortable" data-col="regional">Regional ↕</th><th class="sortable" data-col="operadora">Operador ↕</th></tr>';
+    tbody.innerHTML = rows.length ? rows.map(r =>
+      `<tr><td><div class="td-name">${r.nome||'—'}</div></td><td>${this.fmtDate(r.data_cancelamento)}</td><td>${this.diasParaTempo(r.dias_casa)}</td><td>${r.regional||'—'}</td><td>${r.operadora||'—'}</td></tr>`
+    ).join('') : '<tr><td colspan="5"><div class="empty-state">Nenhum resultado</div></td></tr>';
+  } else if (tipo === 'reativacoes') {
+    thead.innerHTML = '<tr><th class="sortable" data-col="nome">Associado ↕</th><th class="sortable" data-col="data_reativacao">Data Reativação ↕</th><th class="sortable" data-col="usuario_alteracao">Operador ↕</th></tr>';
+    tbody.innerHTML = rows.length ? rows.map(r =>
+      `<tr><td><div class="td-name">${r.nome||'—'}</div><div class="td-sub">Cód. ${r.codigo_associado||'—'}</div></td><td>${this.fmtDate(r.data_reativacao)}</td><td>${r.usuario_alteracao||'—'}</td></tr>`
+    ).join('') : '<tr><td colspan="3"><div class="empty-state">Nenhum resultado</div></td></tr>';
+  } else if (tipo === 'novos') {
+    thead.innerHTML = '<tr><th class="sortable" data-col="nome">Associado ↕</th><th class="sortable" data-col="placa">Placa ↕</th><th class="sortable" data-col="vendedor">Vendedor ↕</th><th class="sortable" data-col="data_venda">Data Venda ↕</th></tr>';
+    tbody.innerHTML = rows.length ? rows.map(r =>
+      `<tr><td><div class="td-name">${r.nome||'—'}</div></td><td>${r.placa?`<span class="badge badge-gray" style="font-family:monospace;letter-spacing:1px">${r.placa}</span>`:'—'}</td><td>${r.vendedor||'—'}</td><td>${this.fmtDate(r.data_venda)}</td></tr>`
+    ).join('') : '<tr><td colspan="4"><div class="empty-state">Nenhum resultado</div></td></tr>';
+  }
+  thead.querySelectorAll('th.sortable').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => App.sortP1Tbl(th.dataset.col));
+  });
+  this.renderPag('p1');
+};
+
+App.sortP1Tbl = function(col) {
+  const s = this.tables.p1;
+  s.sortDir = s.sortCol === col ? -s.sortDir : 1;
+  s.sortCol = col;
+  s.filtered.sort((a, b) => {
+    const av = a[col], bv = b[col];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    const cmp = typeof av === 'number' && typeof bv === 'number' ? av-bv : String(av).localeCompare(String(bv),'pt-BR');
+    return cmp * s.sortDir;
+  });
+  s.page = 1;
+  this.renderP1Tbl();
+};
+
 /* ======= FILTRO INTERATIVO ======= */
 App.irParaP2ComTab = async function(tabName) {
   await this.loadView('p2');
@@ -1161,6 +1371,34 @@ document.addEventListener('DOMContentLoaded', () => {
       App.tables.p3.filtered.map(r => [r.codigo_associado,r.nome,r.data_cancelamento,r.dias_casa,r.regional,r.operadora]),
       'cancelamentos_detalhados.csv'
     );
+  });
+
+  // P1 search
+  document.getElementById('srch-p1').addEventListener('input', () => App.filterP1Tbl());
+
+  // P1 export
+  document.getElementById('exp-p1').addEventListener('click', () => {
+    const tipo = App.cardAtivoP1;
+    if (!tipo) return;
+    if (tipo === 'cancelamentos') {
+      App.exportCSV(
+        ['Código','Nome','Data Cancelamento','Tempo de Casa (dias)','Regional','Operador'],
+        App.tables.p1.filtered.map(r => [r.codigo_associado,r.nome,r.data_cancelamento,r.dias_casa,r.regional,r.operadora]),
+        'cancelamentos.csv'
+      );
+    } else if (tipo === 'reativacoes') {
+      App.exportCSV(
+        ['Código','Nome','Data Reativação','Operador'],
+        App.tables.p1.filtered.map(r => [r.codigo_associado,r.nome,r.data_reativacao,r.usuario_alteracao]),
+        'reativacoes.csv'
+      );
+    } else if (tipo === 'novos') {
+      App.exportCSV(
+        ['Nome','Placa','Vendedor','Data Venda'],
+        App.tables.p1.filtered.map(r => [r.nome,r.placa,r.vendedor,r.data_venda]),
+        'novos_contratos.csv'
+      );
+    }
   });
 
   // Timestamp updater
