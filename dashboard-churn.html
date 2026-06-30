@@ -237,7 +237,6 @@ td{padding:8px 10px;vertical-align:middle}
           <button class="p2-pill active" data-p1t="todos"        onclick="App.setTipoP1('todos')">Todos</button>
           <button class="p2-pill"        data-p1t="cancelamento" onclick="App.setTipoP1('cancelamento')">Cancelamentos</button>
           <button class="p2-pill"        data-p1t="reativacao"   onclick="App.setTipoP1('reativacao')">Reativações</button>
-          <button class="p2-pill"        data-p1t="novo"         onclick="App.setTipoP1('novo')">Novos</button>
           <span style="font-size:11px;color:var(--muted);margin-left:8px">Regional</span>
           <select class="filter-select" id="p1-fil-reg" onchange="App.aplicarFiltrosP1()"><option value="">Todas</option></select>
           <span style="font-size:11px;color:var(--muted)">Operador</span>
@@ -451,9 +450,10 @@ const App = {
     p3:   { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 },
     p1:   { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 }
   },
-  p1Eventos:    [],
-  p1FiltroTipo: 'todos',
-  p1Panorama:   null,
+  p1Eventos:           [],
+  p1FiltroTipo:        'todos',
+  p1Panorama:          null,
+  p1HistoricoMesAtual: null,
   periodoP1:    'all',
   filtroP3:  { tipo: null, valor: null },
   periodoP2: 'all',
@@ -538,6 +538,7 @@ const App = {
     // Gráfico de barras — Novos/Reativações/Cancelamentos (usa historico_mensal, fonte confiável para série temporal)
     const porMes = (historico.por_mes || []);
     const last12 = porMes.slice(-12);
+    this.p1HistoricoMesAtual = last12[last12.length - 1] || {};
     const barLabels = last12.map(m => { const [y, mo] = m.mes.split('-'); return mo + '/' + y.slice(2); });
     const esEl = document.getElementById('p1-es-wrap');
     esEl.innerHTML = `
@@ -1060,8 +1061,8 @@ App.aplicarFiltrosP1 = function() {
 
   const cancelCount = base.filter(e => e.tipo === 'cancelamento').length;
   const reatCount   = base.filter(e => e.tipo === 'reativacao').length;
-  const novoCount   = base.filter(e => e.tipo === 'novo').length;
-  const saldo       = novoCount + reatCount - cancelCount;
+  const novosMes    = (this.p1HistoricoMesAtual && this.p1HistoricoMesAtual.novos) || 0;
+  const saldo       = reatCount - cancelCount;
   const pan         = this.p1Panorama;
   const tipoAtivo   = this.p1FiltroTipo;
 
@@ -1071,25 +1072,25 @@ App.aplicarFiltrosP1 = function() {
       <div class="kpi-value">${this.fmt(pan.veiculos_ativos)}</div>
       <div class="kpi-sub">${this.fmt(pan.base_ativa)} associados</div>
     </div>
-    <div class="card kpi-clickable${tipoAtivo === 'novo' ? ' fi-active' : ''}" onclick="App.setTipoP1('novo')" title="Filtrar: Novos">
-      <div class="kpi-label">Novos</div>
-      <div class="kpi-value">${this.fmt(novoCount)}</div>
-      <div class="kpi-sub">no período selecionado</div>
+    <div class="card">
+      <div class="kpi-label">Novos no Mês</div>
+      <div class="kpi-value">${this.fmt(novosMes)}</div>
+      <div class="kpi-sub" style="font-size:10px">mês corrente · Power CRM</div>
     </div>
     <div class="card kpi-clickable${tipoAtivo === 'cancelamento' ? ' fi-active' : ''}" onclick="App.setTipoP1('cancelamento')" title="Filtrar: Cancelamentos">
       <div class="kpi-label">Cancelamentos</div>
       <div class="kpi-value${cancelCount > 0 ? ' red' : ''}">${this.fmt(cancelCount)}</div>
-      <div class="kpi-sub">no período selecionado</div>
+      <div class="kpi-sub">associados no período</div>
     </div>
     <div class="card kpi-clickable${tipoAtivo === 'reativacao' ? ' fi-active' : ''}" onclick="App.setTipoP1('reativacao')" title="Filtrar: Reativações">
       <div class="kpi-label">Reativações</div>
       <div class="kpi-value green">${this.fmt(reatCount)}</div>
-      <div class="kpi-sub">no período selecionado</div>
+      <div class="kpi-sub">associados no período</div>
     </div>
     <div class="card">
       <div class="kpi-label">Saldo Líquido</div>
       <div class="kpi-value${saldo < 0 ? ' red' : ' green'}">${saldo >= 0 ? '+' : ''}${this.fmt(saldo)}</div>
-      <div class="kpi-sub" style="font-size:10px">novos + reat. − cancelamentos</div>
+      <div class="kpi-sub" style="font-size:10px">reat. − cancelamentos</div>
     </div>`;
 
   const tituloEl = document.getElementById('p1-tbl-titulo');

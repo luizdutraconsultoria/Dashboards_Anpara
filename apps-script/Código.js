@@ -1836,7 +1836,6 @@ function getEventosChurn() {
     var tipo = null;
     if (de === "1" && para === "2")       tipo = "cancelamento";
     else if (de === "2" && para === "1")  tipo = "reativacao";
-    else if (!de         && para === "1") tipo = "novo";
     if (!tipo) return;
 
     var cod      = String(a.codigo_associado || "");
