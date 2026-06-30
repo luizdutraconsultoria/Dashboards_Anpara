@@ -1051,15 +1051,28 @@ function getZonaChurn() {
     if (pagina < totalRegistros) Utilities.sleep(300);
   }
 
+  // Busca alterações em lotes de 7 dias (limite da API) cobrindo o mês atual + anterior
   var inicioJanela = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
-  var dataInicial  = Utilities.formatDate(inicioJanela, "America/Sao_Paulo", "dd/MM/yyyy");
-  var dataFinal    = Utilities.formatDate(hoje,         "America/Sao_Paulo", "dd/MM/yyyy");
+  var alteracoesAssoc = [];
+  var dataLoop = new Date(inicioJanela);
 
-  var alteracoesAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
-    "data_inicial": dataInicial,
-    "data_final":   dataFinal,
-    "campos":       ["codigo_situacao"]
-  });
+  while (dataLoop <= hoje) {
+    var dataFimLote = new Date(dataLoop);
+    dataFimLote.setDate(dataFimLote.getDate() + 6);
+    if (dataFimLote > hoje) dataFimLote = new Date(hoje);
+
+    var di    = Utilities.formatDate(dataLoop,    "America/Sao_Paulo", "dd/MM/yyyy");
+    var df    = Utilities.formatDate(dataFimLote, "America/Sao_Paulo", "dd/MM/yyyy");
+    var lote  = chamarAPI("/listar/alteracao-associados/", "post", {
+      "data_inicial": di, "data_final": df, "campos": ["codigo_situacao"]
+    });
+    if (Array.isArray(lote)) alteracoesAssoc = alteracoesAssoc.concat(lote);
+    Logger.log("Lote alterações " + di + " → " + df + ": " + (Array.isArray(lote) ? lote.length : "null"));
+
+    dataLoop.setDate(dataLoop.getDate() + 7);
+    if (dataLoop <= hoje) Utilities.sleep(200);
+  }
+  Logger.log("Total alterações coletadas: " + alteracoesAssoc.length);
 
   var reativacoesRecentes = [];
   if (Array.isArray(alteracoesAssoc)) {
