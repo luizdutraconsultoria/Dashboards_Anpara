@@ -4,3 +4,5 @@ node_modules/
 DESIGN-REFERENCE-CHURN.html
 app scritpts sga.txt
 api sga.txt
+apps-script/.clasprc.json
+apps-script/.clasp.json

@@ -1768,7 +1768,18 @@ function getAnaliseChurn() {
     distribuicao_tempo_casa: Object.keys(distribuicaoTempoCasa).map(function(f) {
       return { faixa: f, quantidade: distribuicaoTempoCasa[f] };
     }),
-    detalhes: detalhes
+    detalhes: detalhes,
+    reativacoes: assocList.filter(function(a) {
+      return String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1";
+    }).map(function(a) {
+      return {
+        codigo_associado:  a.codigo_associado,
+        nome:              a.nome_associado         || "",
+        cpf:               a.cpf_associado          || "",
+        data_reativacao:   String(a.data_alteracao  || "").substring(0, 10),
+        usuario_alteracao: a.nome_usuario_alteracao || ""
+      };
+    }).sort(function(a, b) { return b.data_reativacao.localeCompare(a.data_reativacao); })
   };
 }
 

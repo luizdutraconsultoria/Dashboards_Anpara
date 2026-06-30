@@ -511,12 +511,7 @@ const App = {
       this.apiFetch('analise_churn')
     ]);
     this.p1Data.cancelamentos = analise.detalhes || [];
-    try {
-      const reatData = await this.apiFetch('reativacoes');
-      this.p1Data.reativacoes = reatData.reativacoes || [];
-    } catch(e) {
-      this.p1Data.reativacoes = [];
-    }
+    this.p1Data.reativacoes   = analise.reativacoes || [];
 
     const porMes = (historico.por_mes || []);
     const mesAtual = porMes[porMes.length - 1] || {};
