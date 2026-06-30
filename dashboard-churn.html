@@ -409,7 +409,7 @@ const App = {
     p3:   { data:[], filtered:[], page:1, perPage:25, sortCol:null, sortDir:1 }
   },
   filtroP3:  { tipo: null, valor: null },
-  periodoP2: 'month',
+  periodoP2: 'all',
 
   async apiFetch(acao) {
     if (this.cache[acao]) return this.cache[acao];
@@ -928,6 +928,9 @@ const App = {
     const cntReat = document.getElementById('cnt-reat');
     if (cntCanc) cntCanc.textContent = this.tables.canc.filtered.length;
     if (cntReat) cntReat.textContent = this.tables.reat.filtered.length;
+    // Sincroniza o card KPI de cancelamentos com o período selecionado
+    const kpiCanc = document.querySelector('#p2-kpis .kpi-clickable .kpi-value');
+    if (kpiCanc) kpiCanc.textContent = this.fmt(this.tables.canc.filtered.length);
     this.renderTbl('canc');
     this.renderTbl('reat');
   },
