@@ -1075,27 +1075,25 @@ function getZonaChurn() {
     });
   }
 
-  // Busca placas de cada associado reativado via /listar/veiculo
+  // Busca placas e telefone via GET /associado/buscar/:codigo/codigo
   var codsVistos = {};
   reativacoesRecentes.forEach(function(r) {
     var cod = String(r.codigo_associado || "");
     if (!cod || codsVistos[cod]) return;
     codsVistos[cod] = true;
     try {
-      var resV = chamarAPI("/listar/veiculo", "post", {
-        "codigo_situacao":       1,
-        "codigo_associado":      cod,
-        "inicio_paginacao":      0,
-        "quantidade_por_pagina": 50
-      });
-      if (resV && Array.isArray(resV.veiculos) && resV.veiculos.length > 0) {
-        var placas = resV.veiculos
-          .map(function(v) { return String(v.placa || "").trim(); })
-          .filter(function(p) { return p.length > 0; });
-        var primeiroV = resV.veiculos[0];
-        var ddd       = String(primeiroV.ddd_celular || primeiroV.ddd || "").trim();
-        var tel       = String(primeiroV.telefone_celular || primeiroV.telefone || "").trim();
-        var fone      = ddd && tel ? "(" + ddd + ") " + tel : tel;
+      var resA = chamarAPI("/associado/buscar/" + cod + "/codigo", "get", null);
+      Logger.log("buscar associado " + cod + " → " + JSON.stringify(resA).substring(0, 200));
+      if (resA) {
+        var placas = [];
+        if (Array.isArray(resA.veiculos)) {
+          placas = resA.veiculos
+            .map(function(v) { return String(v.placa || "").trim(); })
+            .filter(function(p) { return p.length > 0; });
+        }
+        var ddd  = String(resA.ddd_celular || resA.ddd || "").trim();
+        var tel  = String(resA.telefone_celular || resA.telefone_fixo || resA.telefone || "").trim();
+        var fone = ddd && tel ? "(" + ddd + ") " + tel : tel;
         reativacoesRecentes.forEach(function(x) {
           if (String(x.codigo_associado) === cod) {
             x.placas           = placas;
@@ -1104,7 +1102,7 @@ function getZonaChurn() {
         });
       }
     } catch(e) {
-      Logger.log("Erro ao buscar placas/telefone do associado " + cod + ": " + e.message);
+      Logger.log("Erro ao buscar associado " + cod + ": " + e.message);
     }
     Utilities.sleep(200);
   });
