@@ -1147,6 +1147,59 @@ function getZonaChurn() {
   return resultado;
 }
 
+function diagnosticarPlacasReativacao() {
+  if (!TOKEN_USUARIO) autenticar();
+
+  // 1. Busca as alterações do mês para pegar um codigo_associado real
+  var hoje         = new Date();
+  var inicioJanela = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+  var dataInicial  = Utilities.formatDate(inicioJanela, "America/Sao_Paulo", "dd/MM/yyyy");
+  var dataFinal    = Utilities.formatDate(hoje,         "America/Sao_Paulo", "dd/MM/yyyy");
+
+  var alteracoes = chamarAPI("/listar/alteracao-associados/", "post", {
+    "data_inicial": dataInicial,
+    "data_final":   dataFinal,
+    "campos":       ["codigo_situacao"]
+  });
+
+  Logger.log("alteracoesAssoc retornou: " + (Array.isArray(alteracoes) ? alteracoes.length + " registros" : JSON.stringify(alteracoes).substring(0,200)));
+
+  var reativacoes = [];
+  if (Array.isArray(alteracoes)) {
+    alteracoes.forEach(function(a) {
+      if (String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1") {
+        reativacoes.push(a);
+      }
+    });
+  }
+  Logger.log("Reativações encontradas: " + reativacoes.length);
+
+  if (reativacoes.length === 0) {
+    Logger.log("Nenhuma reativação encontrada no período.");
+    return;
+  }
+
+  // 2. Testa o endpoint para os 3 primeiros associados reativados
+  var testCods = reativacoes.slice(0, 3);
+  testCods.forEach(function(a) {
+    var cod = String(a.codigo_associado || "");
+    Logger.log("\n--- Testando associado " + cod + " (" + a.nome_associado + ") ---");
+
+    // Testa GET /associado/buscar/:codigo/codigo
+    var options = {
+      method: "get",
+      headers: {
+        "Authorization": "Bearer " + TOKEN_USUARIO,
+        "Content-Type":  "application/json"
+      },
+      muteHttpExceptions: true
+    };
+    var resp = UrlFetchApp.fetch(BASE_URL + "/associado/buscar/" + cod + "/codigo", options);
+    Logger.log("GET /associado/buscar/" + cod + "/codigo → HTTP " + resp.getResponseCode());
+    Logger.log("Body: " + resp.getContentText().substring(0, 500));
+  });
+}
+
 function invalidarCacheZonaChurn() {
   var cache = CacheService.getScriptCache();
   cache.remove('zona_churn_completo');
