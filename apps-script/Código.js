@@ -1808,51 +1808,77 @@ function getEventosChurn() {
 
   var alteracoes = getAlteracoes();
   var assocList  = alteracoes.associados || [];
+  var veicList   = alteracoes.veiculos   || [];
 
-  // Mesmo lookup de regional que getAnaliseChurn() — via aba "Associados Inativos"
+  // Lookup de nome/regional via abas "Associados Ativos" + "Associados Inativos"
+  // (cobre tanto cancelamento total quanto baixa parcial de veiculo com associado ainda ativo)
   var contratosMap = {};
-  try {
-    var ss        = SpreadsheetApp.getActiveSpreadsheet();
-    var abaInativ = ss.getSheetByName("Associados Inativos");
-    if (abaInativ && abaInativ.getLastRow() >= 2) {
-      var header   = abaInativ.getRange(1, 1, 1, abaInativ.getLastColumn()).getValues()[0];
-      var iCod     = header.indexOf("codigo_associado");
-      var iReg     = header.indexOf("codigo_regional");
-      var linhas   = abaInativ.getRange(2, 1, abaInativ.getLastRow() - 1, abaInativ.getLastColumn()).getValues();
+  ["Associados Ativos", "Associados Inativos"].forEach(function(nomeAba) {
+    try {
+      var ss  = SpreadsheetApp.getActiveSpreadsheet();
+      var aba = ss.getSheetByName(nomeAba);
+      if (!aba || aba.getLastRow() < 2) return;
+      var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+      var iCod    = header.indexOf("codigo_associado");
+      var iReg    = header.indexOf("codigo_regional");
+      var iNome   = header.indexOf("nome");
+      var linhas  = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
       linhas.forEach(function(row) {
         var cod = String(row[iCod] || "").trim();
         if (!cod) return;
-        contratosMap[cod] = { regional: iReg !== -1 ? String(row[iReg] || "") : "" };
+        contratosMap[cod] = {
+          regional: iReg  !== -1 ? String(row[iReg]  || "") : "",
+          nome:     iNome !== -1 ? String(row[iNome] || "") : ""
+        };
       });
+    } catch(e) {
+      Logger.log("Aviso: não foi possível ler " + nomeAba + " — " + e.message);
     }
-  } catch(e) {
-    Logger.log("Aviso: não foi possível ler Associados Inativos — " + e.message);
-  }
+  });
 
   var REGIONAL_NAMES = { "1": "Ipatinga", "2": "Betim" };
+  var regionalDe = function(cod) {
+    var codReg = (contratosMap[cod] || {}).regional || "";
+    return REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional");
+  };
 
   var eventos = [];
+
+  // Reativações — nivel associado (mesma fonte usada no historico_mensal.reativacoes)
   assocList.forEach(function(a) {
     var de   = String(a.valor_anterior  || "").trim();
     var para = String(a.valor_posterior || "").trim();
-    var tipo = null;
-    if (de === "1" && para === "2")       tipo = "cancelamento";
-    else if (de === "2" && para === "1")  tipo = "reativacao";
-    if (!tipo) return;
+    if (de !== "2" || para !== "1") return;
 
-    var cod      = String(a.codigo_associado || "");
-    var info     = contratosMap[cod] || {};
-    var codReg   = info.regional || "";
-    var regNome  = REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional");
-    var operadora = String(a.nome_usuario_alteracao || "").trim() || "Sem Operadora";
-
+    var cod = String(a.codigo_associado || "");
     eventos.push({
-      tipo:             tipo,
+      tipo:             "reativacao",
       codigo_associado: a.codigo_associado,
       nome:             a.nome_associado || "",
       data_evento:      String(a.data_alteracao || "").substring(0, 10),
-      regional:         regNome,
-      operadora:        operadora
+      regional:         regionalDe(cod),
+      operadora:        String(a.nome_usuario_alteracao || "").trim() || "Sem Operadora"
+    });
+  });
+
+  // Cancelamentos — nivel veiculo (mesma fonte usada no historico_mensal.cancelamentos_veiculo
+  // e no grafico "Novos · Reativações · Cancelamentos por Mês")
+  veicList.forEach(function(v) {
+    var de   = String(v.valor_anterior  || "").trim();
+    var para = String(v.valor_posterior || "").trim();
+    if (de !== "1" || para !== "2") return;
+
+    var cod  = String(v.codigo_associado || "");
+    var info = contratosMap[cod] || {};
+
+    eventos.push({
+      tipo:             "cancelamento",
+      codigo_associado: v.codigo_associado || "",
+      nome:             info.nome || "",
+      placa:            v.placa || "",
+      data_evento:      String(v.data_alteracao || "").substring(0, 10),
+      regional:         regionalDe(cod),
+      operadora:        String(v.nome_usuario_alteracao || "").trim() || "Sem Operadora"
     });
   });
 

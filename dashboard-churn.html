@@ -1139,7 +1139,7 @@ App.renderP1Tbl = function() {
     ? rows.map(r =>
         `<tr>
           <td>${tipoBadge(r.tipo)}</td>
-          <td><div class="td-name">${r.nome || '—'}</div><div class="td-sub">Cód. ${r.codigo_associado || '—'}</div></td>
+          <td><div class="td-name">${r.nome || '—'}</div><div class="td-sub">Cód. ${r.codigo_associado || '—'}${r.placa ? ' · Placa ' + r.placa : ''}</div></td>
           <td>${this.fmtDate(r.data_evento)}</td>
           <td>${r.regional || '—'}</td>
           <td>${r.operadora || '—'}</td>
