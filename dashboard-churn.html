@@ -218,7 +218,7 @@ td{padding:8px 10px;vertical-align:middle}
 
     <!-- VIEW 1: SAÚDE DA BASE -->
     <div class="view active" id="view-p1">
-      <!-- FILTROS: PERÍODO + TIPO + REGIONAL + OPERADOR -->
+      <!-- FILTROS: PERÍODO + REGIONAL + OPERADOR -->
       <div class="card-section" style="margin-bottom:12px">
         <div style="padding:10px 14px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <span style="font-size:11px;font-weight:600;color:var(--muted);margin-right:4px">Período</span>
@@ -231,12 +231,6 @@ td{padding:8px 10px;vertical-align:middle}
           <input type="date" class="search-input" id="p1-de"  style="width:130px;flex:none" onchange="App.setPeriodoP1Custom()">
           <span style="font-size:11px;color:var(--muted)">Até</span>
           <input type="date" class="search-input" id="p1-ate" style="width:130px;flex:none" onchange="App.setPeriodoP1Custom()">
-        </div>
-        <div style="padding:6px 14px 10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;border-top:var(--bw) solid var(--border)">
-          <span style="font-size:11px;font-weight:600;color:var(--muted);margin-right:4px">Tipo</span>
-          <button class="p2-pill active" data-p1t="todos"        onclick="App.setTipoP1('todos')">Todos</button>
-          <button class="p2-pill"        data-p1t="cancelamento" onclick="App.setTipoP1('cancelamento')">Cancelamentos</button>
-          <button class="p2-pill"        data-p1t="reativacao"   onclick="App.setTipoP1('reativacao')">Reativações</button>
           <span style="font-size:11px;color:var(--muted);margin-left:8px">Regional</span>
           <select class="filter-select" id="p1-fil-reg" onchange="App.aplicarFiltrosP1()"><option value="">Todas</option></select>
           <span style="font-size:11px;color:var(--muted)">Operador</span>
