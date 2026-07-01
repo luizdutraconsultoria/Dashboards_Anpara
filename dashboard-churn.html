@@ -180,6 +180,11 @@ td{padding:8px 10px;vertical-align:middle}
     <span class="tip">Saúde da Base</span>
   </button>
 
+  <button class="nav-btn" data-view="fechamento">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    <span class="tip">Fechamento Mensal</span>
+  </button>
+
   <!-- VIEW P2 e P3 arquivadas — descomentar para reativar
   <button class="nav-btn" data-view="p2">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -425,6 +430,44 @@ td{padding:8px 10px;vertical-align:middle}
       </div>
     </div>
 
+    <!-- VIEW FECHAMENTO: FECHAMENTO MENSAL DE PLACAS -->
+    <div class="view" id="view-fechamento">
+      <div class="kpi-grid" id="fm-kpis">
+        <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
+        <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
+        <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
+        <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
+      </div>
+
+      <div class="chart-card" id="fm-chart-wrap">
+        <div class="chart-title">Placas Ativas no Fechamento</div>
+        <div class="chart-canvas-wrap" style="height:240px"><canvas id="chart-fm"></canvas></div>
+      </div>
+
+      <div class="card-section">
+        <div class="card-section-header">
+          <span class="card-section-title">Fechamentos Registrados</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn-export" id="exp-fm">↓ CSV</button>
+            <button class="btn-export" id="btn-registrar-fm">📅 Registrar fechamento agora</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="tbl-fm">
+            <thead><tr>
+              <th>Mês</th>
+              <th>Data do Snapshot</th>
+              <th>Placas Ativas</th>
+              <th>Associados Ativos</th>
+              <th>Variação</th>
+              <th>Fonte</th>
+            </tr></thead>
+            <tbody id="body-fm"><tr><td colspan="6"><div class="empty-state">Carregando…</div></td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 </div><!-- /app -->
@@ -479,13 +522,14 @@ const App = {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-' + viewId).classList.add('active');
     document.querySelectorAll('.nav-btn[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === viewId));
-    const titles = { p1:'Saúde da Base', p2:'Zona de Risco', p3:'Por que Cancela' };
+    const titles = { p1:'Saúde da Base', p2:'Zona de Risco', p3:'Por que Cancela', fechamento:'Fechamento Mensal' };
     document.getElementById('topbarTitle').textContent = titles[viewId];
     if (this.loadedViews[viewId]) return;
     try {
       if (viewId === 'p1') await this.renderP1();
       else if (viewId === 'p2') await this.renderP2();
       else if (viewId === 'p3') await this.renderP3();
+      else if (viewId === 'fechamento') await this.renderFechamento();
       this.loadedViews[viewId] = true;
       this.lastUpdate = new Date();
       this.updateTs();
@@ -747,6 +791,117 @@ const App = {
     this.atualizarVisualFiltroP3();
   },
 
+  /* ======= VIEW FECHAMENTO MENSAL ======= */
+  async renderFechamento() {
+    const data = await this.apiFetch('snapshots_mensais');
+    const fechamentos = (Array.isArray(data) ? data : []).slice().sort((a, b) => String(a.mes).localeCompare(String(b.mes)));
+    this.fmData = fechamentos;
+    this.renderFechamentoUI();
+  },
+
+  renderFechamentoUI() {
+    const fechamentos = this.fmData || [];
+    const ultimo   = fechamentos[fechamentos.length - 1];
+    const anterior = fechamentos[fechamentos.length - 2];
+    const variacao = (ultimo && anterior) ? (ultimo.placas_ativas - anterior.placas_ativas) : null;
+
+    document.getElementById('fm-kpis').innerHTML = `
+      <div class="card">
+        <div class="kpi-label">Último Fechamento</div>
+        <div class="kpi-value">${ultimo ? this.fmtDateShort(ultimo.mes + '-01') : '—'}</div>
+        <div class="kpi-sub">${ultimo ? this.fmtDateHora(ultimo.data_snapshot) : 'nenhum registro'}</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label">Placas no Último Fechamento</div>
+        <div class="kpi-value">${ultimo ? this.fmt(ultimo.placas_ativas) : '—'}</div>
+        <div class="kpi-sub">${ultimo ? this.fmt(ultimo.associados_ativos) + ' associados ativos' : '—'}</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label">Variação vs Mês Anterior</div>
+        <div class="kpi-value ${variacao == null ? '' : (variacao >= 0 ? 'green' : 'red')}">${variacao == null ? '—' : (variacao > 0 ? '+' : '') + this.fmt(variacao)}</div>
+        <div class="kpi-sub">${anterior ? 'vs ' + this.fmtDateShort(anterior.mes + '-01') : 'sem mês anterior'}</div>
+      </div>
+      <div class="card">
+        <div class="kpi-label">Total de Fechamentos</div>
+        <div class="kpi-value">${this.fmt(fechamentos.length)}</div>
+        <div class="kpi-sub">registros na aba Snapshots Mensais</div>
+      </div>`;
+
+    const labels = fechamentos.map(f => this.fmtDateShort(f.mes + '-01'));
+    const vals   = fechamentos.map(f => f.placas_ativas || 0);
+    const cores  = fechamentos.map(f => f.fonte === 'manual' ? '#D9A441' : '#1D9E75');
+
+    if (this.charts.fm) this.charts.fm.destroy();
+    this.charts.fm = new Chart(document.getElementById('chart-fm'), {
+      type: 'line',
+      data: { labels, datasets: [
+        { label: 'Placas Ativas no Fechamento', data: vals, borderColor: '#3B82F6', backgroundColor: 'transparent',
+          pointBackgroundColor: cores, pointBorderColor: cores, pointRadius: 4, borderWidth: 2, tension: 0.2 }
+      ]},
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => 'Placas: ' + this.fmt(ctx.parsed.y),
+              afterLabel: (ctx) => {
+                const f = fechamentos[ctx.dataIndex];
+                if (!f) return '';
+                return 'Snapshot: ' + this.fmtDateHora(f.data_snapshot) + '\nFonte: ' + (f.fonte === 'manual' ? 'Manual' : 'Automático');
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#6B6B67' } },
+          y: { grid: { color: '#F1EFE8' }, ticks: { font: { size: 10 }, color: '#6B6B67' } }
+        }
+      }
+    });
+
+    const ordenados = fechamentos.slice().reverse();
+    const tbody = document.getElementById('body-fm');
+    tbody.innerHTML = ordenados.length ? ordenados.map((f, i) => {
+      const anteriorRow = ordenados[i + 1];
+      const delta = anteriorRow ? f.placas_ativas - anteriorRow.placas_ativas : null;
+      const deltaTxt = delta == null ? '—' : (delta > 0 ? '+' : '') + this.fmt(delta);
+      const deltaClass = delta == null ? '' : (delta >= 0 ? 'pos' : 'neg');
+      const badge = f.fonte === 'manual' ? '<span class="badge badge-amber">Manual</span>' : '<span class="badge badge-green">Auto</span>';
+      return `<tr>
+        <td>${this.fmtDateShort(f.mes + '-01')}</td>
+        <td>${this.fmtDateHora(f.data_snapshot)}</td>
+        <td>${this.fmt(f.placas_ativas)}</td>
+        <td>${this.fmt(f.associados_ativos)}</td>
+        <td><span class="kpi-delta ${deltaClass}">${deltaTxt}</span></td>
+        <td>${badge}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="6"><div class="empty-state">Nenhum fechamento registrado</div></td></tr>';
+  },
+
+  async registrarFechamentoAgora() {
+    const btn = document.getElementById('btn-registrar-fm');
+    btn.disabled = true;
+    const textoOriginal = btn.textContent;
+    btn.textContent = 'Registrando...';
+    try {
+      const cacheKey = 'registrar_fechamento';
+      delete this.cache[cacheKey];
+      delete this.cache['snapshots_mensais'];
+      const r = await this.apiFetch('registrar_fechamento');
+      if (r && r.erro) throw new Error(r.erro);
+      await this.renderFechamento();
+    } catch(e) {
+      const view = document.getElementById('view-fechamento');
+      const banner = document.createElement('div');
+      banner.className = 'error-banner';
+      banner.textContent = 'Erro ao registrar fechamento: ' + e.message;
+      view.prepend(banner);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+    }
+  },
+
   /* ======= TABLE RENDERER ======= */
   renderTbl(id) {
     const s = this.tables[id];
@@ -949,6 +1104,10 @@ const App = {
       const d = new Date(s.length === 10 ? s + 'T00:00:00' : s);
       return String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
     } catch(e) { return s; }
+  },
+  fmtDateHora(s) {
+    if (!s) return '—';
+    try { return new Date(s).toLocaleString('pt-BR'); } catch(e) { return s; }
   },
   diasParaTempo(dias) {
     if (dias == null || dias === '') return '—';
@@ -1363,6 +1522,17 @@ document.addEventListener('DOMContentLoaded', () => {
       'eventos_churn.csv'
     );
   });
+
+  // Fechamento Mensal
+  document.getElementById('exp-fm').addEventListener('click', () => {
+    const fechamentos = (App.fmData || []).slice().reverse();
+    App.exportCSV(
+      ['Mês','Data do Snapshot','Placas Ativas','Associados Ativos','Fonte'],
+      fechamentos.map(f => [App.fmtDateShort(f.mes + '-01'), App.fmtDateHora(f.data_snapshot), f.placas_ativas, f.associados_ativos, f.fonte === 'manual' ? 'Manual' : 'Auto']),
+      'fechamentos_mensais.csv'
+    );
+  });
+  document.getElementById('btn-registrar-fm').addEventListener('click', () => App.registrarFechamentoAgora());
 
   // Timestamp updater
   setInterval(() => App.updateTs(), 30000);

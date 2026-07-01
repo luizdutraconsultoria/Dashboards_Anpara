@@ -44,6 +44,8 @@ function onOpen() {
     .addItem("📅 Agendar Snapshot de Fim de Mês", "agendarSnapshotFimMes")
     .addItem("🕰️ Preencher Histórico (últimos 12 meses)", "backfillSnapshots")
     .addSeparator()
+    .addItem("📅 Registrar Fechamento Mensal (Manual)", "salvarFechamentoManual")
+    .addSeparator()
     .addItem("📅 Reconstruir Histórico de Cancelamentos (3 anos)", "reconstruirHistoricoCancelamentos")
     .addItem("📈 Analisar Cancelamentos 60 e 90 dias", "analisarCancelamentos60e90")
     .addSeparator()
@@ -513,11 +515,98 @@ function snapshotFimMes() {
   var amanha = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 1);
   if (amanha.getDate() !== 1) return;
   try {
-    var r = _salvarSnapshotCore();
-    Logger.log("Snapshot fim de mês: " + r.data + " | Membros: " + r.ativos + " | Veículos: " + r.veiculos);
+    var r = registrarFechamentoMensal("automatico");
+    Logger.log("Fechamento mensal: " + r.mes + " | Placas ativas: " + r.placas_ativas + " | Associados ativos: " + r.associados_ativos);
   } catch(e) {
     Logger.log("Erro no snapshot de fim de mês: " + e.message + "\n" + e.stack);
   }
+}
+
+// ===================== FECHAMENTO MENSAL DE PLACAS (COMISSÕES) =====================
+// Fecha no último dia do mês (via snapshotFimMes), diferente do rateio (dia 20).
+function registrarFechamentoMensal(fonte) {
+  fonte = fonte || "manual";
+
+  var mes = Utilities.formatDate(new Date(), "America/Sao_Paulo", "yyyy-MM");
+
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName("Snapshots Mensais") || ss.insertSheet("Snapshots Mensais");
+
+  if (aba.getLastRow() === 0) {
+    aba.getRange(1, 1, 1, 5).setValues([["mes", "data_snapshot", "placas_ativas", "associados_ativos", "fonte"]]);
+    aba.getRange(1, 1, 1, 5).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
+    aba.setFrozenRows(1);
+  }
+
+  if (aba.getLastRow() > 1) {
+    var existentes = aba.getRange(2, 1, aba.getLastRow() - 1, 5).getValues();
+    for (var i = 0; i < existentes.length; i++) {
+      if (String(existentes[i][0]) === mes) {
+        return {
+          mes:               existentes[i][0],
+          data_snapshot:     existentes[i][1],
+          placas_ativas:     existentes[i][2],
+          associados_ativos: existentes[i][3],
+          fonte:             existentes[i][4]
+        };
+      }
+    }
+  }
+
+  autenticar();
+
+  var resumo = chamarAPI("/associado-ativo-inativo/listar", "get");
+  if (!resumo) throw new Error("Falha ao buscar resumo da API");
+
+  var veicResult = chamarAPI("/listar/veiculo", "post", {
+    "codigo_situacao": 1, "codigo_situacao_associado": 1,
+    "inicio_paginacao": 0, "quantidade_por_pagina": 1
+  });
+  var placasAtivas     = veicResult ? (parseInt(veicResult.total_veiculos) || 0) : 0;
+  var associadosAtivos = resumo.associados_ativos || 0;
+  var dataSnapshot      = new Date().toISOString();
+
+  aba.getRange(aba.getLastRow() + 1, 1, 1, 5).setValues([[
+    mes, dataSnapshot, placasAtivas, associadosAtivos, fonte
+  ]]);
+
+  return {
+    mes:               mes,
+    data_snapshot:     dataSnapshot,
+    placas_ativas:     placasAtivas,
+    associados_ativos: associadosAtivos,
+    fonte:             fonte
+  };
+}
+
+function salvarFechamentoManual() {
+  var ui = getUI();
+  try {
+    var r = registrarFechamentoMensal("manual");
+    ui.alert(
+      "📅 Fechamento mensal registrado!",
+      "Mês: " + r.mes + "\nPlacas ativas: " + r.placas_ativas + "\nAssociados ativos: " + r.associados_ativos,
+      ui.ButtonSet.OK
+    );
+  } catch(e) {
+    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
+    Logger.log(e.stack);
+  }
+}
+
+function getSnapshotsMensais() {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName("Snapshots Mensais");
+  if (!aba || aba.getLastRow() < 2) return [];
+
+  var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+  var dados  = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
+
+  return dados.map(function(linha) {
+    var obj = {};
+    header.forEach(function(col, i) { obj[col] = linha[i]; });
+    return obj;
+  });
 }
 
 function agendarSnapshotFimMes() {
@@ -892,6 +981,8 @@ function doGet(e) {
       case "veiculos":              resultado = getVeiculos();              break;
       case "alteracoes":            resultado = getAlteracoes();            break;
       case "snapshots":             resultado = getSnapshots();             break;
+      case "snapshots_mensais":     resultado = getSnapshotsMensais();      break;
+      case "registrar_fechamento":  resultado = registrarFechamentoMensal("manual"); break;
       case "zona_churn":            resultado = getZonaChurn();             break;
       case "panorama":              resultado = getPanorama();              break;
       case "analise_cancelamentos": resultado = getAnaliseCancelamentos();  break;
