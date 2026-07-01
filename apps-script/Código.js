@@ -36,6 +36,7 @@ function onOpen() {
     .addItem("📊 Resumo Ativos/Inativos", "extrairResumoRapido")
     .addItem("👥 Extrair Associados Ativos", "extrairAssociadosAtivos")
     .addItem("🚗 Extrair Veículos Ativos", "extrairVeiculosAtivos")
+    .addItem("🚗 Extrair Veículos Inativos", "extrairVeiculosInativos")
     .addItem("📋 Listar Situações e Motivos", "extrairSituacoesEMotivos")
     .addItem("🔄 Extrair Alterações (últimos 7 dias)", "extrairAlteracoes7dias")
     .addSeparator()
@@ -307,6 +308,14 @@ function extrairAssociadosPorSituacao(codigoSituacao, nomeAba) {
 
 // ===================== EXTRAIR VEÍCULOS =====================
 function extrairVeiculosAtivos() {
+  extrairVeiculosPorSituacao(1, "Veículos Ativos");
+}
+
+function extrairVeiculosInativos() {
+  extrairVeiculosPorSituacao(2, "Veículos Inativos");
+}
+
+function extrairVeiculosPorSituacao(codigoSituacao, nomeAba) {
   var ui = getUI();
   try {
     autenticar();
@@ -316,7 +325,7 @@ function extrairVeiculosAtivos() {
 
     while (pagina < totalRegistros) {
       var resultado = chamarAPI("/listar/veiculo", "post", {
-        "codigo_situacao":      1,
+        "codigo_situacao":      codigoSituacao,
         "inicio_paginacao":     pagina,
         "quantidade_por_pagina": 1000
       });
@@ -330,7 +339,7 @@ function extrairVeiculosAtivos() {
     if (todos.length === 0) { ui.alert("⚠️ Nenhum veículo encontrado.", "", ui.ButtonSet.OK); return; }
 
     var ss     = SpreadsheetApp.getActiveSpreadsheet();
-    var aba    = ss.getSheetByName("Veículos Ativos") || ss.insertSheet("Veículos Ativos");
+    var aba    = ss.getSheetByName(nomeAba) || ss.insertSheet(nomeAba);
     aba.clear();
     var campos = Object.keys(todos[0]);
     aba.getRange(1, 1, 1, campos.length).setValues([campos]);
@@ -891,6 +900,10 @@ function doGet(e) {
       case "novos_contratos":       resultado = getNovosContratosMes(e.parameter.de, e.parameter.ate); break;
       case "reativacoes":           resultado = getReativacoesDetalhadas(); break;
       case "eventos_churn":         resultado = getEventosChurn();          break;
+      case "limpar_cache_eventos":
+        invalidarCacheEventosChurn();
+        resultado = { ok: true, mensagem: "Cache de eventos_churn limpo." };
+        break;
       case "kpis":                  resultado = getDadosKPIs();             break;
       case "raw":                   resultado = getDadosRaw();              break;
       default: resultado = { erro: "Acao nao reconhecida: " + acao };
@@ -1363,8 +1376,21 @@ function invalidarCacheAlteracoes() {
   cache.remove('alteracoes_completo');
   cache.remove('alteracoes_chunks');
   for (var i = 0; i < 20; i++) cache.remove('alteracoes_chunk_' + i);
+  invalidarCacheEventosChurn();
   Logger.log('✅ Cache de alterações invalidado.');
   try { SpreadsheetApp.getUi().alert("✅ Cache invalidado.", "Próxima chamada buscará dados frescos.", SpreadsheetApp.getUi().ButtonSet.OK); } catch(e) {}
+}
+
+// eventos_churn é derivado de alteracoes — precisa ser limpo junto, senão fica servindo
+// a versão cacheada antiga (ate 1h) mesmo depois do codigo mudar.
+function invalidarCacheEventosChurn() {
+  var cache  = CacheService.getScriptCache();
+  var chunks = cache.get('eventos_churn_chunks');
+  if (chunks) { for (var i = 0; i < parseInt(chunks); i++) cache.remove('eventos_churn_chunk_' + i); }
+  cache.remove('eventos_churn_chunks');
+  cache.remove('eventos_churn_completo');
+  cache.remove('veiculos_placa_map');
+  Logger.log('✅ Cache de eventos_churn invalidado.');
 }
 
 // ===================== ANÁLISE CANCELAMENTOS =====================
@@ -1790,6 +1816,47 @@ function getAnaliseChurn() {
   };
 }
 
+// ===================== VEÍCULOS POR PLACA (dono + regional) =====================
+// /listar/alteracao-veiculos nao retorna codigo_associado, so placa/chassi — por isso
+// precisamos cruzar com as abas "Veículos Ativos"/"Veículos Inativos" (extraídas via
+// menu, populadas a partir de /listar/veiculo, que traz codigo_associado, nome_associado
+// e codigo_regional). Ler ao vivo da API aqui daria timeout no doGet (frota inteira).
+function getVeiculosPorPlaca() {
+  var cache  = CacheService.getScriptCache();
+  var cached = cache.get('veiculos_placa_map');
+  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+
+  var map = {};
+  ["Veículos Ativos", "Veículos Inativos"].forEach(function(nomeAba) {
+    try {
+      var ss  = SpreadsheetApp.getActiveSpreadsheet();
+      var aba = ss.getSheetByName(nomeAba);
+      if (!aba || aba.getLastRow() < 2) return;
+      var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
+      var iPlaca = header.indexOf("placa");
+      var iCod   = header.indexOf("codigo_associado");
+      var iNome  = header.indexOf("nome_associado");
+      var iReg   = header.indexOf("codigo_regional");
+      if (iPlaca === -1) return;
+      var linhas = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
+      linhas.forEach(function(row) {
+        var placa = String(row[iPlaca] || "").trim();
+        if (!placa) return;
+        map[placa] = {
+          codigo_associado: iCod  !== -1 ? String(row[iCod]  || "") : "",
+          nome:             iNome !== -1 ? String(row[iNome] || "") : "",
+          regional:         iReg  !== -1 ? String(row[iReg]  || "") : ""
+        };
+      });
+    } catch(e) {
+      Logger.log("Aviso: não foi possível ler " + nomeAba + " — " + e.message);
+    }
+  });
+
+  try { cache.put('veiculos_placa_map', JSON.stringify(map), 3600); } catch(e) {}
+  return map;
+}
+
 // ===================== EVENTOS CHURN — LISTA NORMALIZADA PARA MINI-BI =====================
 function getEventosChurn() {
   var cache = CacheService.getScriptCache();
@@ -1863,21 +1930,23 @@ function getEventosChurn() {
 
   // Cancelamentos — nivel veiculo (mesma fonte usada no historico_mensal.cancelamentos_veiculo
   // e no grafico "Novos · Reativações · Cancelamentos por Mês")
+  var veiculosPorPlaca = getVeiculosPorPlaca();
   veicList.forEach(function(v) {
     var de   = String(v.valor_anterior  || "").trim();
     var para = String(v.valor_posterior || "").trim();
     if (de !== "1" || para !== "2") return;
 
-    var cod  = String(v.codigo_associado || "");
-    var info = contratosMap[cod] || {};
+    var placa = String(v.placa || "").trim();
+    var info  = veiculosPorPlaca[placa] || {};
+    var codReg = info.regional || "";
 
     eventos.push({
       tipo:             "cancelamento",
-      codigo_associado: v.codigo_associado || "",
+      codigo_associado: info.codigo_associado || "",
       nome:             info.nome || "",
       placa:            v.placa || "",
       data_evento:      String(v.data_alteracao || "").substring(0, 10),
-      regional:         regionalDe(cod),
+      regional:         REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional"),
       operadora:        String(v.nome_usuario_alteracao || "").trim() || "Sem Operadora"
     });
   });
