@@ -1126,6 +1126,8 @@ App.renderP1Tbl = function() {
     <th class="sortable" data-col="data_evento">Data ↕</th>
     <th class="sortable" data-col="regional">Regional ↕</th>
     <th class="sortable" data-col="operadora">Operador ↕</th>
+    <th class="sortable" data-col="data_cadastro">Cadastro ↕</th>
+    <th class="sortable" data-col="data_contrato">Contrato ↕</th>
   </tr>`;
 
   const tipoBadge = t => {
@@ -1143,8 +1145,10 @@ App.renderP1Tbl = function() {
           <td>${this.fmtDate(r.data_evento)}</td>
           <td>${r.regional || '—'}</td>
           <td>${r.operadora || '—'}</td>
+          <td>${this.fmtDate(r.data_cadastro)}</td>
+          <td>${this.fmtDate(r.data_contrato)}</td>
         </tr>`).join('')
-    : '<tr><td colspan="5"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>';
+    : '<tr><td colspan="7"><div class="empty-state">Nenhum resultado encontrado</div></td></tr>';
 
   thead.querySelectorAll('th.sortable').forEach(th => {
     th.style.cursor = 'pointer';
@@ -1354,8 +1358,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // P1 export
   document.getElementById('exp-p1').addEventListener('click', () => {
     App.exportCSV(
-      ['Tipo','Código','Associado','Data','Regional','Operador'],
-      App.tables.p1.filtered.map(r => [r.tipo, r.codigo_associado, r.nome, r.data_evento, r.regional, r.operadora]),
+      ['Tipo','Código','Associado','Data','Regional','Operador','Data Cadastro','Data Contrato'],
+      App.tables.p1.filtered.map(r => [r.tipo, r.codigo_associado, r.nome, r.data_evento, r.regional, r.operadora, r.data_cadastro, r.data_contrato]),
       'eventos_churn.csv'
     );
   });

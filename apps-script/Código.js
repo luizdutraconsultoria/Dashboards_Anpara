@@ -1833,19 +1833,23 @@ function getVeiculosPorPlaca() {
       var aba = ss.getSheetByName(nomeAba);
       if (!aba || aba.getLastRow() < 2) return;
       var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
-      var iPlaca = header.indexOf("placa");
-      var iCod   = header.indexOf("codigo_associado");
-      var iNome  = header.indexOf("nome_associado");
-      var iReg   = header.indexOf("codigo_regional");
+      var iPlaca   = header.indexOf("placa");
+      var iCod     = header.indexOf("codigo_associado");
+      var iNome    = header.indexOf("nome_associado");
+      var iReg     = header.indexOf("codigo_regional");
+      var iDtCad   = header.indexOf("data_cadastro");
+      var iDtContr = header.indexOf("data_contrato");
       if (iPlaca === -1) return;
       var linhas = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
       linhas.forEach(function(row) {
         var placa = String(row[iPlaca] || "").trim();
         if (!placa) return;
         map[placa] = {
-          codigo_associado: iCod  !== -1 ? String(row[iCod]  || "") : "",
-          nome:             iNome !== -1 ? String(row[iNome] || "") : "",
-          regional:         iReg  !== -1 ? String(row[iReg]  || "") : ""
+          codigo_associado: iCod     !== -1 ? String(row[iCod]     || "") : "",
+          nome:             iNome    !== -1 ? String(row[iNome]    || "") : "",
+          regional:         iReg     !== -1 ? String(row[iReg]     || "") : "",
+          data_cadastro:    iDtCad   !== -1 ? String(row[iDtCad]   || "").substring(0, 10) : "",
+          data_contrato:    iDtContr !== -1 ? String(row[iDtContr] || "").substring(0, 10) : ""
         };
       });
     } catch(e) {
@@ -1886,16 +1890,20 @@ function getEventosChurn() {
       var aba = ss.getSheetByName(nomeAba);
       if (!aba || aba.getLastRow() < 2) return;
       var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
-      var iCod    = header.indexOf("codigo_associado");
-      var iReg    = header.indexOf("codigo_regional");
-      var iNome   = header.indexOf("nome");
+      var iCod     = header.indexOf("codigo_associado");
+      var iReg     = header.indexOf("codigo_regional");
+      var iNome    = header.indexOf("nome");
+      var iDtCad   = header.indexOf("data_cadastro_associado");
+      var iDtContr = header.indexOf("data_contrato_associado");
       var linhas  = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
       linhas.forEach(function(row) {
         var cod = String(row[iCod] || "").trim();
         if (!cod) return;
         contratosMap[cod] = {
-          regional: iReg  !== -1 ? String(row[iReg]  || "") : "",
-          nome:     iNome !== -1 ? String(row[iNome] || "") : ""
+          regional:      iReg     !== -1 ? String(row[iReg]     || "") : "",
+          nome:          iNome    !== -1 ? String(row[iNome]    || "") : "",
+          data_cadastro: iDtCad   !== -1 ? String(row[iDtCad]   || "").substring(0, 10) : "",
+          data_contrato: iDtContr !== -1 ? String(row[iDtContr] || "").substring(0, 10) : ""
         };
       });
     } catch(e) {
@@ -1917,14 +1925,17 @@ function getEventosChurn() {
     var para = String(a.valor_posterior || "").trim();
     if (de !== "2" || para !== "1") return;
 
-    var cod = String(a.codigo_associado || "");
+    var cod  = String(a.codigo_associado || "");
+    var info = contratosMap[cod] || {};
     eventos.push({
       tipo:             "reativacao",
       codigo_associado: a.codigo_associado,
       nome:             a.nome_associado || "",
       data_evento:      String(a.data_alteracao || "").substring(0, 10),
       regional:         regionalDe(cod),
-      operadora:        String(a.nome_usuario_alteracao || "").trim() || "Sem Operadora"
+      operadora:        String(a.nome_usuario_alteracao || "").trim() || "Sem Operadora",
+      data_cadastro:    info.data_cadastro || "",
+      data_contrato:    info.data_contrato || ""
     });
   });
 
@@ -1947,7 +1958,9 @@ function getEventosChurn() {
       placa:            v.placa || "",
       data_evento:      String(v.data_alteracao || "").substring(0, 10),
       regional:         REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional"),
-      operadora:        String(v.nome_usuario_alteracao || "").trim() || "Sem Operadora"
+      operadora:        String(v.nome_usuario_alteracao || "").trim() || "Sem Operadora",
+      data_cadastro:    info.data_cadastro || "",
+      data_contrato:    info.data_contrato || ""
     });
   });
 
