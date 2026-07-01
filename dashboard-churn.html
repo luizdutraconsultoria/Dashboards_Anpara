@@ -1035,7 +1035,7 @@ App.setTipoP1 = function(tipo) {
   this.aplicarFiltrosP1();
 };
 
-App.getNovosNoPeriodo = function(from, to) {
+App.sumHistoricoCampo = function(from, to, campo) {
   const meses = this.p1HistoricoPorMes || [];
   const pad   = n => String(n).padStart(2, '0');
   const mesFrom = from ? `${from.getFullYear()}-${pad(from.getMonth()+1)}` : null;
@@ -1043,8 +1043,12 @@ App.getNovosNoPeriodo = function(from, to) {
   return meses.reduce((sum, m) => {
     if (mesFrom && m.mes < mesFrom) return sum;
     if (mesTo   && m.mes > mesTo)   return sum;
-    return sum + (m.novos || 0);
+    return sum + (m[campo] || 0);
   }, 0);
+};
+
+App.getNovosNoPeriodo = function(from, to) {
+  return this.sumHistoricoCampo(from, to, 'novos');
 };
 
 App.aplicarFiltrosP1 = function() {
@@ -1067,7 +1071,7 @@ App.aplicarFiltrosP1 = function() {
   if (operador) base = base.filter(e => e.operadora === operador);
   if (q) base = base.filter(e => Object.values(e).some(v => String(v||'').toLowerCase().includes(q)));
 
-  const cancelCount = base.filter(e => e.tipo === 'cancelamento').length;
+  const cancelCount = this.sumHistoricoCampo(from, to, 'cancelamentos_veiculo');
   const reatCount   = base.filter(e => e.tipo === 'reativacao').length;
   const novosMes    = this.getNovosNoPeriodo(from, to);
   const saldo       = reatCount - cancelCount;
@@ -1088,7 +1092,7 @@ App.aplicarFiltrosP1 = function() {
     <div class="card kpi-clickable${tipoAtivo === 'cancelamento' ? ' fi-active' : ''}" onclick="App.setTipoP1('cancelamento')" title="Filtrar: Cancelamentos">
       <div class="kpi-label">Cancelamentos</div>
       <div class="kpi-value${cancelCount > 0 ? ' red' : ''}">${this.fmt(cancelCount)}</div>
-      <div class="kpi-sub">associados no período</div>
+      <div class="kpi-sub">veículos no período</div>
     </div>
     <div class="card kpi-clickable${tipoAtivo === 'reativacao' ? ' fi-active' : ''}" onclick="App.setTipoP1('reativacao')" title="Filtrar: Reativações">
       <div class="kpi-label">Reativações</div>
