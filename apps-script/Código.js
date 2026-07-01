@@ -891,6 +891,8 @@ function doGet(e) {
       case "novos_contratos":       resultado = getNovosContratosMes(e.parameter.de, e.parameter.ate); break;
       case "reativacoes":           resultado = getReativacoesDetalhadas(); break;
       case "eventos_churn":         resultado = getEventosChurn();          break;
+      case "kpis":                  resultado = getDadosKPIs();             break;
+      case "raw":                   resultado = getDadosRaw();              break;
       default: resultado = { erro: "Acao nao reconhecida: " + acao };
     }
   } catch(err) {
@@ -1474,7 +1476,7 @@ function getNovosContratosPorMes() {
           'Content-Type':  'application/json',
           'Accept':        'application/json'
         },
-        payload:            JSON.stringify({ from: from, to: to, stringFilterTypeDate: 3 }),
+        payload:            JSON.stringify({ from: from, to: to, stringFilterTypeDate: 1 }),
         muteHttpExceptions: true
       });
 
@@ -1539,7 +1541,7 @@ function getNovosContratosMes(de, ate) {
         'Content-Type':  'application/json',
         'Accept':        'application/json'
       },
-      payload:            JSON.stringify({ from: from, to: to, stringFilterTypeDate: 3 }),
+      payload:            JSON.stringify({ from: from, to: to, stringFilterTypeDate: 1 }),
       muteHttpExceptions: true
     });
 
@@ -2069,4 +2071,190 @@ function testarDoGet() {
   });
   var msg = Object.keys(resultados).map(function(k) { return k + ": " + resultados[k]; }).join("\n");
   ui.alert("Teste doGet", msg, ui.ButtonSet.OK);
+}
+
+// ===================== KPIs AGREGADOS — DASHBOARD COMERCIAL =====================
+function getDadosKPIs() {
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName('kpis');
+  if (!aba) return { erro: 'Aba kpis nao encontrada' };
+
+  var valores   = aba.getDataRange().getValues();
+  var resultado = {
+    porMes: [], porVendedor: [], porStatus: [],
+    porOrigem: [], porPlano: [], motivosPerda: [], totais: {}
+  };
+  var secao = null;
+
+  function str(v) {
+    if (v === null || v === undefined || v === '') return '';
+    if (v instanceof Date) {
+      var y = v.getFullYear();
+      var m = ('0' + (v.getMonth()+1)).slice(-2);
+      return y + '-' + m;
+    }
+    return String(v).trim();
+  }
+
+  for (var i = 0; i < valores.length; i++) {
+    var row   = valores[i];
+    var campo = str(row[0]);
+    if (!campo) continue;
+
+    if (campo.indexOf('KPIs por mes')      !== -1) { secao = 'mes';      continue; }
+    if (campo.indexOf('KPIs por vendedor') !== -1) { secao = 'vendedor'; continue; }
+    if (campo.indexOf('Funil por status')  !== -1) { secao = 'status';   continue; }
+    if (campo.indexOf('Motivos de perda')  !== -1) { secao = 'perda';    continue; }
+    if (campo.indexOf('Por origem')        !== -1) { secao = 'origem';   continue; }
+    if (campo.indexOf('Por plano')         !== -1) { secao = 'plano';    continue; }
+    if (campo.indexOf('Totais gerais')     !== -1) { secao = 'totais';   continue; }
+    if (campo.startsWith('##'))                    { secao = null;        continue; }
+    if (campo === 'mes' || campo === 'vendedor' || campo === 'status' ||
+        campo === 'motivo' || campo === 'origem' || campo === 'plano')  continue;
+
+    if (secao === 'mes' && campo.match(/^\d{4}-\d{2}$/)) {
+      resultado.porMes.push({
+        mes:           campo,
+        leads:         Number(row[1]) || 0,
+        oportunidades: Number(row[2]) || 0,
+        propostas:     Number(row[3]) || 0,
+        vendas:        Number(row[4]) || 0,
+        receita:       Number(row[5]) || 0,
+        perdas:        Number(row[6]) || 0
+      });
+    } else if (secao === 'vendedor' && campo) {
+      var conv = row[4];
+      if (conv instanceof Date) conv = 0;
+      conv = parseFloat(String(conv).replace(',','.')) || 0;
+      resultado.porVendedor.push({
+        vendedor:  campo,
+        leads:     Number(row[1]) || 0,
+        vendas:    Number(row[2]) || 0,
+        receita:   Number(row[3]) || 0,
+        conversao: conv,
+        perdas:    Number(row[5]) || 0
+      });
+    } else if (secao === 'status' && campo) {
+      resultado.porStatus.push({ status: campo, quantidade: Number(row[1]) || 0 });
+    } else if (secao === 'perda' && campo && campo !== 'Nenhum registro arquivado encontrado') {
+      resultado.motivosPerda.push({ motivo: campo, quantidade: Number(row[1]) || 0 });
+    } else if (secao === 'origem' && campo) {
+      resultado.porOrigem.push({ origem: campo, quantidade: Number(row[1]) || 0 });
+    } else if (secao === 'plano' && campo) {
+      resultado.porPlano.push({ plano: campo, quantidade: Number(row[1]) || 0 });
+    } else if (secao === 'totais' && campo) {
+      resultado.totais[campo] = row[1];
+    }
+  }
+  return resultado;
+}
+
+// ===================== DADOS BRUTOS — DASHBOARD COMERCIAL (LIVE, POWER CRM) =====================
+// Sem cache: busca ao vivo. A API exige from/to e nao suporta range amplo numa unica
+// chamada (sem from/to = HTTP 500; range de anos = HTTP 502), entao pagina mes a mes.
+function getDadosRaw() {
+  function fmtData(v) {
+    if (v === null || v === undefined || v === '') return '';
+    var s = String(v).trim();
+    if (!s || s === '0' || s === '-' || s === 'null' || s === 'undefined') return '';
+    if (s.indexOf('/') !== -1) {
+      var parte = s.split(' - ')[0].trim();
+      var pts   = parte.split('/');
+      if (pts.length >= 3) {
+        var dia = pts[0].trim().padStart(2,'0');
+        var mes = pts[1].trim().padStart(2,'0');
+        var ano = pts[2].trim().slice(0,4);
+        if (ano.length === 4 && !isNaN(+ano)) return ano + '-' + mes + '-' + dia;
+      }
+    }
+    if (s.match(/^\d{4}-\d{2}-\d{2}/)) return s.slice(0,10);
+    return '';
+  }
+
+  var dados    = [];
+  var hoje     = new Date();
+  var mesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+
+  for (var d = new Date(2024, 0, 1); d <= mesAtual; d.setMonth(d.getMonth() + 1)) {
+    var ano    = d.getFullYear();
+    var mesNum = d.getMonth() + 1;
+    var mesStr = ano + '-' + (mesNum < 10 ? '0' + mesNum : mesNum);
+    var ultimo = new Date(ano, mesNum, 0).getDate();
+    var from   = mesStr + '-01';
+    var to     = mesStr + '-' + (ultimo < 10 ? '0' + ultimo : ultimo);
+
+    try {
+      var resp = UrlFetchApp.fetch(POWER_CRM_URL + '/api/report/db', {
+        method:  'POST',
+        headers: {
+          'Authorization': 'Bearer ' + POWER_CRM_TOKEN,
+          'Content-Type':  'application/json',
+          'Accept':        'application/json'
+        },
+        payload:            JSON.stringify({ from: from, to: to, stringFilterTypeDate: 1 }),
+        muteHttpExceptions: true
+      });
+
+      if (resp.getResponseCode() !== 200) {
+        Logger.log('getDadosRaw ' + mesStr + ': HTTP ' + resp.getResponseCode());
+        Utilities.sleep(400);
+        continue;
+      }
+
+      var data  = JSON.parse(resp.getContentText());
+      var lista = Array.isArray(data) ? data
+        : (data.data || data.content || data.result || data.records || data.items || []);
+
+      lista.forEach(function(row) {
+        var arq = (row.isShelved === 'S' || row.isShelved === true || row.isShelved === 1
+                || String(row.isShelved).toUpperCase() === 'TRUE');
+
+        var precoStr = String(row.monthlyPaymentsPrice || '0')
+          .replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+        var preco = parseFloat(precoStr) || 0;
+
+        var statusAtual = parseInt(row.cardStatus) || 0;
+        var dtVenda = '';
+        if (statusAtual === 5 && !arq) {
+          dtVenda = fmtData(row.inspectionFinalizedDate) || fmtData(row.sentToHinovaDate);
+        }
+
+        dados.push([
+          fmtData(row.createdDate),
+          fmtData(row.quotationNegotiatingDate),
+          fmtData(row.clearForInspectionDate),
+          fmtData(row.inspectionFinalizedDate),
+          dtVenda,
+          fmtData(row.quoteShelvedDate),
+          arq ? 1 : 0,
+          preco,
+          String(row.responsibleSalesman || '').trim(),
+          String(row.namePlan || '').trim(),
+          String(row.quotationLeadSource || row.quotationOrigin || '').trim(),
+          String(row.shelvedReason || '').trim(),
+          String(row.cooperative || '').trim(),
+          String(row.cardId || '').trim(),
+          String(row.quotationCode || '').trim(),
+          String(row.clientName || '').trim(),
+          String(row.clientMobile || row.clientPhone || '').trim(),
+          String(row.vehiclePlates || '').trim(),
+          String(row.vehicleBrand || '').trim(),
+          String(row.vehicleModel || '').trim(),
+          String(row.vehicleModelYear || '').trim()
+        ]);
+      });
+
+    } catch(e) {
+      Logger.log('getDadosRaw erro ' + mesStr + ': ' + e.message);
+    }
+    Utilities.sleep(400);
+  }
+
+  return {
+    cols: ['dtLead','dtNeg','dtLibVist','dtVistoria','dtVenda','dtPerda','isPerda','receita',
+           'vendedor','plano','origem','motivoPerda','unidade',
+           'cardId','quotationCode','clientName','clientPhone',
+           'vehiclePlates','vehicleBrand','vehicleModel','vehicleModelYear'],
+    dados: dados
+  };
 }
