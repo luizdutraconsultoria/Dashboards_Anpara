@@ -454,6 +454,7 @@ const App = {
   p1FiltroTipo:        'todos',
   p1Panorama:          null,
   p1HistoricoMesAtual: null,
+  p1HistoricoPorMes:   [],
   periodoP1:    'all',
   filtroP3:  { tipo: null, valor: null },
   periodoP2: 'all',
@@ -539,6 +540,7 @@ const App = {
     const porMes = (historico.por_mes || []);
     const last12 = porMes.slice(-12);
     this.p1HistoricoMesAtual = last12[last12.length - 1] || {};
+    this.p1HistoricoPorMes   = porMes;
     const barLabels = last12.map(m => { const [y, mo] = m.mes.split('-'); return mo + '/' + y.slice(2); });
     const esEl = document.getElementById('p1-es-wrap');
     esEl.innerHTML = `
@@ -1039,6 +1041,18 @@ App.setTipoP1 = function(tipo) {
   this.aplicarFiltrosP1();
 };
 
+App.getNovosNoPeriodo = function(from, to) {
+  const meses = this.p1HistoricoPorMes || [];
+  const pad   = n => String(n).padStart(2, '0');
+  const mesFrom = from ? `${from.getFullYear()}-${pad(from.getMonth()+1)}` : null;
+  const mesTo   = to   ? `${to.getFullYear()}-${pad(to.getMonth()+1)}`     : null;
+  return meses.reduce((sum, m) => {
+    if (mesFrom && m.mes < mesFrom) return sum;
+    if (mesTo   && m.mes > mesTo)   return sum;
+    return sum + (m.novos || 0);
+  }, 0);
+};
+
 App.aplicarFiltrosP1 = function() {
   if (!this.p1Panorama) return;
   const { from, to } = this.getP1PeriodoRange();
@@ -1061,7 +1075,7 @@ App.aplicarFiltrosP1 = function() {
 
   const cancelCount = base.filter(e => e.tipo === 'cancelamento').length;
   const reatCount   = base.filter(e => e.tipo === 'reativacao').length;
-  const novosMes    = (this.p1HistoricoMesAtual && this.p1HistoricoMesAtual.novos) || 0;
+  const novosMes    = this.getNovosNoPeriodo(from, to);
   const saldo       = reatCount - cancelCount;
   const pan         = this.p1Panorama;
   const tipoAtivo   = this.p1FiltroTipo;
@@ -1073,9 +1087,9 @@ App.aplicarFiltrosP1 = function() {
       <div class="kpi-sub">${this.fmt(pan.base_ativa)} associados</div>
     </div>
     <div class="card">
-      <div class="kpi-label">Novos no Mês</div>
+      <div class="kpi-label">Novos no Período</div>
       <div class="kpi-value">${this.fmt(novosMes)}</div>
-      <div class="kpi-sub" style="font-size:10px">mês corrente · Power CRM</div>
+      <div class="kpi-sub" style="font-size:10px">Power CRM · granularidade mensal</div>
     </div>
     <div class="card kpi-clickable${tipoAtivo === 'cancelamento' ? ' fi-active' : ''}" onclick="App.setTipoP1('cancelamento')" title="Filtrar: Cancelamentos">
       <div class="kpi-label">Cancelamentos</div>
