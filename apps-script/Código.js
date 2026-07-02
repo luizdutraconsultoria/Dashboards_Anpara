@@ -44,6 +44,8 @@ function onOpen() {
     .addItem("📅 Agendar Snapshot de Fim de Mês", "agendarSnapshotFimMes")
     .addItem("🕰️ Preencher Histórico (últimos 12 meses)", "backfillSnapshots")
     .addSeparator()
+    .addItem("🔥 Agendar Aquecimento de Cache a cada 15min (evita erro 524)", "agendarAquecimentoCache")
+    .addSeparator()
     .addItem("📅 Registrar Fechamento Mensal (Manual)", "salvarFechamentoManual")
     .addSeparator()
     .addItem("📅 Reconstruir Histórico de Cancelamentos (3 anos)", "reconstruirHistoricoCancelamentos")
@@ -620,9 +622,32 @@ function agendarSnapshotFimMes() {
 
 function agendarExtracaoDiaria() {
   var ui = getUI();
-  ScriptApp.getProjectTriggers().forEach(function(t) { ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === "salvarSnapshot") ScriptApp.deleteTrigger(t);
+  });
   ScriptApp.newTrigger("salvarSnapshot").timeBased().everyDays(1).atHour(6).create();
   ui.alert("⏰ Agendado!", "Snapshot diário agendado para 6h da manhã.", ui.ButtonSet.OK);
+}
+
+// ===================== AQUECIMENTO DE CACHE (evita HTTP 524 no painel) =====================
+// getAlteracoes() em cache frio faz ~53 janelas de 7 dias sequenciais e pode passar
+// de 100s, estourando o timeout do proxy Cloudflare (erro 524). Rodando isso num
+// trigger em segundo plano, o cache (TTL 1h/30min) nunca expira durante uma requisicao
+// real do dashboard — o usuario sempre pega o caminho rapido (cache quente, ~5s).
+function aquecerCaches() {
+  try { getAlteracoes(); } catch(e) { Logger.log('aquecerCaches/alteracoes: ' + e.message); }
+  try { getZonaChurn(); } catch(e) { Logger.log('aquecerCaches/zonaChurn: ' + e.message); }
+  try { getEventosChurn(); } catch(e) { Logger.log('aquecerCaches/eventosChurn: ' + e.message); }
+  try { getNovosContratosPorMes(); } catch(e) { Logger.log('aquecerCaches/novosContratos: ' + e.message); }
+}
+
+function agendarAquecimentoCache() {
+  var ui = getUI();
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === "aquecerCaches") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("aquecerCaches").timeBased().everyMinutes(15).create();
+  ui.alert("🔥 Agendado!", "Aquecimento de cache agendado a cada 15 min (evita erro 524 no painel).", ui.ButtonSet.OK);
 }
 
 // ===================== BACKFILL DE SNAPSHOTS =====================
@@ -994,6 +1019,19 @@ function doGet(e) {
       case "limpar_cache_eventos":
         invalidarCacheEventosChurn();
         resultado = { ok: true, mensagem: "Cache de eventos_churn limpo." };
+        break;
+      case "limpar_cache_novos":
+        CacheService.getScriptCache().remove('power_crm_novos');
+        resultado = { ok: true, mensagem: "Cache power_crm_novos limpo." };
+        break;
+      case "debug_novos":           resultado = debugNovosContratos();      break;
+      case "aquecer_cache":
+        aquecerCaches();
+        resultado = { ok: true, mensagem: "Caches aquecidos." };
+        break;
+      case "agendar_aquecimento":
+        agendarAquecimentoCache();
+        resultado = { ok: true, mensagem: "Trigger de aquecimento de cache agendado (a cada 15 min)." };
         break;
       case "kpis":                  resultado = getDadosKPIs();             break;
       case "raw":                   resultado = getDadosRaw();              break;
@@ -1567,16 +1605,30 @@ function lerAba(nomeAba) {
   return { total: registros.length, aba: nomeAba, dados: registros };
 }
 
-// ===================== NOVOS CONTRATOS VIA POWER CRM =====================
-function getNovosContratosPorMes() {
-  var cache  = CacheService.getScriptCache();
-  var cached = cache.get('power_crm_novos');
-  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+// ===================== DEBUG TEMPORARIO — remover apos investigacao =====================
+function debugNovosContratos() {
+  function fmtData(v) {
+    if (v === null || v === undefined || v === '') return '';
+    var s = String(v).trim();
+    if (!s || s === '0' || s === '-' || s === 'null' || s === 'undefined') return '';
+    if (s.indexOf('/') !== -1) {
+      var parte = s.split(' - ')[0].trim();
+      var pts   = parte.split('/');
+      if (pts.length >= 3) {
+        var dia = pts[0].trim().padStart(2,'0');
+        var mes = pts[1].trim().padStart(2,'0');
+        var ano = pts[2].trim().slice(0,4);
+        if (ano.length === 4 && !isNaN(+ano)) return ano + '-' + mes + '-' + dia;
+      }
+    }
+    if (s.match(/^\d{4}-\d{2}-\d{2}/)) return s.slice(0,10);
+    return '';
+  }
 
-  var porMes = {};
-  var hoje   = new Date();
+  var out  = [];
+  var hoje = new Date();
 
-  for (var i = 11; i >= 0; i--) {
+  for (var i = 2; i >= 0; i--) {
     var d      = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
     var ano    = d.getFullYear();
     var mesNum = d.getMonth() + 1;
@@ -1597,9 +1649,91 @@ function getNovosContratosPorMes() {
         muteHttpExceptions: true
       });
 
+      if (resp.getResponseCode() !== 200) continue;
+
+      var data  = JSON.parse(resp.getContentText());
+      var lista = Array.isArray(data) ? data
+        : (data.data || data.content || data.result || data.records || data.items || []);
+
+      lista.forEach(function(row) {
+        var status    = parseInt(row.cardStatus) || 0;
+        var arquivado = row.isShelved === true || row.isShelved === 1
+                     || String(row.isShelved).toUpperCase() === 'TRUE';
+        if (status !== 5 || arquivado) return;
+
+        var dtVenda = fmtData(row.inspectionFinalizedDate) || fmtData(row.sentToHinovaDate);
+        out.push({
+          bucket:                 mesStr,
+          cardId:                 String(row.cardId || row.id || ''),
+          createdDate:            fmtData(row.createdDate),
+          inspectionFinalizedDate: row.inspectionFinalizedDate || '',
+          sentToHinovaDate:        row.sentToHinovaDate || '',
+          dtVenda:                dtVenda,
+          mesVenda:               dtVenda ? dtVenda.slice(0, 7) : mesStr
+        });
+      });
+    } catch(e) {
+      out.push({ bucket: mesStr, erro: e.message });
+    }
+    Utilities.sleep(400);
+  }
+
+  return out;
+}
+
+// ===================== NOVOS CONTRATOS VIA POWER CRM =====================
+function getNovosContratosPorMes() {
+  var cache  = CacheService.getScriptCache();
+  var cached = cache.get('power_crm_novos');
+  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+
+  function fmtData(v) {
+    if (v === null || v === undefined || v === '') return '';
+    var s = String(v).trim();
+    if (!s || s === '0' || s === '-' || s === 'null' || s === 'undefined') return '';
+    if (s.indexOf('/') !== -1) {
+      var parte = s.split(' - ')[0].trim();
+      var pts   = parte.split('/');
+      if (pts.length >= 3) {
+        var dia = pts[0].trim().padStart(2,'0');
+        var mes = pts[1].trim().padStart(2,'0');
+        var ano = pts[2].trim().slice(0,4);
+        if (ano.length === 4 && !isNaN(+ano)) return ano + '-' + mes + '-' + dia;
+      }
+    }
+    if (s.match(/^\d{4}-\d{2}-\d{2}/)) return s.slice(0,10);
+    return '';
+  }
+
+  var porMes   = {};
+  var contados = {}; // dedup por cardId — o mesmo card pode ser retornado por mais de uma busca mensal
+  var hoje     = new Date();
+
+  for (var i = 23; i >= 0; i--) {
+    var d      = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    var ano    = d.getFullYear();
+    var mesNum = d.getMonth() + 1;
+    var mesStr = ano + '-' + (mesNum < 10 ? '0' + mesNum : mesNum);
+    var ultimo = new Date(ano, mesNum, 0).getDate();
+    var from   = mesStr + '-01';
+    var to     = mesStr + '-' + (ultimo < 10 ? '0' + ultimo : ultimo);
+
+    if (!porMes[mesStr]) porMes[mesStr] = 0;
+
+    try {
+      var resp = UrlFetchApp.fetch(POWER_CRM_URL + '/api/report/db', {
+        method:  'POST',
+        headers: {
+          'Authorization': 'Bearer ' + POWER_CRM_TOKEN,
+          'Content-Type':  'application/json',
+          'Accept':        'application/json'
+        },
+        payload:            JSON.stringify({ from: from, to: to, stringFilterTypeDate: 1 }),
+        muteHttpExceptions: true
+      });
+
       if (resp.getResponseCode() !== 200) {
         Logger.log('PowerCRM ' + mesStr + ': HTTP ' + resp.getResponseCode());
-        porMes[mesStr] = 0;
         Utilities.sleep(400);
         continue;
       }
@@ -1608,19 +1742,27 @@ function getNovosContratosPorMes() {
       var lista = Array.isArray(data) ? data
         : (data.data || data.content || data.result || data.records || data.items || []);
 
-      var count = 0;
       lista.forEach(function(row) {
         var status    = parseInt(row.cardStatus) || 0;
         var arquivado = row.isShelved === true || row.isShelved === 1
                      || String(row.isShelved).toUpperCase() === 'TRUE';
-        if (status === 5 && !arquivado) count++;
-      });
+        if (status !== 5 || arquivado) return;
 
-      porMes[mesStr] = count;
-      Logger.log('PowerCRM ' + mesStr + ': ' + count + ' vendas');
+        var cardId = String(row.cardId || row.id || '');
+        if (cardId) {
+          if (contados[cardId]) return;
+          contados[cardId] = true;
+        }
+
+        // Conta pelo mes da data de fechamento real (mesma regra do dashboard-comercial:
+        // inspectionFinalizedDate/sentToHinovaDate), nao pelo mes em que o card foi
+        // criado — evita subcontar vendas fechadas em mes diferente do de criacao.
+        var dtVenda  = fmtData(row.inspectionFinalizedDate) || fmtData(row.sentToHinovaDate);
+        var mesVenda = dtVenda ? dtVenda.slice(0, 7) : mesStr;
+        porMes[mesVenda] = (porMes[mesVenda] || 0) + 1;
+      });
     } catch(e) {
       Logger.log('PowerCRM erro ' + mesStr + ': ' + e.message);
-      porMes[mesStr] = 0;
     }
     Utilities.sleep(400);
   }
@@ -1759,7 +1901,7 @@ function getHistoricoMensal() {
 
   var hoje      = new Date();
   var resultado = [];
-  for (var i = 11; i >= 0; i--) {
+  for (var i = 23; i >= 0; i--) {
     var d      = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
     var mesNum = d.getMonth() + 1;
     var mesStr = d.getFullYear() + "-" + (mesNum < 10 ? "0" + mesNum : mesNum);

@@ -250,17 +250,17 @@ td{padding:8px 10px;vertical-align:middle}
         <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
         <div class="card"><div class="skeleton" style="height:12px;width:60%;margin-bottom:8px"></div><div class="skeleton" style="height:36px;width:80%;margin-bottom:6px"></div><div class="skeleton" style="height:10px;width:50%"></div></div>
       </div>
-      <!-- Row 3 -->
-      <div class="row-2fr1fr">
-        <div class="chart-card" style="margin-bottom:0" id="p1-es-wrap">
-          <div class="skeleton" style="height:240px;border-radius:4px"></div>
-        </div>
-        <div class="chart-card" style="margin-bottom:0" id="p1-reg-wrap">
-          <div class="chart-title">Churn por Regional</div>
-          <div class="skeleton" style="height:12px;margin-bottom:8px"></div>
-          <div class="skeleton" style="height:12px;margin-bottom:8px"></div>
-          <div class="skeleton" style="height:12px"></div>
-        </div>
+      <!-- Row 3: Novos/Reativações/Cancelamentos — full width -->
+      <div class="chart-card" id="p1-es-wrap">
+        <div class="skeleton" style="height:240px;border-radius:4px"></div>
+      </div>
+
+      <!-- Row 4: Churn por Regional -->
+      <div class="chart-card" id="p1-reg-wrap">
+        <div class="chart-title">Churn por Regional</div>
+        <div class="skeleton" style="height:12px;margin-bottom:8px"></div>
+        <div class="skeleton" style="height:12px;margin-bottom:8px"></div>
+        <div class="skeleton" style="height:12px"></div>
       </div>
 
       <!-- TABELA BI — sempre visível, reage a todos os filtros -->
@@ -576,57 +576,9 @@ const App = {
 
     // Gráfico de barras — Novos/Reativações/Cancelamentos (usa historico_mensal, fonte confiável para série temporal)
     const porMes = (historico.por_mes || []);
-    const last12 = porMes.slice(-12);
-    this.p1HistoricoMesAtual = last12[last12.length - 1] || {};
+    this.p1HistoricoMesAtual = porMes[porMes.length - 1] || {};
     this.p1HistoricoPorMes   = porMes;
-    const barLabels = last12.map(m => { const [y, mo] = m.mes.split('-'); return mo + '/' + y.slice(2); });
-    const esEl = document.getElementById('p1-es-wrap');
-    esEl.innerHTML = `
-      <div class="chart-legend">
-        <div class="legend-item"><div class="legend-dot" style="background:#3B82F6"></div>Novos</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>Reativações</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div>Cancelamentos</div>
-      </div>
-      <div class="chart-title">Novos · Reativações · Cancelamentos por Mês (veículos)</div>
-      <div class="chart-canvas-wrap" style="height:200px"><canvas id="chart-es"></canvas></div>`;
-
-    if (this.charts.es) this.charts.es.destroy();
-    this.charts.es = new Chart(document.getElementById('chart-es'), {
-      type: 'bar',
-      data: { labels: barLabels, datasets: [
-        { label:'Novos',         data: last12.map(m => m.novos                 || 0), backgroundColor:'#3B82F6', borderRadius:2 },
-        { label:'Reativações',   data: last12.map(m => m.reativacoes           || 0), backgroundColor:'#1D9E75', borderRadius:2 },
-        { label:'Cancelamentos', data: last12.map(m => m.cancelamentos_veiculo || 0), backgroundColor:'#E24B4A', borderRadius:2 }
-      ]},
-      plugins: [{
-        id: 'barLabels',
-        afterDraw(chart) {
-          const { ctx } = chart;
-          chart.data.datasets.forEach((ds, di) => {
-            const meta = chart.getDatasetMeta(di);
-            meta.data.forEach((bar, i) => {
-              const val = ds.data[i];
-              if (!val) return;
-              ctx.save();
-              ctx.fillStyle = '#6B6B67';
-              ctx.font = '600 10px DM Sans, sans-serif';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'bottom';
-              ctx.fillText(Number(val).toLocaleString('pt-BR'), bar.x, bar.y - 2);
-              ctx.restore();
-            });
-          });
-        }
-      }],
-      options: { responsive:true, maintainAspectRatio:false,
-        layout: { padding: { top: 16 } },
-        plugins:{ legend:{ display:false } },
-        scales:{
-          x:{ grid:{ display:false }, ticks:{ font:{ size:10 }, color:'#6B6B67' } },
-          y:{ grid:{ color:'#F1EFE8' }, ticks:{ font:{ size:10 }, color:'#6B6B67' } }
-        }
-      }
-    });
+    this.renderChartES();
 
     // Regional — usa analise_churn (todos os 365 dias, sem filtro de período)
     const regs = (analise.por_regional || []).sort((a, b) => b.cancelamentos - a.cancelamentos);
@@ -1141,6 +1093,73 @@ const App = {
       <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${w}%"></div></div>
     </div>`;
   }
+};
+
+/* ======= P1 — Gráfico Novos/Reativações/Cancelamentos (janela própria, estilo comparativo mensal) ======= */
+App.p1ChartWindow = 12;
+
+App.setEsWindow = function(n) {
+  this.p1ChartWindow = n;
+  document.querySelectorAll('[data-esw]').forEach(b => b.classList.toggle('active', +b.dataset.esw === n));
+  this.renderChartES();
+};
+
+App.renderChartES = function() {
+  const porMes = this.p1HistoricoPorMes || [];
+  const janela = porMes.slice(-this.p1ChartWindow);
+  const barLabels = janela.map(m => { const [y, mo] = m.mes.split('-'); return mo + '/' + y.slice(2); });
+  const esEl = document.getElementById('p1-es-wrap');
+  esEl.innerHTML = `
+    <div class="chart-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#3B82F6"></div>Novos</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1D9E75"></div>Reativações</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#E24B4A"></div>Cancelamentos</div>
+    </div>
+    <div class="chart-title">Novos · Reativações · Cancelamentos por Mês (veículos)</div>
+    <div style="display:flex;gap:6px;margin:6px 0 4px">
+      <button class="p2-pill${this.p1ChartWindow===6  ? ' active' : ''}" data-esw="6"  onclick="App.setEsWindow(6)">6 meses</button>
+      <button class="p2-pill${this.p1ChartWindow===12 ? ' active' : ''}" data-esw="12" onclick="App.setEsWindow(12)">12 meses</button>
+      <button class="p2-pill${this.p1ChartWindow===24 ? ' active' : ''}" data-esw="24" onclick="App.setEsWindow(24)">24 meses</button>
+    </div>
+    <div class="chart-canvas-wrap" style="height:240px"><canvas id="chart-es"></canvas></div>`;
+
+  if (this.charts.es) this.charts.es.destroy();
+  this.charts.es = new Chart(document.getElementById('chart-es'), {
+    type: 'bar',
+    data: { labels: barLabels, datasets: [
+      { label:'Novos',         data: janela.map(m => m.novos                 || 0), backgroundColor:'#3B82F6', borderRadius:2 },
+      { label:'Reativações',   data: janela.map(m => m.reativacoes           || 0), backgroundColor:'#1D9E75', borderRadius:2 },
+      { label:'Cancelamentos', data: janela.map(m => m.cancelamentos_veiculo || 0), backgroundColor:'#E24B4A', borderRadius:2 }
+    ]},
+    plugins: [{
+      id: 'barLabels',
+      afterDraw(chart) {
+        const { ctx } = chart;
+        chart.data.datasets.forEach((ds, di) => {
+          const meta = chart.getDatasetMeta(di);
+          meta.data.forEach((bar, i) => {
+            const val = ds.data[i];
+            if (!val) return;
+            ctx.save();
+            ctx.fillStyle = '#6B6B67';
+            ctx.font = '600 10px DM Sans, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(Number(val).toLocaleString('pt-BR'), bar.x, bar.y - 2);
+            ctx.restore();
+          });
+        });
+      }
+    }],
+    options: { responsive:true, maintainAspectRatio:false,
+      layout: { padding: { top: 16 } },
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ grid:{ display:false }, ticks:{ font:{ size:10 }, color:'#6B6B67' } },
+        y:{ grid:{ color:'#F1EFE8' }, ticks:{ font:{ size:10 }, color:'#6B6B67' } }
+      }
+    }
+  });
 };
 
 /* ======= P1 — MINI-BI ======= */
