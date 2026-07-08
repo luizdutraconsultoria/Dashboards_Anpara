@@ -185,6 +185,11 @@ td{padding:8px 10px;vertical-align:middle}
     <span class="tip">Fechamento Mensal</span>
   </button>
 
+  <button class="nav-btn" data-view="comparativo">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    <span class="tip">Análise Comparativa</span>
+  </button>
+
   <!-- VIEW P2 e P3 arquivadas — descomentar para reativar
   <button class="nav-btn" data-view="p2">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -468,6 +473,13 @@ td{padding:8px 10px;vertical-align:middle}
       </div>
     </div>
 
+    <!-- VIEW COMPARATIVO: ANÁLISE COMPARATIVA (MTD vs meses anteriores) -->
+    <div class="view" id="view-comparativo">
+      <div class="chart-card" id="cmp-chart-wrap">
+        <div class="skeleton" style="height:280px;border-radius:4px"></div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 </div><!-- /main -->
 </div><!-- /app -->
@@ -522,7 +534,7 @@ const App = {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-' + viewId).classList.add('active');
     document.querySelectorAll('.nav-btn[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === viewId));
-    const titles = { p1:'Saúde da Base', p2:'Zona de Risco', p3:'Por que Cancela', fechamento:'Fechamento Mensal' };
+    const titles = { p1:'Saúde da Base', p2:'Zona de Risco', p3:'Por que Cancela', fechamento:'Fechamento Mensal', comparativo:'Análise Comparativa' };
     document.getElementById('topbarTitle').textContent = titles[viewId];
     if (this.loadedViews[viewId]) return;
     try {
@@ -530,6 +542,7 @@ const App = {
       else if (viewId === 'p2') await this.renderP2();
       else if (viewId === 'p3') await this.renderP3();
       else if (viewId === 'fechamento') await this.renderFechamento();
+      else if (viewId === 'comparativo') await this.renderComparativo();
       this.loadedViews[viewId] = true;
       this.lastUpdate = new Date();
       this.updateTs();
@@ -1162,6 +1175,120 @@ App.renderChartES = function() {
   });
 };
 
+/* ======= VIEW COMPARATIVO — Reativações/Cancelamentos: acumulado até o dia vs meses anteriores ======= */
+App.cmpMetric   = 'cancelamento';
+App.cmpWindow   = 12;
+App.cmpEventos  = [];
+
+App.renderComparativo = async function() {
+  const eventosData = await this.apiFetch('eventos_churn');
+  this.cmpEventos = eventosData.eventos || [];
+  this.renderChartComparativo();
+};
+
+App.setCmpMetric = function(m) {
+  this.cmpMetric = m;
+  this.renderChartComparativo();
+};
+
+App.setCmpWindow = function(n) {
+  this.cmpWindow = n;
+  this.renderChartComparativo();
+};
+
+App.buildComparativoMeses = function() {
+  const lastDayOfMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+  const pad = n => String(n).padStart(2, '0');
+  const eventos = (this.cmpEventos || []).filter(e => e.tipo === this.cmpMetric);
+  const hoje = new Date();
+  const diaAtual = hoje.getDate();
+  const meses = [];
+  for (let i = this.cmpWindow - 1; i >= 0; i--) {
+    const ref = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    const y = ref.getFullYear(), mi = ref.getMonth();
+    const dim = lastDayOfMonth(y, mi);
+    const mtdDia = Math.min(diaAtual, dim);
+    const de       = `${y}-${pad(mi + 1)}-01`;
+    const ateMTD   = `${y}-${pad(mi + 1)}-${pad(mtdDia)}`;
+    const ateTotal = `${y}-${pad(mi + 1)}-${pad(dim)}`;
+    const isAtual  = i === 0;
+    const mtd   = eventos.filter(e => e.data_evento >= de && e.data_evento <= ateMTD).length;
+    const total = isAtual ? null : eventos.filter(e => e.data_evento >= de && e.data_evento <= ateTotal).length;
+    meses.push({ label: pad(mi + 1) + '/' + String(y).slice(2), mtd, total, mtdDia, isAtual });
+  }
+  return meses;
+};
+
+App.renderChartComparativo = function() {
+  const meses    = this.buildComparativoMeses();
+  const isCanc   = this.cmpMetric === 'cancelamento';
+  const cor      = isCanc ? '#E24B4A' : '#1D9E75';
+  const label    = isCanc ? 'Cancelamentos' : 'Reativações';
+  const diaAtual = new Date().getDate();
+
+  const completos = meses.filter(m => m.total != null);
+  const media = completos.length
+    ? completos.reduce((s, m) => s + m.total, 0) / completos.length
+    : (meses.length ? meses.reduce((s, m) => s + m.mtd, 0) / meses.length : 0);
+
+  const wrap = document.getElementById('cmp-chart-wrap');
+  wrap.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="chart-title">Análise Comparativa — ${label} por Mês</div>
+        <div class="info-note">Barra cinza = total do mês encerrado · Barra colorida = acumulado até o dia ${diaAtual} de cada mês (comparável ao mês em curso) · Linha tracejada = média do período</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="p2-pill${isCanc  ? ' active' : ''}" data-cmpm="cancelamento" onclick="App.setCmpMetric('cancelamento')">Cancelamentos</button>
+        <button class="p2-pill${!isCanc ? ' active' : ''}" data-cmpm="reativacao"   onclick="App.setCmpMetric('reativacao')">Reativações</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin:8px 0 4px">
+      <button class="p2-pill${this.cmpWindow===6  ? ' active' : ''}" data-cmpw="6"  onclick="App.setCmpWindow(6)">6 meses</button>
+      <button class="p2-pill${this.cmpWindow===12 ? ' active' : ''}" data-cmpw="12" onclick="App.setCmpWindow(12)">12 meses</button>
+      <button class="p2-pill${this.cmpWindow===24 ? ' active' : ''}" data-cmpw="24" onclick="App.setCmpWindow(24)">24 meses</button>
+    </div>
+    <div class="chart-canvas-wrap" style="height:280px"><canvas id="chart-cmp"></canvas></div>`;
+
+  if (this.charts.cmp) this.charts.cmp.destroy();
+  this.charts.cmp = new Chart(document.getElementById('chart-cmp'), {
+    type: 'bar',
+    data: {
+      labels: meses.map(m => m.label),
+      datasets: [
+        { label:'Total do mês',      data: meses.map(m => m.total), backgroundColor:'#EDEDEB', borderRadius:2, barPercentage:.7,  categoryPercentage:.8, grouped:false },
+        { label:'Acumulado até dia ' + diaAtual, data: meses.map(m => m.mtd), backgroundColor: cor, borderRadius:2, barPercentage:.38, categoryPercentage:.8, grouped:false },
+        { type:'line', label:'Média do período', data: meses.map(() => media), borderColor:'#C08A2E', borderDash:[6,4], borderWidth:1.5, pointRadius:0, fill:false, tension:0 }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ top:16 } },
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ display:true, position:'bottom', labels:{ font:{ size:10 }, color:'#6B6B67', boxWidth:10, boxHeight:10 } },
+        tooltip:{
+          filter: item => !(item.datasetIndex === 0 && meses[item.dataIndex].total == null),
+          callbacks:{
+            label: c => {
+              const m = meses[c.dataIndex];
+              if (c.datasetIndex === 0) return ` Total do mês: ${m.total}`;
+              if (c.datasetIndex === 2) return ` Média do período: ${media.toFixed(1)}`;
+              let s = ` Acumulado (até dia ${m.mtdDia}): ${m.mtd}`;
+              if (m.total) s += ` · ${(m.mtd / m.total * 100).toFixed(0)}% do total`;
+              return s;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{ grid:{ display:false }, ticks:{ font:{ size:10 }, color:'#6B6B67' } },
+        y:{ beginAtZero:true, grid:{ color:'#F1EFE8' }, ticks:{ font:{ size:10 }, color:'#6B6B67' } }
+      }
+    }
+  });
+};
+
 /* ======= P1 — MINI-BI ======= */
 App.getP1PeriodoRange = function() {
   const now = new Date();
@@ -1252,7 +1379,7 @@ App.aplicarFiltrosP1 = function() {
   const cancelCount = this.sumHistoricoCampo(from, to, 'cancelamentos_veiculo');
   const reatCount   = base.filter(e => e.tipo === 'reativacao').length;
   const novosMes    = this.getNovosNoPeriodo(from, to);
-  const saldo       = reatCount - cancelCount;
+  const saldo       = novosMes + reatCount - cancelCount;
   const pan         = this.p1Panorama;
   const tipoAtivo   = this.p1FiltroTipo;
 
@@ -1280,7 +1407,7 @@ App.aplicarFiltrosP1 = function() {
     <div class="card">
       <div class="kpi-label">Saldo Líquido</div>
       <div class="kpi-value${saldo < 0 ? ' red' : ' green'}">${saldo >= 0 ? '+' : ''}${this.fmt(saldo)}</div>
-      <div class="kpi-sub" style="font-size:10px">reat. − cancelamentos</div>
+      <div class="kpi-sub" style="font-size:10px">vendas + reat. − cancelamentos</div>
     </div>`;
 
   const tituloEl = document.getElementById('p1-tbl-titulo');
