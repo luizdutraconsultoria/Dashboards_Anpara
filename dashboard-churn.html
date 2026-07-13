@@ -758,6 +758,8 @@ const App = {
 
   /* ======= VIEW FECHAMENTO MENSAL ======= */
   async renderFechamento() {
+    await this.apiFetch('registrar_fechamento');
+    delete this.cache['snapshots_mensais'];
     const data = await this.apiFetch('snapshots_mensais');
     const fechamentos = (Array.isArray(data) ? data : []).slice().sort((a, b) => String(a.mes).localeCompare(String(b.mes)));
     this.fmData = fechamentos;
