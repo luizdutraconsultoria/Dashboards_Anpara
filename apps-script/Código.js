@@ -52,6 +52,7 @@ function onOpen() {
     .addItem("📈 Analisar Cancelamentos 60 e 90 dias", "analisarCancelamentos60e90")
     .addSeparator()
     .addItem("🔍 Diagnosticar Motivo Cancelamento", "diagnosticarMotivoCancelamento")
+    .addItem("🧪 Testar Campo Motivo na API de Alterações", "testarCampoMotivoAlteracao")
     .addSeparator()
     .addItem("🗑️ Invalidar Cache de Alterações", "invalidarCacheAlteracoes")
     .addItem("🗑️ Invalidar Cache de Zona de Churn", "invalidarCacheZonaChurn")
@@ -639,6 +640,7 @@ function aquecerCaches() {
   try { getZonaChurn(); } catch(e) { Logger.log('aquecerCaches/zonaChurn: ' + e.message); }
   try { getEventosChurn(); } catch(e) { Logger.log('aquecerCaches/eventosChurn: ' + e.message); }
   try { getNovosContratosPorMes(); } catch(e) { Logger.log('aquecerCaches/novosContratos: ' + e.message); }
+  try { getDadosRaw(); } catch(e) { Logger.log('aquecerCaches/dadosRaw: ' + e.message); }
 }
 
 function agendarAquecimentoCache() {
@@ -877,6 +879,84 @@ function diagnosticarMotivoCancelamento() {
     "contêm o motivo nos campos título/descrição.",
     ui.ButtonSet.OK
   );
+}
+
+// ===================== TESTE: MOTIVO NA API DE ALTERAÇÕES =====================
+// Hipótese: assim como "codigo_situacao" gera uma linha de log quando muda,
+// pedir "codigo_motivo_situacao" no mesmo endpoint pode devolver o motivo
+// registrado no momento do cancelamento (valor_posterior = código do motivo).
+// Isso seria muito mais confiável do que inferir pelo histórico de atendimento.
+function testarCampoMotivoAlteracao() {
+  var ui = getUI();
+  try {
+    autenticar();
+  } catch(e) {
+    ui.alert("❌ Erro de autenticação", e.message, ui.ButtonSet.OK);
+    return;
+  }
+
+  var hoje = new Date();
+  var dIni = Utilities.formatDate(new Date(hoje.getTime() - 29 * 24 * 60 * 60 * 1000), "America/Sao_Paulo", "dd/MM/yyyy");
+  var dFim = Utilities.formatDate(hoje, "America/Sao_Paulo", "dd/MM/yyyy");
+
+  var camposTeste = ["codigo_situacao", "codigo_motivo_situacao"];
+
+  var resAssoc = chamarAPI("/listar/alteracao-associados/", "post", {
+    "data_inicial": dIni, "data_final": dFim, "campos": camposTeste
+  });
+  var resVeic = chamarAPI("/listar/alteracao-veiculos", "post", {
+    "data_inicial": dIni, "data_final": dFim, "campos": camposTeste
+  });
+
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var aba = ss.getSheetByName("Teste Motivo Alteracao") || ss.insertSheet("Teste Motivo Alteracao");
+  aba.clear();
+
+  var linhas = [["origem", "codigo_alteracao", "nome_campo_tabela", "valor_anterior", "valor_posterior", "data_alteracao", "codigo_associado_ou_veiculo"]];
+  var camposEncontrados = {};
+
+  function registrar(origem, arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function(item) {
+      var campo = item.nome_campo_tabela || "(sem nome_campo_tabela)";
+      camposEncontrados[campo] = (camposEncontrados[campo] || 0) + 1;
+      linhas.push([
+        origem,
+        item.codigo_alteracao || "",
+        campo,
+        item.valor_anterior,
+        item.valor_posterior,
+        item.data_alteracao || "",
+        item.codigo_associado || item.codigo_veiculo || ""
+      ]);
+    });
+  }
+
+  registrar("associado", resAssoc);
+  registrar("veiculo", resVeic);
+
+  if (linhas.length > 1) {
+    aba.getRange(1, 1, linhas.length, linhas[0].length).setValues(linhas);
+  } else {
+    aba.getRange(1, 1, 1, linhas[0].length).setValues(linhas);
+  }
+  aba.setFrozenRows(1);
+  aba.getRange(1, 1, 1, linhas[0].length).setFontWeight("bold").setBackground("#1a1a2e").setFontColor("#fff");
+
+  var resumo = "Janela testada: " + dIni + " a " + dFim + " (29 dias)\n\n";
+  resumo += "Campos (nome_campo_tabela) encontrados nas linhas retornadas:\n";
+  if (Object.keys(camposEncontrados).length === 0) {
+    resumo += "• Nenhum — API não retornou nenhuma alteração nesse período.\n";
+  } else {
+    Object.keys(camposEncontrados).forEach(function(k) {
+      resumo += "• " + k + ": " + camposEncontrados[k] + " ocorrências\n";
+    });
+  }
+  resumo += "\nTotal de linhas: " + (linhas.length - 1);
+  resumo += "\n\nSe aparecer 'codigo_motivo_situacao' na lista acima, o motivo está\ndisponível diretamente pela API — confira a aba 'Teste Motivo Alteracao'.";
+
+  Logger.log(resumo);
+  ui.alert("✅ Teste concluído", resumo, ui.ButtonSet.OK);
 }
 
 // ===================== FUNÇÕES DE DIAGNÓSTICO =====================
@@ -2490,9 +2570,25 @@ function getDadosKPIs() {
   return resultado;
 }
 
-// ===================== DADOS BRUTOS — DASHBOARD COMERCIAL (LIVE, POWER CRM) =====================
-// Sem cache: busca ao vivo. A API exige from/to e nao suporta range amplo numa unica
-// chamada (sem from/to = HTTP 500; range de anos = HTTP 502), entao pagina mes a mes.
+// ===================== DADOS BRUTOS — DASHBOARD COMERCIAL (POWER CRM) =====================
+// A API exige from/to e nao suporta range amplo numa unica chamada (sem from/to = HTTP 500;
+// range de anos = HTTP 502), entao pagina mes a mes. Meses realmente antigos sao imutaveis e
+// ficam em cache por ate 6h (RAW_CACHE_TTL) — sem isso a funcao faz ~30 chamadas sequenciais
+// ao Power CRM e passa de 100s por requisicao, deixando o dashboard "preso" carregando.
+// aquecerCaches() (trigger de 15/15 min) mantem esse cache sempre quente para o usuario nunca
+// cair no caminho frio.
+//
+// Um card criado num mes pode so finalizar (dtVenda) dias/semanas depois, as vezes ja no mes
+// seguinte — entao o mes anterior ao atual (e o retrasado) nao sao realmente "imutaveis" ainda.
+// Cachear esses meses recentes por 6h deixava o dashboard-comercial ate 6h atrasado em relacao
+// ao grafico do dashboard-churn (cujo cache de "novos" e global e renova a cada 1h), causando
+// contagens diferentes de vendas do mes pra quem olhasse os dois dashboards em momentos
+// proximos. RAW_CACHE_TTL_RECENTE limita esse atraso a no maximo 1h para os ultimos
+// RAW_MESES_RECENTES meses fechados; so os meses mais antigos usam o TTL longo de 6h.
+var RAW_CACHE_TTL          = 21600; // 6h — maximo permitido pelo CacheService (meses antigos, realmente imutaveis)
+var RAW_CACHE_TTL_RECENTE  = 3600;  // 1h — meses fechados recentes, ainda podem ganhar vendas novas
+var RAW_MESES_RECENTES     = 2;     // quantos meses fechados antes do atual sao tratados como "recentes"
+
 function getDadosRaw() {
   function fmtData(v) {
     if (v === null || v === undefined || v === '') return '';
@@ -2512,17 +2608,37 @@ function getDadosRaw() {
     return '';
   }
 
-  var dados    = [];
-  var hoje     = new Date();
-  var mesAtual = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  var dados      = [];
+  var hoje       = new Date();
+  var mesAtual   = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  var mesAtualStr = hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0');
+  var cache      = CacheService.getScriptCache();
 
   for (var d = new Date(2024, 0, 1); d <= mesAtual; d.setMonth(d.getMonth() + 1)) {
     var ano    = d.getFullYear();
     var mesNum = d.getMonth() + 1;
     var mesStr = ano + '-' + (mesNum < 10 ? '0' + mesNum : mesNum);
+    var mesFechado = mesStr !== mesAtualStr;
+    var mesesAtras = (mesAtual.getFullYear() * 12 + mesAtual.getMonth())
+                    - (ano * 12 + (mesNum - 1));
+    var mesRecente = mesFechado && mesesAtras <= RAW_MESES_RECENTES;
+    var ttlDoMes   = mesRecente ? RAW_CACHE_TTL_RECENTE : RAW_CACHE_TTL;
+    var cacheKey   = 'power_crm_raw_' + mesStr;
+
+    if (mesFechado) {
+      var emCache = cache.get(cacheKey);
+      if (emCache) {
+        try {
+          JSON.parse(emCache).forEach(function(linha) { dados.push(linha); });
+          continue;
+        } catch (e) { /* cache corrompido, refaz o fetch abaixo */ }
+      }
+    }
+
     var ultimo = new Date(ano, mesNum, 0).getDate();
     var from   = mesStr + '-01';
     var to     = mesStr + '-' + (ultimo < 10 ? '0' + ultimo : ultimo);
+    var linhasDoMes = [];
 
     try {
       var resp = UrlFetchApp.fetch(POWER_CRM_URL + '/api/report/db', {
@@ -2560,7 +2676,7 @@ function getDadosRaw() {
           dtVenda = fmtData(row.inspectionFinalizedDate) || fmtData(row.sentToHinovaDate);
         }
 
-        dados.push([
+        linhasDoMes.push([
           fmtData(row.createdDate),
           fmtData(row.quotationNegotiatingDate),
           fmtData(row.clearForInspectionDate),
@@ -2584,6 +2700,13 @@ function getDadosRaw() {
           String(row.vehicleModelYear || '').trim()
         ]);
       });
+
+      linhasDoMes.forEach(function(linha) { dados.push(linha); });
+
+      if (mesFechado) {
+        try { cache.put(cacheKey, JSON.stringify(linhasDoMes), ttlDoMes); }
+        catch (e) { Logger.log('getDadosRaw cache ' + mesStr + ' (provavelmente >100KB): ' + e.message); }
+      }
 
     } catch(e) {
       Logger.log('getDadosRaw erro ' + mesStr + ': ' + e.message);
