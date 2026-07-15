@@ -1115,6 +1115,7 @@ function doGet(e) {
         break;
       case "kpis":                  resultado = getDadosKPIs();             break;
       case "raw":                   resultado = getDadosRaw();              break;
+      case "forcar_atualizacao":    resultado = forcarAtualizacaoRaw();     break;
       default: resultado = { erro: "Acao nao reconhecida: " + acao };
     }
   } catch(err) {
@@ -2586,8 +2587,25 @@ function getDadosKPIs() {
 // proximos. RAW_CACHE_TTL_RECENTE limita esse atraso a no maximo 1h para os ultimos
 // RAW_MESES_RECENTES meses fechados; so os meses mais antigos usam o TTL longo de 6h.
 var RAW_CACHE_TTL          = 21600; // 6h — maximo permitido pelo CacheService (meses antigos, realmente imutaveis)
-var RAW_CACHE_TTL_RECENTE  = 3600;  // 1h — meses fechados recentes, ainda podem ganhar vendas novas
+var RAW_CACHE_TTL_RECENTE  = 900;   // 15min — meses fechados recentes, ainda podem ganhar vendas novas (mesmo intervalo do trigger aquecerCaches)
 var RAW_MESES_RECENTES     = 2;     // quantos meses fechados antes do atual sao tratados como "recentes"
+
+// Limpa o cache dos meses recentes (+ o cache global de "novos" do dashboard-churn) e
+// busca os dados na hora, para o botao "forcar agora" do dashboard-comercial. Nao mexe nos
+// meses antigos (ja imutaveis) para nao pagar o custo de ~30 chamadas sequenciais ao Power CRM.
+function forcarAtualizacaoRaw() {
+  var cache     = CacheService.getScriptCache();
+  var hoje      = new Date();
+  var mesAtual  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  var chaves    = ['power_crm_novos'];
+  for (var i = 1; i <= RAW_MESES_RECENTES; i++) {
+    var d      = new Date(mesAtual.getFullYear(), mesAtual.getMonth() - i, 1);
+    var mesStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    chaves.push('power_crm_raw_' + mesStr);
+  }
+  cache.removeAll(chaves);
+  return getDadosRaw();
+}
 
 function getDadosRaw() {
   function fmtData(v) {

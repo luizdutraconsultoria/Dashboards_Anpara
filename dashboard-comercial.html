@@ -176,6 +176,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
     <a class="btn" href="painel-analises.html" style="text-decoration:none">📊 Análise comparativa</a>
     <button class="btn" onclick="abrirReconciliacao()" id="btn-rec">⇄ Reconciliar SGA</button>
     <button class="btn" onclick="carregar()">↻ atualizar</button>
+    <button class="btn" onclick="forcarAgora()" id="btn-forcar" title="Ignora o cache dos meses recentes e busca direto no Power CRM">⚡ forçar agora</button>
   </div>
 </header>
 
@@ -300,6 +301,24 @@ async function carregar(){
     renderRaw();
   }catch(e){
     document.getElementById('lmsg').textContent='filtros indisponíveis: '+e.message;
+  }
+}
+
+async function forcarAgora(){
+  const btn = document.getElementById('btn-forcar');
+  btn.disabled = true;
+  const txtOriginal = btn.textContent;
+  btn.textContent = '⏳ atualizando...';
+  try{
+    const r = await fetch(API+'?acao=forcar_atualizacao&t='+Date.now());
+    const d = await r.json();
+    if(d.erro) throw new Error(d.erro);
+    await carregar();
+  }catch(e){
+    alert('Erro ao forçar atualização: '+e.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = txtOriginal;
   }
 }
 
