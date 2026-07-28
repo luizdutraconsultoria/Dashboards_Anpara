@@ -39,6 +39,7 @@ function onOpen() {
     .addItem("🚗 Extrair Veículos Inativos", "extrairVeiculosInativos")
     .addItem("📋 Listar Situações e Motivos", "extrairSituacoesEMotivos")
     .addItem("🔄 Extrair Alterações (últimos 7 dias)", "extrairAlteracoes7dias")
+    .addItem("🧾 Extrair Boletos de Julho/2026", "extrairBoletosJulho2026")
     .addSeparator()
     .addItem("📸 Salvar Snapshot de Hoje", "salvarSnapshot")
     .addItem("📅 Agendar Snapshot de Fim de Mês", "agendarSnapshotFimMes")
@@ -404,6 +405,92 @@ function extrairSituacoesEMotivos() {
     ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
     Logger.log(e.stack);
   }
+}
+
+// ===================== BOLETOS POR PERÍODO =====================
+// Usa /listar/boleto-associado/periodo.
+// IMPORTANTE: os boletos recorrentes (mensalidade) são gerados em lote ANTES
+// do mês de referência (ex.: emitidos em junho para vencimento em julho), então
+// filtrar por data_emissao só pega os boletos avulsos criados dentro do mês.
+// Por isso o filtro aqui é por data_vencimento + mes_referente, não data_emissao.
+// Limite da API: no máximo 31 dias de intervalo por chamada.
+function extrairBoletosPorPeriodo(filtros, nomeAba) {
+  var ui = getUI();
+  try {
+    autenticar();
+    var todos          = [];
+    var pagina         = 0;
+    var totalRegistros = 1;
+
+    while (pagina < totalRegistros) {
+      var payload = Object.assign({
+        "inicio_paginacao":      pagina,
+        "quantidade_por_pagina": 1000
+      }, filtros);
+      var resultado = chamarAPI("/listar/boleto-associado/periodo", "post", payload);
+
+      var lista = resultado && (resultado.boletos || resultado.dados || (Array.isArray(resultado) ? resultado : null));
+      if (!lista || lista.length === 0) break;
+
+      totalRegistros = parseInt(resultado.total_boletos || resultado.total || lista.length) || lista.length;
+      todos = todos.concat(lista);
+      pagina += 1000;
+      if (pagina < totalRegistros) Utilities.sleep(500);
+    }
+
+    if (todos.length === 0) {
+      ui.alert("⚠️ Nenhum boleto encontrado", "Filtros: " + JSON.stringify(filtros), ui.ButtonSet.OK);
+      return;
+    }
+
+    var ss  = SpreadsheetApp.getActiveSpreadsheet();
+    var aba = ss.getSheetByName(nomeAba) || ss.insertSheet(nomeAba);
+    aba.clear();
+    var campos = Object.keys(todos[0]);
+    aba.getRange(1, 1, 1, campos.length).setValues([campos]);
+    aba.getRange(1, 1, 1, campos.length).setBackground("#1a1a2e").setFontColor("#ffffff").setFontWeight("bold");
+    var linhas = todos.map(function(reg) {
+      return campos.map(function(c) {
+        var v = reg[c];
+        if (v === null || v === undefined) return "";
+        if (typeof v === "object") return JSON.stringify(v);
+        return v;
+      });
+    });
+    aba.getRange(2, 1, linhas.length, campos.length).setValues(linhas);
+    aba.setFrozenRows(1);
+    campos.forEach(function(_, i) { aba.autoResizeColumn(i + 1); });
+
+    // Resumo por situação do boleto + contagem de placas distintas cobradas
+    var porSituacao  = {};
+    var placasUnicas = {};
+    todos.forEach(function(b) {
+      var sit = b.descricao_situacao_boleto || b.codigo_situacao_boleto || "SEM SITUAÇÃO";
+      porSituacao[sit] = (porSituacao[sit] || 0) + 1;
+      if (Array.isArray(b.veiculos)) {
+        b.veiculos.forEach(function(v) { if (v.placa) placasUnicas[v.placa] = true; });
+      }
+    });
+
+    var resumo = "Total de boletos: " + todos.length + "\n";
+    resumo += "Placas distintas cobradas: " + Object.keys(placasUnicas).length + "\n\n";
+    Object.keys(porSituacao).forEach(function(sit) {
+      resumo += "• " + sit + ": " + porSituacao[sit] + "\n";
+    });
+
+    ui.alert("✅ Boletos extraídos!", resumo, ui.ButtonSet.OK);
+    Logger.log(resumo);
+  } catch(e) {
+    ui.alert("❌ Erro", e.message, ui.ButtonSet.OK);
+    Logger.log(e.stack);
+  }
+}
+
+function extrairBoletosJulho2026() {
+  extrairBoletosPorPeriodo({
+    "data_vencimento_inicial": "01/07/2026",
+    "data_vencimento_final":   "31/07/2026"
+  }, "Boletos Julho 2026");
 }
 
 // ===================== EXTRAIR ALTERAÇÕES 7 DIAS =====================
@@ -1591,6 +1678,94 @@ function invalidarCacheAlteracoes() {
   try { SpreadsheetApp.getUi().alert("✅ Cache invalidado.", "Próxima chamada buscará dados frescos.", SpreadsheetApp.getUi().ButtonSet.OK); } catch(e) {}
 }
 
+// ===================== DIAGNÓSTICO — DEDUP DE ALTERAÇÕES DE VEÍCULO =====================
+// getAlteracoes() deduplica com: item.codigo_alteracao || data_alteracao + "_" + codigo_associado.
+// Só que /listar/alteracao-veiculos não retorna codigo_associado (ver getVeiculosPorPlaca).
+// Se também não vier codigo_alteracao, a chave de fallback fica igual para TODO veículo
+// que mudou de status no mesmo dia — e o dedup descartaria eventos reais e distintos.
+// Esta função só lê a API e loga (Logger.log); não escreve em planilha nem mexe em cache.
+// Rodar direto pelo editor do Apps Script (selecionar a função no dropdown e executar),
+// depois abrir Ver > Registros de execução (ou Ctrl+Enter) para ler o resultado.
+function diagnosticarDedupVeiculos() {
+  autenticar();
+
+  var hoje         = new Date();
+  var JANELA_DIAS  = 30;
+  var totalJanelas = Math.ceil(JANELA_DIAS / 7);
+  var todoVeic     = [];
+
+  for (var i = 0; i < totalJanelas; i++) {
+    var dataFim = new Date(hoje.getTime() - i       * 7 * 24 * 60 * 60 * 1000);
+    var dataIni = new Date(hoje.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000);
+    var dFim = Utilities.formatDate(dataFim, "America/Sao_Paulo", "dd/MM/yyyy");
+    var dIni = Utilities.formatDate(dataIni, "America/Sao_Paulo", "dd/MM/yyyy");
+
+    var resVeic = chamarAPI("/listar/alteracao-veiculos", "post", {
+      "data_inicial": dIni, "data_final": dFim, "campos": ["codigo_situacao"]
+    });
+    if (Array.isArray(resVeic)) todoVeic = todoVeic.concat(resVeic);
+    Utilities.sleep(300);
+  }
+
+  Logger.log("=== DIAGNÓSTICO DEDUP — ALTERAÇÃO DE VEÍCULOS (últimos " + JANELA_DIAS + " dias) ===");
+  Logger.log("Total de registros brutos recebidos da API: " + todoVeic.length);
+
+  if (todoVeic.length === 0) {
+    Logger.log("Nenhum registro retornado — não dá pra diagnosticar. Tente aumentar JANELA_DIAS.");
+    return;
+  }
+
+  Logger.log("\n--- Amostra dos 3 primeiros registros crus (JSON completo) ---");
+  todoVeic.slice(0, 3).forEach(function(item, idx) {
+    Logger.log("[" + idx + "] " + JSON.stringify(item));
+  });
+
+  var comCodigoAlteracao = todoVeic.filter(function(item) { return !!item.codigo_alteracao; }).length;
+  Logger.log("\nRegistros com codigo_alteracao preenchido: " + comCodigoAlteracao + " / " + todoVeic.length);
+  Logger.log("Registros SEM codigo_alteracao (caem no fallback data+codigo_associado): " + (todoVeic.length - comCodigoAlteracao));
+
+  // Replica exatamente a chave de dedup usada hoje em getAlteracoes()
+  function chaveAtual(item) {
+    return String(item.codigo_alteracao || item.data_alteracao + "_" + item.codigo_associado);
+  }
+
+  var vistos    = {};
+  var colisoes  = {};
+  todoVeic.forEach(function(item) {
+    var chave = chaveAtual(item);
+    if (vistos[chave]) {
+      colisoes[chave] = colisoes[chave] || [vistos[chave]];
+      colisoes[chave].push(item);
+    } else {
+      vistos[chave] = item;
+    }
+  });
+
+  var chavesUnicas  = Object.keys(vistos).length;
+  var chavesColisao = Object.keys(colisoes);
+  Logger.log("\nChaves únicas após dedup atual: " + chavesUnicas + " (de " + todoVeic.length + " brutos)");
+  Logger.log("Registros que o dedup atual DESCARTARIA: " + (todoVeic.length - chavesUnicas));
+
+  Logger.log("\n--- Exemplos de colisão (mesma chave agrupando registros distintos) ---");
+  chavesColisao.slice(0, 5).forEach(function(chave) {
+    var grupo  = colisoes[chave];
+    var placas = grupo.map(function(g) { return g.placa; }).join(", ");
+    Logger.log("Chave '" + chave + "' agrupou " + grupo.length + " registros — placas: " + placas);
+  });
+  if (chavesColisao.length === 0) {
+    Logger.log("Nenhuma colisão encontrada nessa amostra — dedup parece seguro no período testado.");
+  }
+
+  // Chave alternativa por placa — não depende de codigo_associado nem codigo_alteracao
+  function chaveAlternativa(item) {
+    return String(item.placa || "") + "_" + item.data_alteracao + "_" + item.valor_anterior + "_" + item.valor_posterior;
+  }
+  var vistosAlt = {};
+  todoVeic.forEach(function(item) { vistosAlt[chaveAlternativa(item)] = true; });
+  Logger.log("\nChaves únicas com chave alternativa (placa+data+de+para): " + Object.keys(vistosAlt).length);
+  Logger.log("=== FIM DO DIAGNÓSTICO ===");
+}
+
 // eventos_churn é derivado de alteracoes — precisa ser limpo junto, senão fica servindo
 // a versão cacheada antiga (ate 1h) mesmo depois do codigo mudar.
 function invalidarCacheEventosChurn() {
@@ -1920,19 +2095,24 @@ function getNovosContratosMes(de, ate) {
 }
 
 // ===================== REATIVAÇÕES DETALHADAS (últimos 365 dias) =====================
+// Nivel veiculo/placa (mesma fonte usada no historico_mensal.reativacoes_veiculo) —
+// consistente com getEventosChurn(), que ja usa placa para cancelamento.
 function getReativacoesDetalhadas() {
   var alteracoes = getAlteracoes();
-  var assocList  = alteracoes.associados || [];
+  var veicList   = alteracoes.veiculos || [];
+  var veiculosPorPlaca = getVeiculosPorPlaca();
   var reativacoes = [];
 
-  assocList.forEach(function(a) {
-    if (String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1") {
+  veicList.forEach(function(v) {
+    if (String(v.valor_anterior) === "2" && String(v.valor_posterior) === "1") {
+      var placa = String(v.placa || "").trim();
+      var info  = veiculosPorPlaca[placa] || {};
       reativacoes.push({
-        codigo_associado:  a.codigo_associado,
-        nome:              a.nome_associado         || "",
-        cpf:               a.cpf_associado          || "",
-        data_reativacao:   String(a.data_alteracao  || "").substring(0, 10),
-        usuario_alteracao: a.nome_usuario_alteracao || ""
+        codigo_associado:  info.codigo_associado || "",
+        nome:              info.nome              || "",
+        placa:             v.placa                || "",
+        data_reativacao:   String(v.data_alteracao || "").substring(0, 10),
+        usuario_alteracao: v.nome_usuario_alteracao || ""
       });
     }
   });
@@ -2014,6 +2194,7 @@ function getHistoricoMensal() {
 function getAnaliseChurn() {
   var alteracoes = getAlteracoes();
   var assocList  = alteracoes.associados || [];
+  var veicList   = alteracoes.veiculos   || [];
 
   var cancelamentos = assocList.filter(function(a) {
     return String(a.valor_posterior) === "2" && String(a.valor_anterior) === "1";
@@ -2112,21 +2293,27 @@ function getAnaliseChurn() {
       return { faixa: f, quantidade: distribuicaoTempoCasa[f] };
     }),
     detalhes: detalhes,
-    reativacoes: assocList.filter(function(a) {
-      return String(a.valor_anterior) === "2" && String(a.valor_posterior) === "1";
-    }).map(function(a) {
-      var cod     = String(a.codigo_associado || "");
-      var info    = contratosMap[cod] || {};
-      var codReg  = info.regional || "";
-      var regNome = REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional");
-      return {
-        codigo_associado:  a.codigo_associado,
-        nome:              a.nome_associado         || "",
-        data_reativacao:   String(a.data_alteracao  || "").substring(0, 10),
-        regional:          regNome,
-        usuario_alteracao: a.nome_usuario_alteracao || ""
-      };
-    }).sort(function(a, b) { return b.data_reativacao.localeCompare(a.data_reativacao); })
+    // Reativações — nivel veiculo/placa (mesma fonte usada no historico_mensal.reativacoes_veiculo),
+    // consistente com getEventosChurn().
+    reativacoes: (function() {
+      var veiculosPorPlaca = getVeiculosPorPlaca();
+      return veicList.filter(function(v) {
+        return String(v.valor_anterior) === "2" && String(v.valor_posterior) === "1";
+      }).map(function(v) {
+        var placa   = String(v.placa || "").trim();
+        var info    = veiculosPorPlaca[placa] || {};
+        var codReg  = info.regional || "";
+        var regNome = REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional");
+        return {
+          codigo_associado:  info.codigo_associado || "",
+          nome:              info.nome              || "",
+          placa:             v.placa                || "",
+          data_reativacao:   String(v.data_alteracao || "").substring(0, 10),
+          regional:          regNome,
+          usuario_alteracao: v.nome_usuario_alteracao || ""
+        };
+      }).sort(function(a, b) { return b.data_reativacao.localeCompare(a.data_reativacao); });
+    })()
   };
 }
 
@@ -2192,62 +2379,31 @@ function getEventosChurn() {
   }
 
   var alteracoes = getAlteracoes();
-  var assocList  = alteracoes.associados || [];
-  var veicList   = alteracoes.veiculos   || [];
+  var veicList   = alteracoes.veiculos || [];
 
-  // Lookup de nome/regional via abas "Associados Ativos" + "Associados Inativos"
-  // (cobre tanto cancelamento total quanto baixa parcial de veiculo com associado ainda ativo)
-  var contratosMap = {};
-  ["Associados Ativos", "Associados Inativos"].forEach(function(nomeAba) {
-    try {
-      var ss  = SpreadsheetApp.getActiveSpreadsheet();
-      var aba = ss.getSheetByName(nomeAba);
-      if (!aba || aba.getLastRow() < 2) return;
-      var header = aba.getRange(1, 1, 1, aba.getLastColumn()).getValues()[0];
-      var iCod     = header.indexOf("codigo_associado");
-      var iReg     = header.indexOf("codigo_regional");
-      var iNome    = header.indexOf("nome");
-      var iDtCad   = header.indexOf("data_cadastro_associado");
-      var iDtContr = header.indexOf("data_contrato_associado");
-      var linhas  = aba.getRange(2, 1, aba.getLastRow() - 1, aba.getLastColumn()).getValues();
-      linhas.forEach(function(row) {
-        var cod = String(row[iCod] || "").trim();
-        if (!cod) return;
-        contratosMap[cod] = {
-          regional:      iReg     !== -1 ? String(row[iReg]     || "") : "",
-          nome:          iNome    !== -1 ? String(row[iNome]    || "") : "",
-          data_cadastro: iDtCad   !== -1 ? String(row[iDtCad]   || "").substring(0, 10) : "",
-          data_contrato: iDtContr !== -1 ? String(row[iDtContr] || "").substring(0, 10) : ""
-        };
-      });
-    } catch(e) {
-      Logger.log("Aviso: não foi possível ler " + nomeAba + " — " + e.message);
-    }
-  });
-
-  var REGIONAL_NAMES = { "1": "Ipatinga", "2": "Betim" };
-  var regionalDe = function(cod) {
-    var codReg = (contratosMap[cod] || {}).regional || "";
-    return REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional");
-  };
+  var REGIONAL_NAMES   = { "1": "Ipatinga", "2": "Betim" };
+  var veiculosPorPlaca = getVeiculosPorPlaca();
 
   var eventos = [];
 
-  // Reativações — nivel associado (mesma fonte usada no historico_mensal.reativacoes)
-  assocList.forEach(function(a) {
-    var de   = String(a.valor_anterior  || "").trim();
-    var para = String(a.valor_posterior || "").trim();
+  // Reativações — nivel veiculo/placa (mesma fonte usada no historico_mensal.reativacoes_veiculo)
+  veicList.forEach(function(v) {
+    var de   = String(v.valor_anterior  || "").trim();
+    var para = String(v.valor_posterior || "").trim();
     if (de !== "2" || para !== "1") return;
 
-    var cod  = String(a.codigo_associado || "");
-    var info = contratosMap[cod] || {};
+    var placa  = String(v.placa || "").trim();
+    var info   = veiculosPorPlaca[placa] || {};
+    var codReg = info.regional || "";
+
     eventos.push({
       tipo:             "reativacao",
-      codigo_associado: a.codigo_associado,
-      nome:             a.nome_associado || "",
-      data_evento:      String(a.data_alteracao || "").substring(0, 10),
-      regional:         regionalDe(cod),
-      operadora:        String(a.nome_usuario_alteracao || "").trim() || "Sem Operadora",
+      codigo_associado: info.codigo_associado || "",
+      nome:             info.nome || "",
+      placa:            v.placa || "",
+      data_evento:      String(v.data_alteracao || "").substring(0, 10),
+      regional:         REGIONAL_NAMES[codReg] || (codReg ? "Regional " + codReg : "Sem Regional"),
+      operadora:        String(v.nome_usuario_alteracao || "").trim() || "Sem Operadora",
       data_cadastro:    info.data_cadastro || "",
       data_contrato:    info.data_contrato || ""
     });
@@ -2255,7 +2411,6 @@ function getEventosChurn() {
 
   // Cancelamentos — nivel veiculo (mesma fonte usada no historico_mensal.cancelamentos_veiculo
   // e no grafico "Novos · Reativações · Cancelamentos por Mês")
-  var veiculosPorPlaca = getVeiculosPorPlaca();
   veicList.forEach(function(v) {
     var de   = String(v.valor_anterior  || "").trim();
     var para = String(v.valor_posterior || "").trim();

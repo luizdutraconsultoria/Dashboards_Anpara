@@ -15,6 +15,7 @@ const API = {
   panorama()        { return this._get('panorama'); },
   zonaChurn()       { return this._get('zona_churn'); },
   alteracoes()      { return this._get('alteracoes'); },
+  eventosChurn()    { return this._get('eventos_churn'); },
   historicoMensal() { return this._get('historico_mensal'); },
   analiseChurn()    { return this._get('analise_churn'); },
   novosContratos()  { return this._get('novos_contratos'); },

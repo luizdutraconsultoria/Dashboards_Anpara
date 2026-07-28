@@ -6,6 +6,7 @@
 /* ---- GLOBAL DATA ---- */
 let _panorama   = null;
 let _alt        = [];
+let _eventos    = [];
 let _hist       = null;
 let _zona       = null;
 let _analise    = null;
@@ -97,9 +98,10 @@ function showPage(id, btn) {
 async function init() {
   document.getElementById('loading').style.display = 'flex';
   try {
-    const [panR, altR, histR, zonaR, analiseR] = await Promise.allSettled([
+    const [panR, altR, eventosR, histR, zonaR, analiseR] = await Promise.allSettled([
       API.panorama(),
       API.alteracoes(),
+      API.eventosChurn(),
       API.historicoMensal(),
       API.zonaChurn(),
       API.analiseChurn(),
@@ -107,6 +109,7 @@ async function init() {
 
     if (panR.status    === 'fulfilled') _panorama = panR.value;
     if (altR.status    === 'fulfilled') _alt      = altR.value.associados || [];
+    if (eventosR.status === 'fulfilled') _eventos = eventosR.value.eventos || [];
     if (histR.status   === 'fulfilled') _hist     = histR.value;
     if (zonaR.status   === 'fulfilled') _zona     = zonaR.value;
     if (analiseR.status === 'fulfilled') _analise = analiseR.value;
@@ -120,10 +123,10 @@ async function init() {
     renderP2();
     renderP3();
 
-    const falhas = [panR, altR, histR, zonaR, analiseR].filter(r => r.status === 'rejected');
-    if (falhas.length > 0 && falhas.length < 5) {
+    const falhas = [panR, altR, eventosR, histR, zonaR, analiseR].filter(r => r.status === 'rejected');
+    if (falhas.length > 0 && falhas.length < 6) {
       showErr('p1', 'Alguns dados indisponíveis (APIs em atualização). Dados disponíveis exibidos.');
-    } else if (falhas.length === 5) {
+    } else if (falhas.length === 6) {
       showErr('p1', 'Falha ao carregar dados: ' + falhas[0].reason?.message);
       showErr('p2', 'Falha ao carregar dados.');
       showErr('p3', 'Falha ao carregar dados.');
@@ -263,31 +266,33 @@ function renderEntradasChart() {
   if (!ctx) return;
   if (_cEntradas) _cEntradas.destroy();
 
-  if (!_alt || _alt.length === 0) {
+  if (!_eventos || _eventos.length === 0) {
     ctx.closest('.chart-area').innerHTML = '<div class="empty">Sem dados de alterações</div>';
     return;
   }
 
   const fs = _fs.p1;
-  let rows = _alt;
+  let rows = _eventos;
 
   const periodLbl = fs.period === 'all' ? 'Últimos 12 meses' : getPeriodLabel(fs.period, fs.from, fs.to);
   const lblEl = document.getElementById('entradas-period-lbl');
   if (lblEl) lblEl.textContent = 'Entradas x saídas' + (periodLbl ? ` — ${periodLbl}` : '');
 
   const { from, to } = getPeriodDates(fs.period, fs.from, fs.to);
-  if (from || to)   rows = filterByDate(rows, 'data_alteracao', from, to);
-  if (fs.regional)  rows = rows.filter(a => String(a.codigo_regional) === fs.regional);
+  if (from || to)   rows = filterByDate(rows, 'data_evento', from, to);
+  if (fs.regional)  rows = rows.filter(e => e.regional === regionalLabel(fs.regional));
 
   const gran = fs.period === 'all' ? 'month' : getGranularity(fs.period);
 
-  const gCancel = groupItems(rows.filter(a => String(a.valor_posterior) === '2' && String(a.valor_anterior) === '1'), 'data_alteracao', gran);
-  const gReat   = groupItems(rows.filter(a => String(a.valor_anterior)  === '2' && String(a.valor_posterior) === '1'), 'data_alteracao', gran);
+  // Nivel veiculo/placa (fonte: eventos_churn) — cancelamento e reativação de
+  // veículo específico, não de associado (um associado pode ter várias placas).
+  const gCancel = groupItems(rows.filter(e => e.tipo === 'cancelamento'), 'data_evento', gran);
+  const gReat   = groupItems(rows.filter(e => e.tipo === 'reativacao'),   'data_evento', gran);
 
   const labelMap = {};
   [...gCancel, ...gReat].forEach(g => { labelMap[g.key] = g.label; });
 
-  // Inclui meses de _hist que estejam no período mas sem entradas no _alt,
+  // Inclui meses de _hist que estejam no período mas sem entradas em _eventos,
   // para que as barras de "Novos" apareçam mesmo quando não há cancel./reat.
   if (gran === 'month' && !fs.regional && _hist?.por_mes?.length) {
     const _mths = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
