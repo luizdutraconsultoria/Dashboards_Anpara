@@ -176,16 +176,17 @@ function renderP1() {
   setText('m-novos', fmtNum(_panorama.novos_contratos_hoje));
   setText('m-novos-delta', 'novos contratos hoje');
 
-  /* Cancelamentos filtrados por período */
+  /* Cancelamentos filtrados por período — nivel veiculo/placa (mesma fonte do
+     grafico "Entradas x Saidas"), nao nivel associado: um associado pode ter
+     varias placas e cancelar/reativar uma sem sair da base. */
   const { from, to } = getPeriodDates(fs.period, fs.from, fs.to);
-  let items = _alt;
-  if (from || to) items = filterByDate(items, 'data_alteracao', from, to);
-  if (fs.regional) items = items.filter(a => String(a.codigo_regional) === fs.regional);
-  const cancels = items.filter(a => a.valor_posterior === '2');
-  setText('m-cancel', fmtNum(cancels.length));
+  let items = _eventos.filter(e => e.tipo === 'cancelamento');
+  if (from || to) items = filterByDate(items, 'data_evento', from, to);
+  if (fs.regional) items = items.filter(e => e.regional === regionalLabel(fs.regional));
+  setText('m-cancel', fmtNum(items.length));
   const lbl = getPeriodLabel(fs.period, fs.from, fs.to);
   setText('m-cancel-lbl', 'Cancelamentos' + (lbl ? ` — ${lbl}` : ''));
-  setText('m-cancel-delta', 'no período');
+  setText('m-cancel-delta', 'veículos no período');
 
   /* Taxa de churn */
   setText('m-churn', _panorama.churn_rate_estimado || '—');
