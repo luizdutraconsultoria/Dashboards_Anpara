@@ -186,6 +186,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--font);font-size:14px
     </div>
   </div>
   <div class="fsep"></div>
+  <div class="fg"><label>Unidade</label><select id="f-unid" onchange="comparar()"><option value="">Todas</option></select></div>
   <div class="fg"><label>Vendedor</label><select id="f-vend" onchange="comparar()"><option value="">Todos</option></select></div>
   <div class="cmp-actions">
     <button class="btn btn-primary" onclick="comparar()">Comparar</button>
@@ -234,6 +235,7 @@ async function carregar(){
     DRAW=d.dados||[];
     document.getElementById('hsub').textContent=fmt(DRAW.length)+' registros carregados';
     document.getElementById('pill').style.display='flex';
+    popUnidades(DRAW);
     popVendedores(DRAW);
     sMesAtualVsAnterior();
   }catch(e){
@@ -249,12 +251,26 @@ function popVendedores(dados){
   while(el.options.length>1) el.remove(1);
   nomes.forEach(v=>el.add(new Option(v,v)));
 }
+/* Cooperativa do Power CRM -> unidade: Região Um = Ipatinga, Região Dois = Betim */
+function unidade(r){
+  const c=String(r[CI.unidade]||'').toLowerCase();
+  if(c.includes('dois')) return 'Betim';
+  if(/\bum\)?$/.test(c.trim())||c.includes(' um)')) return 'Ipatinga';
+  return 'Sem unidade (N/D)';
+}
+function popUnidades(dados){
+  const el=document.getElementById('f-unid');
+  if(!el) return;
+  const nomes=[...new Set(dados.map(unidade))].sort();
+  while(el.options.length>1) el.remove(1);
+  nomes.forEach(v=>el.add(new Option(v,v)));
+}
 function dadosFiltrados(){
   if(!DRAW) return [];
-  const el=document.getElementById('f-vend');
-  const sel=el?el.value:'';
-  if(!sel) return DRAW;
-  return DRAW.filter(r=>norm(r[CI.vendedor],'Sem vendedor')===sel);
+  const vend=(document.getElementById('f-vend')||{}).value||'';
+  const unid=(document.getElementById('f-unid')||{}).value||'';
+  if(!vend&&!unid) return DRAW;
+  return DRAW.filter(r=>(!vend||norm(r[CI.vendedor],'Sem vendedor')===vend)&&(!unid||unidade(r)===unid));
 }
 
 /* ===== Atalhos de período ===== */
